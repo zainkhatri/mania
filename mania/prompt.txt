@@ -1,0 +1,231 @@
+mania/
+├── App/
+│   ├── ContentView.swift
+│   └── maniaApp.swift
+├── Models/
+│   ├── JournalEntry.swift
+│   ├── JournalStorage.swift
+│   └── PhotoModels/
+│       ├── DraggablePhoto.swift
+│       └── PhotoEditingState.swift
+├── Navigation/
+│   └── MainTabView.swift
+├── Preview Content/
+├── Utilities/
+│   ├── DateFormatting.swift
+│   └── ImageSaver.swift
+└── Views/
+    ├── AppCover/
+    │   └── AppCoverView.swift
+    ├── Create/
+    │   ├── Components/
+    │   │   ├── CollageComponents/
+    │   │   │   ├── AddOverlayPhotosButton.swift
+    │   │   │   ├── CollageCanvas.swift
+    │   │   │   ├── EditModeToggle.swift
+    │   │   │   ├── MainImagePickerButton.swift
+    │   │   │   ├── OverlayPhotoView.swift
+    │   │   │   ├── PhotoEditControls.swift
+    │   │   │   └── SaveCollageButton.swift
+    │   │   ├── GenerateCollage.swift
+    │   │   ├── JournalHeader.swift
+    │   │   ├── JournalRenderer.swift
+    │   │   └── JournalTyper.swift
+    │   └── CreateJournalView.swift
+    ├── Home/
+    │   ├── Components/
+    │   │   ├── GridView.swift
+    │   │   ├── JournalCard.swift
+    │   │   ├── JournalRow.swift
+    │   │   └── ListView.swift
+    │   └── HomeView.swift
+    ├── Settings/
+    │   ├── SettingRow.swift
+    │   └── SettingsView.swift
+    └── Welcome/
+        └── WelcomeView.swift
+    
+Key Features:
+
+Custom font (Zain-Regular.ttf) used throughout
+Initial AppCover welcome screen
+Four main tabs: Welcome, Journal, New Entry, Settings
+Journal entries can include text and images
+Both grid and list views for journal entries
+Custom kerning for the font (-2.3 for large text, -1.5 for medium, -0.5 for small)
+Black and white color scheme
+
+Special Considerations:
+
+Font registration is kept in ContentView for reliability
+JournalEntry model includes proper Codable support
+Images are saved locally with ImageSaver utility
+Dates are formatted consistently with DateFormatting utility
+Journal entries are persisted with JournalStorage utility
+
+The app is a personal journaling tool that formats entries in your specific style, with special attention to typography and layout. Users can create entries with text an images, view them in different layouts, and manage their journal through the settings.
+
+
+
+
+
+# ManiaML Development Roadmap
+
+## Phase 1: Data Collection & Analysis
+### Setup
+- Create new Xcode project "ManiaML"
+- Set up Python environment for ML training
+- Create directory structure for data storage
+
+### Journal Analysis Tools
+1. Image Processing
+   - Extract images from existing journals
+   - Detect collage layouts
+   - Identify image positions and sizes
+   - Save layout data in JSON format
+
+2. Text Analysis
+   - Analyze text placement
+   - Measure line spacing and kerning
+   - Record text formatting patterns
+   - Extract handwriting characteristics
+
+3. Title Analysis
+   - Capture title positions
+   - Record font sizes and spacing
+   - Analyze background styling
+   - Document color schemes
+
+### Data Storage
+- Create JSON schema for storing analysis results
+- Organize data by:
+  - Collage patterns
+  - Text styles
+  - Title formats
+- Include metadata (date, journal type, etc.)
+
+## Phase 2: ML Model Development
+### Data Preparation
+- Clean and normalize collected data
+- Split into training/validation sets
+- Create data pipelines for model training
+
+### Model Training
+1. Collage Arrangement Model
+   - Train for image placement
+   - Learn spacing patterns
+   - Understand size relationships
+
+2. Text Style Model
+   - Learn handwriting patterns
+   - Predict line spacing
+   - Generate kerning values
+
+3. Title Style Model
+   - Learn title placement
+   - Predict font sizes
+   - Generate background styles
+
+### Model Testing
+- Create test suite for each model
+- Validate predictions
+- Fine-tune as needed
+
+## Phase 3: Swift Integration Prototype
+### Basic Test App
+1. Core ML Integration
+   - Convert trained models to Core ML format
+   - Create model manager class
+   - Set up prediction pipeline
+
+2. Test Interface
+   - Simple UI for testing models
+   - Upload test images
+   - View predictions
+   - Compare with actual journals
+
+### Validation
+- Test performance
+- Measure accuracy
+- Gather feedback
+- Iterate on models
+
+## Phase 4: Production Integration
+### Preparation
+- Review existing Mania codebase
+- Identify integration points
+- Plan migration strategy
+
+### Integration Steps
+1. Add ML Components
+   - Integrate Core ML models
+   - Add style manager
+   - Create ML service layer
+
+2. Update UI
+   - Add style controls
+   - Create preview system
+   - Implement style application
+
+3. Testing
+   - Unit tests
+   - Integration tests
+   - User testing
+
+## Technical Requirements
+
+### Software Requirements
+- Xcode 15+
+- Python 3.8+
+- Core ML Tools
+- Git for version control
+
+### Python Dependencies
+```
+numpy
+pandas
+torch
+scikit-learn
+coremltools
+pillow
+```
+
+### Project Structure
+```
+ManiaML/
+├── DataCollection/
+│   ├── ImageProcessor/
+│   ├── TextAnalyzer/
+│   └── TitleAnalyzer/
+├── MLModels/
+│   ├── CollageModel/
+│   ├── TextModel/
+│   └── TitleModel/
+├── CoreMLIntegration/
+│   ├── Models/
+│   └── Services/
+└── TestApp/
+    ├── Views/
+    └── Utilities/
+```
+
+## Success Metrics
+- Model accuracy > 90%
+- Processing time < 1 second
+- Memory usage < 100MB
+- User satisfaction with predictions
+
+## Timeline
+1. Phase 1: 2-3 weeks
+2. Phase 2: 3-4 weeks
+3. Phase 3: 2 weeks
+4. Phase 4: 2-3 weeks
+
+Total estimated time: 9-12 weeks
+
+## Notes
+- Keep existing Mania app functional
+- Commit code frequently
+- Document all analysis results
+- Create backup points before major changes
+- Test thoroughly before integration

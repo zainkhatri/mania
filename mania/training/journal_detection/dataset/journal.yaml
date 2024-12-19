@@ -1,0 +1,10 @@
+path: /Volumes/ZAIN/projects/training/journal_detection/dataset
+train: /Volumes/ZAIN/projects/training/journal_detection/dataset/images/train
+val: /Volumes/ZAIN/projects/training/journal_detection/dataset/images/val
+nc: 5
+names:
+- date
+- title
+- journal_entry
+- main_image
+- sub_image
