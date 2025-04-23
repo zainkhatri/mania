@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Copy any custom styles from globals.css and styles.css here */
+body {
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  background-image: linear-gradient(to bottom, #f9fafb, #ffffff, #eef2ff30);
+  color: #111827;
+}
+
+html {
+  height: 100%;
+  scroll-behavior: smooth;
+}
+
+/* Add any other custom styles from the original project */
