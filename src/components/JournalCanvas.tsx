@@ -1,6 +1,10 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { TextColors } from './ColorPicker';
+import html2canvas from 'html2canvas';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 
 // Define types for image positioning
 export interface ImagePosition {
@@ -138,11 +142,13 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     // Add timestamp to prevent caching of the font files
     const timestamp = new Date().getTime();
     const contentFontUrl = `/font/zain.ttf?v=${timestamp}`; // For journal content
-    const titleFontUrl = `/font/title.ttf?v=${timestamp}`; // New font for location
+    const titleFontUrl = `/font/titles.ttf?v=${timestamp}`; // Corrected font name for location
     
     // Load the fonts
     const loadFonts = async () => {
       try {
+        console.log('Starting to load custom fonts...');
+        
         // Load content font
         const contentFont = new FontFace('ZainCustomFont', `url(${contentFontUrl})`, {
           style: 'normal',
@@ -153,7 +159,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         // Load title font
         const headingFont = new FontFace('TitleFont', `url(${titleFontUrl})`, {
           style: 'normal',
-          weight: '400',
+          weight: '700', // Make title font bold for better visibility
           display: 'swap'
         });
         
@@ -161,6 +167,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Attempt to clear font cache
           if ('fonts' in document) {
             document.fonts.clear();
+            console.log('Font cache cleared');
           }
         } catch (e) {
           console.warn('Failed to clear font cache, continuing anyway:', e);
@@ -174,7 +181,13 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         try {
           const loadedTitleFont = await headingFont.load();
           document.fonts.add(loadedTitleFont);
-          console.log('Title font loaded successfully');
+          console.log('Title font loaded successfully: ', titleFontUrl);
+          
+          // Force a redraw when fonts are loaded
+          setTimeout(() => {
+            console.log('Forcing redraw after font load');
+            setForceRender(prev => prev + 1);
+          }, 100);
         } catch (titleErr) {
           console.warn('Failed to load title font, continuing with standard fonts:', titleErr);
         }
@@ -205,16 +218,41 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   
   // Format date in handwritten style
   const formatDate = (date: Date): string => {
+    // Helper function to get ordinal suffix
+    const getOrdinalSuffix = (day: number): string => {
+      if (day > 3 && day < 21) return 'TH';
+      switch (day % 10) {
+        case 1: return 'ST';
+        case 2: return 'ND';
+        case 3: return 'RD';
+        default: return 'TH';
+      }
+    };
+
     const options: Intl.DateTimeFormatOptions = { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
     };
-    const dateStr = date.toLocaleDateString('en-US', options)
-      .replace(/(\d+)(th|st|nd|rd)/, '$1$2,') // Add comma after ordinal
-      .toUpperCase();
-    return dateStr;
+    
+    // Format the date without ordinal first
+    let dateStr = date.toLocaleDateString('en-US', options);
+    
+    // Extract the day number and add the ordinal suffix
+    const day = date.getDate();
+    const ordinalSuffix = getOrdinalSuffix(day);
+    
+    // Replace the day number with day + ordinal suffix
+    dateStr = dateStr.replace(/(\d+)/, `$1${ordinalSuffix}`);
+    
+    // Fix double commas - remove any existing comma after the day before adding our own
+    dateStr = dateStr.replace(/(\d+[A-Z]+),/, '$1');
+    
+    // Make sure there's a comma after the ordinal suffix
+    dateStr = dateStr.replace(/(\d+[A-Z]+)/, '$1,');
+    
+    return dateStr.toUpperCase();
   };
 
   // Combine all text sections into one continuous text
@@ -245,7 +283,9 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             console.error('Failed to load template image:', err);
             resolve(null); // Continue even if template fails
           };
-          template.src = templateUrl;
+          // Add timestamp to prevent caching issues
+          const cacheBuster = `?v=${new Date().getTime()}`;
+          template.src = templateUrl.includes('?') ? templateUrl : templateUrl + cacheBuster;
         });
         
         const loadedTemplate = await templatePromise;
@@ -260,6 +300,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         const imagePromises = images.map((src) => {
           return new Promise<HTMLImageElement | null>((resolve) => {
             const img = new Image();
+            img.crossOrigin = 'anonymous'; // Set crossOrigin for all images to prevent tainted canvas
             img.onload = () => {
               console.log('Debug: Image loaded successfully');
               resolve(img);
@@ -271,12 +312,16 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             // Determine source type
             if (typeof src === 'string') {
               console.log('Debug: Loading image from URL');
+              // Use the direct source without cache busting to avoid rendering issues
               img.src = src;
             } else {
               // Blob (File) object
               console.log('Debug: Loading image from Blob');
               img.src = URL.createObjectURL(src);
             }
+            
+            // Standard decoding is more reliable
+            img.decoding = 'auto';
           });
         });
         
@@ -318,32 +363,37 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const imgAspect = img.width / img.height;
-    const targetAspect = width / height;
-    let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
-    if (imgAspect > targetAspect) {
-      drawWidth = width;
-      drawHeight = width / imgAspect;
-      drawX = x;
-      drawY = y + (height - drawHeight) / 2;
-    } else {
-      drawHeight = height;
-      drawWidth = height * imgAspect;
-      drawX = x + (width - drawWidth) / 2;
-      drawY = y;
+    
+    try {
+      const imgAspect = img.width / img.height;
+      const targetAspect = width / height;
+      let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
+      if (imgAspect > targetAspect) {
+        drawWidth = width;
+        drawHeight = width / imgAspect;
+        drawX = x;
+        drawY = y + (height - drawHeight) / 2;
+      } else {
+        drawHeight = height;
+        drawWidth = height * imgAspect;
+        drawX = x + (width - drawWidth) / 2;
+        drawY = y;
+      }
+      ctx.save();
+      ctx.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
+      if (rotation) ctx.rotate((rotation * Math.PI) / 180);
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      if (addBorder) {
+        // Draw a subtle dark outline instead of white border
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.strokeRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      }
+      ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.restore();
+    } catch (err) {
+      console.error('Error drawing image:', err);
     }
-    ctx.save();
-    ctx.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
-    if (rotation) ctx.rotate((rotation * Math.PI) / 180);
-    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-    if (addBorder) {
-      // Draw a subtle dark outline instead of white border
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-      ctx.strokeRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-    }
-    ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-    ctx.restore();
   };
 
   // Draw the canvas with all elements
@@ -362,24 +412,23 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     console.log('Force update timestamp:', props.forceUpdate);
     
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
     if (!ctx) return;
     
     try {
-      // Set canvas size for high resolution (matches template dimensions)
+      // Original canvas dimensions
       canvas.width = 1240;
       canvas.height = 1748;
       
-      // Clear canvas
+      // Clear canvas and fill with template background color
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#f5f2e9'; // Match the template's cream color
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
       // Draw template
       if (templateImage) {
+        // Draw template to fill the entire canvas exactly
         ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-      } else {
-        // If template fails to load, draw a fallback background
-        ctx.fillStyle = '#f5f2e9';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       
       // DEBUG: Draw red guide lines to show notebook lines (21 lines total)
@@ -405,31 +454,34 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       
       // Calculate dimensions to use full page height
       const topMargin = 20;
-      const minSpacingBetweenElements = 2; // Reduced to just 2px spacing between date and location
+      const minSpacingBetweenElements = 10; // Keep better spacing
       let currentYPosition = topMargin + 40; // Starting Y position for the date
-      const headerHeight = 150; // Reduced combined height for date and location with minimal spacing
+      const headerHeight = 180; // Slightly taller header area
       const contentHeight = canvas.height - topMargin - headerHeight - 20; // Subtract top margin, headers, and bottom margin
       const rowHeight = contentHeight / 3; // Divide remaining space into 3 equal rows
       
-      // Make image columns wider than text columns (60% vs 40%)
-      const imageColumnWidth = (canvas.width - 60) * 0.60;
-      const textColumnWidth = (canvas.width - 60) * 0.40;
+      // Ensure the grid layout allows content to fill full width
+      const fullWidth = canvas.width; // Use the full canvas width
       
-      // Define a strict grid layout that matches the template exactly and fills the full page
+      // Adjust ratio to give more space to text and fill entire canvas
+      const imageColumnWidth = fullWidth * 0.55; // Wider images
+      const textColumnWidth = fullWidth * 0.45; // Wider text
+      
+      // Define grid layout that fills the entire canvas with no margins
       const gridLayout = [
         // Row 1 - Date spans full width
-        { type: 'date', x: 5, y: currentYPosition, width: canvas.width - 40, height: 60 },
-        // Row 2 - Location spans full width (y-position will be calculated after date rendering)
-        { type: 'location', x: 5, y: 0, width: canvas.width - 40, height: 60 },
-        // Row 3 - Left image (wider), right text (narrower)
-        { type: 'image', x: 10, y: topMargin + headerHeight + 85, width: imageColumnWidth - 40, height: rowHeight - 50 },
-        { type: 'text', x: -30 + imageColumnWidth, y: topMargin + headerHeight, width: textColumnWidth + 80, height: rowHeight },
-        // Row 4 - Left text (narrower), right image (wider)
-        { type: 'text', x: -10, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 90, height: rowHeight },
-        { type: 'image', x: 10 + textColumnWidth, y: topMargin + headerHeight + rowHeight + 60, width: imageColumnWidth + 90, height: rowHeight - 40 },
-        // Row 5 - Left image (wider), right text (narrower)
-        { type: 'image', x: -40, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth + 60, height: rowHeight - 30 },
-        { type: 'text', x: -20 + imageColumnWidth, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 90, height: rowHeight + 100 }
+        { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
+        // Row 2 - Location spans full width (moved higher - less Y offset from date)
+        { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+        // Row 3 - Left image, right text
+        { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
+        { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
+        // Row 4 - Left text, right image
+        { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
+        { type: 'image', x: textColumnWidth+ 15, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+        // Row 5 - Left image, right text
+        { type: 'image', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 },
+        { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 }
       ];
       
       // Extract text areas and image positions from grid layout
@@ -460,15 +512,16 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             ctx, 
             dateText, 
             dateCell.width - 20, // Reduced padding
-            'TitleFont, ZainCustomFont, Arial, sans-serif', // Use title font for date
+            "'TitleFont', sans-serif", // Use title font for date
             60, // min
             150 // max
           );
           
           // Set font and color - always black for date text
           ctx.fontKerning = 'normal';
-          ctx.font = `${maxDateFontSize}px TitleFont, ZainCustomFont, Arial, sans-serif`;
+          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
           ctx.fillStyle = '#000000'; // Always black for the date
+          ctx.textAlign = 'left'; // Ensure text is left-aligned
           
           // Calculate metrics for the date text to determine its actual height
           const dateMetrics = ctx.measureText(dateText);
@@ -483,11 +536,11 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           }
           
           // Draw the date text (no shadow)
-          ctx.fillText(dateText, dateCell.x + 10, dateCell.y + 35);
+          ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 35);
           
           // Calculate the Y position for the location with minimal spacing
-          // Use the date baseline position + minimal spacing (instead of full height)
-          currentYPosition = dateCell.y + 35 + dateTextBaselineOffset + minSpacingBetweenElements;
+          // Use the date baseline position + reduced spacing (moved higher)
+          currentYPosition = dateCell.y + 5 + dateTextBaselineOffset + minSpacingBetweenElements;
           
           // Update the location cell's Y position
           const locationCell = gridLayout.find(cell => cell.type === 'location');
@@ -516,7 +569,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             ctx, 
             location, 
             locationCell.width - 20, // Reduced padding
-            'TitleFont, ZainCustomFont, Arial, sans-serif', // Use title font for location
+            "'TitleFont', sans-serif", // Use title font for location
             60, // min
             150 // max
           );
@@ -535,7 +588,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             shadowColor: locationShadowColor
           });
           
-          ctx.font = `${maxLocationFontSize}px TitleFont, ZainCustomFont, Arial, sans-serif`;
+          ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
+          ctx.textAlign = 'left'; // Ensure text is left-aligned
           
           // For the location, we'll use the ascent part of the font for precise positioning
           const locationMetrics = ctx.measureText(location.toUpperCase());
@@ -557,16 +611,12 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
           ctx.restore();
           
-          // Enhanced shadow effect - draw multiple shadow layers for a stronger effect
-          // First shadow layer (furthest)
+          // Simplified shadow effect - just one shadow layer and main text (two colors total)
+          // Shadow layer
           ctx.fillStyle = locationShadowColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x + 20, yPosition + 3);
-          
-          // Second shadow layer (closer)
-          ctx.fillStyle = adjustColor(locationShadowColor, -15); // Slightly darker shadow for depth
-          ctx.fillText(location.toUpperCase(), locationCell.x + 16, yPosition + 1);
-          
-          // Then draw main color text
+          ctx.fillText(location.toUpperCase(), locationCell.x + 15, yPosition + 5);
+
+          // Main text
           ctx.fillStyle = locationColor;
           ctx.fillText(location.toUpperCase(), locationCell.x + 10, yPosition - 3);
         } catch (err) {
@@ -586,23 +636,31 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           const totalLines = 21; // Total available lines across all text areas
           const words = journalText.split(' ');
           
-          // Function to count how many lines the text will take at a given font size
-          const countLinesWithFontSize = (size: number): number => {
+          // Use binary search to find the optimal font size
+          let low = minFontSize;
+          let high = maxFontSize;
+          let fontSize = minFontSize;
+          
+          // Create a fixed text with 98 words to use as a reference for font sizing
+          const referenceText = Array(98).fill("word").join(" ");
+          const referenceWords = referenceText.split(' ');
+          
+          // Function to count lines with our reference text (98 words)
+          const countReferenceLines = (size: number): number => {
             try {
-              const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`; // Keep original font for content
+              const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`;
               ctx.font = testFontString;
               
-              // Use the smallest width from the three text areas to ensure text fits everywhere
               const smallestAreaWidth = Math.min(
-                textAreas[0].width - 40,
-                textAreas[1].width - 40,
-                textAreas[2].width - 40
+                textAreas[0].width - 80, // Increase padding
+                textAreas[1].width - 80, // Increase padding
+                textAreas[2].width - 80  // Increase padding
               );
               
               let lines = 0;
               let currentLine = '';
               
-              for (const word of words) {
+              for (const word of referenceWords) {
                 const testLine = currentLine ? `${currentLine} ${word}` : word;
                 const metrics = ctx.measureText(testLine);
                 
@@ -614,60 +672,41 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
                 }
               }
               
-              // Count the last line if it has content
               if (currentLine) {
                 lines++;
               }
               
               return lines;
             } catch (err) {
-              console.error('Error counting lines:', err);
-              return totalLines + 1; // Return a value that will force smaller font size
+              console.error('Error counting reference lines:', err);
+              return totalLines + 1;
             }
           };
-
-          // Use binary search to find the optimal font size
-          let low = minFontSize;
-          let high = maxFontSize;
-          let fontSize = minFontSize;
           
+          // First, calculate the optimal font size for our reference text (98 words)
+          // This will be our maximum allowable font size even for shorter texts
           while (low <= high) {
             const mid = Math.floor((low + high) / 2);
-            const lineCount = countLinesWithFontSize(mid);
+            const lineCount = countReferenceLines(mid);
             
             if (lineCount <= totalLines) {
-              // This font size fits, try a larger one
               fontSize = mid;
               low = mid + 1;
             } else {
-              // This font size doesn't fit, try a smaller one
               high = mid - 1;
             }
           }
           
-          // Fine precision tuning with decimal increments
-          // First, try to increase with 1.0 increments
-          while (fontSize < maxFontSize && countLinesWithFontSize(fontSize + 1) <= totalLines) {
+          // Fine tune the reference font size
+          while (fontSize < maxFontSize && countReferenceLines(fontSize + 1) <= totalLines) {
             fontSize += 1;
           }
           
-          // Then use 0.1 increments for finer precision
-          while (fontSize < maxFontSize && countLinesWithFontSize(fontSize + 0.1) <= totalLines) {
-            fontSize += 0.1;
-          }
+          // Reduce the font size by 25% to make it less squished
+          fontSize = Math.max(minFontSize, fontSize * 0.75);
           
-          // Finally, use 0.01 increments for maximum precision
-          while (fontSize < maxFontSize && countLinesWithFontSize(fontSize + 0.01) <= totalLines) {
-            fontSize += 0.01;
-          }
-          
-          // Round to 2 decimal places to avoid floating point issues
-          fontSize = Math.round(fontSize * 100) / 100;
-          
-          // Final safety check to ensure text fits
-          while (fontSize > minFontSize && countLinesWithFontSize(fontSize) > totalLines) {
-            fontSize -= 0.01;
-          }
+          // Use the real text to do layout, but with the font size constrained by our reference calculation
+          // The font size is now fixed based on 98 words and reduced by 25%
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
@@ -704,8 +743,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Process each text area in the specific snake order
           for (let areaIndex = 0; areaIndex < orderedTextAreas.length && currentWord < words.length; areaIndex++) {
             const area = orderedTextAreas[areaIndex];
-            const areaX = area.x + 20; // Add padding
-            const areaWidth = area.width - 40; // Account for padding
+            const areaX = area.x + 30; // Increase left padding for text
+            const areaWidth = area.width - 80; // Account for more padding to reduce squishing
             const lineRange = textAreaLineRanges[areaIndex];
             
             // Add this text area to clickable areas
@@ -769,11 +808,11 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           
           drawImagePreservingAspectRatio(
             img,
-            position.x, // Reduced padding from 15 to 5
-            position.y, // Reduced padding from 15 to 5
-            position.width, // Reduced padding from 30 to 10
-            position.height, // Reduced padding from 30 to 10
-            false, // Remove borders (was true)
+            position.x, 
+            position.y, 
+            position.width, 
+            position.height, 
+            true, // Add a subtle border for definition
             position.rotation,
             position.flipH,
             position.flipV
@@ -816,14 +855,112 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     }
   }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount]);
 
-  // Handle download function
-  const downloadJournal = () => {
+  // Replace both export functions with a single ultra-high-quality export
+  const exportUltraHDPDF = () => {
     if (!canvasRef.current) return;
     
-    const link = document.createElement('a');
-    link.download = `journal-${date.toISOString().split('T')[0]}.png`;
-    link.href = canvasRef.current.toDataURL('image/png');
-    link.click();
+    // Create a saving indicator
+    const savingToast = document.createElement('div');
+    savingToast.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50';
+    savingToast.innerHTML = `
+      <div class="bg-white p-4 rounded-md shadow-lg flex flex-col items-center">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-3"></div>
+        <p class="text-gray-800">Creating Ultra-Maximum Resolution Export...</p>
+      </div>
+    `;
+    document.body.appendChild(savingToast);
+    
+    // Get the canvas for export
+    const journalCanvas = canvasRef.current;
+    
+    try {
+      // First create a high-resolution PNG snapshot
+      html2canvas(journalCanvas, {
+        scale: 20, // Extreme high-resolution (20x)
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#f5f2e9',
+        logging: false,
+        letterRendering: true,
+        imageTimeout: 0,
+        async: true,
+        removeContainer: true,
+        foreignObjectRendering: false, // Better quality with native canvas rendering
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: journalCanvas.width * 4,
+        windowHeight: journalCanvas.height * 4
+      }).then((canvas: HTMLCanvasElement) => {
+        // Get PNG data at maximum quality
+        const pngData = canvas.toDataURL('image/png', 1.0);
+        
+        // Create a new image element from the high-quality PNG
+        const img = new Image();
+        img.onload = () => {
+          // Define PDF options with extreme quality settings
+          // Create PDF document with maximum quality
+          const pdf = new jsPDF(
+            'portrait', 
+            'px', 
+            [journalCanvas.width * 2, journalCanvas.height * 2],
+            false // No compression
+          );
+          
+          // Add px_scaling hotfix manually if needed
+          if (pdf.internal && pdf.internal.scaleFactor) {
+            pdf.internal.scaleFactor = 2; // Boost scaling factor
+          }
+          
+          // Add the image to the PDF at maximum resolution
+          pdf.addImage({
+            imageData: pngData,
+            x: 0,
+            y: 0,
+            width: pdf.internal.pageSize.getWidth(),
+            height: pdf.internal.pageSize.getHeight(),
+            compression: 'NONE', // No compression for maximum quality
+            rotation: 0,
+            alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
+          });
+          
+          // Save the PDF
+          pdf.save(`journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`);
+          
+          // Remove saving indicator
+          document.body.removeChild(savingToast);
+          
+          // Show success notification
+          const successToast = document.createElement('div');
+          successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+          successToast.textContent = 'Crystal Clear Export Complete';
+          document.body.appendChild(successToast);
+          
+          // Remove success notification after 2 seconds
+          setTimeout(() => {
+            document.body.removeChild(successToast);
+          }, 2000);
+        };
+        
+        img.onerror = (err) => {
+          console.error('Error loading high-resolution image for PDF:', err);
+          document.body.removeChild(savingToast);
+          alert('Could not create crystal clear export. Please try again.');
+        };
+        
+        // Start loading the high-resolution image
+        img.src = pngData;
+      }).catch((error: Error) => {
+        console.error('Error creating canvas snapshot:', error);
+        document.body.removeChild(savingToast);
+        alert('Could not create export. Please try again.');
+      });
+    } catch (error: unknown) {
+      console.error('Error in export process:', error);
+      document.body.removeChild(savingToast);
+      alert('Could not create export. Please try again.');
+    }
   };
 
   // Calculate the optimal font size to fit text in a given width
@@ -1016,20 +1153,28 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           <span className="text-gray-400">Loading journal...</span>
         </div>
       ) : (
-        <motion.canvas
-          ref={canvasRef}
-          id="journal-canvas"
-          className="w-full h-auto max-w-full bg-white rounded-lg shadow-lg"
-          style={{ aspectRatio: '1240 / 1748' }}
-          whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        />
+        <>
+          <motion.canvas
+            ref={canvasRef}
+            id="journal-canvas"
+            className="w-full h-auto max-w-full bg-[#f5f2e9] rounded-lg shadow-lg"
+            style={{ 
+              aspectRatio: '1240 / 1748',
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto'
+            }}
+            whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            onClick={props.editMode ? exportUltraHDPDF : undefined}
+          />
+        </>
       )}
     </div>
   );

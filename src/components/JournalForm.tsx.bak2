@@ -4,26 +4,11 @@ import JournalCanvas, { ClickableTextArea } from './JournalCanvas';
 import SimpleColorPicker, { TextColors } from './TempColorPicker';
 // @ts-ignore
 import html2canvas from 'html2canvas';
-// Import html2pdf properly
-import html2pdf from 'html2pdf.js';
+import styled from 'styled-components';
 // Add module imports at the top
 import * as htmlToImage from 'html-to-image';
-// Import jsPDF for direct PDF generation
 // @ts-ignore
-import { jsPDF } from 'jspdf';
-import { toast } from 'react-toastify';
-
-// Simple function that returns the original image without enhancement
-const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
-  return imageDataUrl;
-};
-
-// Interface for custom Window properties
-interface CustomWindow extends Window {
-  FORCE_CANVAS_REDRAW: boolean;
-  CURRENT_COLORS: TextColors;
-  forceCanvasRedraw?: () => void;
-}
+import html2pdf from 'html2pdf.js';
 
 // Declare global window properties for TypeScript
 declare global {
@@ -31,7 +16,6 @@ declare global {
     FORCE_CANVAS_REDRAW: boolean;
     CURRENT_COLORS: TextColors;
     forceCanvasRedraw?: () => void;
-    html2pdf?: any;
   }
 }
 
@@ -54,7 +38,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [images, setImages] = useState<string[]>([]);
   const [date, setDate] = useState(new Date());
   const [submitted, setSubmitted] = useState(false);
-  const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [textColors, setTextColors] = useState<TextColors>({
     locationColor: '#2D9CDB',
     locationShadowColor: '#1D3557',
@@ -552,114 +535,82 @@ const JournalForm: React.FC<JournalFormProps> = ({
   }, [clearEyedropper, showSavedNotification]);
   
   // Function to process and optimize image data for more reliable storage
-  const optimizeImageForStorage = async (imageDataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        // Create a canvas for simple resizing if needed
-        const canvas = document.createElement('canvas');
-        
-        // Determine if we need to resize
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        
-        let width = img.width;
-        let height = img.height;
-        
-        // Resize if image is too large
-        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-          if (width > height) {
-            height = Math.floor(height * (MAX_WIDTH / width));
-            width = MAX_WIDTH;
-          } else {
-            width = Math.floor(width * (MAX_HEIGHT / height));
-            height = MAX_HEIGHT;
+  const optimizeImageForStorage = (imageDataUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const img = new Image();
+        img.onload = () => {
+          // Create a canvas to resize the image
+          const canvas = document.createElement('canvas');
+          
+          // Calculate new dimensions - max width/height of 800px
+          const MAX_SIZE = 800;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height && width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
           }
-        }
-        
-        // Set canvas dimensions
-        canvas.width = width;
-        canvas.height = height;
-        
-        // Draw resized image
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          // Return a moderately compressed JPEG for storage
-          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          resolve(optimizedDataUrl);
-        } else {
-          // Fall back to original if context not available
-          resolve(imageDataUrl);
-        }
-      };
-      
-      img.onerror = () => {
-        console.error('Failed to load image for optimization');
-        resolve(imageDataUrl);
-      };
-      
-      img.src = imageDataUrl;
-    });
-  };
-  
-  // Update handleImageUpload to optimize images and show loading indicator
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    
-    // Process all selected files instead of just the first one
-    const files = Array.from(e.target.files);
-    
-    // Show loading indicator 
-    setIsLoadingImage(true);
-    
-    // Process each file in parallel
-    const processImage = async (file: File) => {
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = async (event) => {
-          if (!event.target || typeof event.target.result !== 'string') {
-            reject(new Error('Failed to read file'));
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw the resized image
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(imageDataUrl); // Fallback to original if context fails
             return;
           }
           
-          try {
-            // Use the optimized image processing function
-            const optimizedImage = await optimizeImageForStorage(event.target.result);
-            resolve(optimizedImage);
-          } catch (error) {
-            reject(error);
-          }
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Get the resized image with reduced quality
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(optimizedDataUrl);
         };
         
-        reader.onerror = () => {
-          reject(new Error('Error reading file'));
+        img.onerror = () => {
+          console.error('Error loading image for optimization');
+          resolve(imageDataUrl); // Return original if optimization fails
         };
         
-        reader.readAsDataURL(file);
-      });
-    };
+        img.src = imageDataUrl;
+      } catch (error) {
+        console.error('Error optimizing image:', error);
+        resolve(imageDataUrl); // Return original if optimization fails
+      }
+    });
+  };
+  
+  // Update handleImageUpload to optimize images
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
     
-    // Process all images and add them to the state
-    Promise.all(files.map(processImage))
-      .then(optimizedImages => {
-        setImages(prevImages => [...prevImages, ...optimizedImages]);
-        
-        // Save to local storage
-        saveJournalData();
-      })
-      .catch(error => {
-        console.error('Error processing images:', error);
-        alert('There was an error processing one or more images. Please try different images or formats.');
-      })
-      .finally(() => {
-        setIsLoadingImage(false);
-        // Clear the file input
-        if (e.target) {
-          e.target.value = '';
+    const remainingSlots = 3 - images.length;
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    
+    filesToProcess.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        if (e.target?.result) {
+          try {
+            // Optimize the image before storing
+            const optimizedImage = await optimizeImageForStorage(e.target.result as string);
+            setImages(prev => [...prev, optimizedImage]);
+          } catch (error) {
+            console.error('Error processing image:', error);
+            // Use original as fallback
+            setImages(prev => [...prev, e.target!.result as string]);
+          }
         }
-      });
+      };
+      reader.readAsDataURL(file);
+    });
   };
   
   // Handle replacing an image
@@ -1077,19 +1028,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleSaveAsImage = () => {
     setShowSaveOptions(false);
     
-    // Show toast with loading indicator
-    const toastId = toast.loading('Creating ultra high definition image...', {
-      position: 'top-right',
-      autoClose: false
-    });
+    // Create saving indicator
+    const savingToast = document.createElement('div');
+    savingToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+    savingToast.innerHTML = `
+      <svg class="animate-spin w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Creating ultra high definition image...</span>
+    `;
+    document.body.appendChild(savingToast);
     
     const journalElement = document.getElementById('journal-canvas');
     if (!journalElement) {
-      toast.dismiss(toastId);
-      toast.error('Journal element not found', {
-        position: 'top-right',
-        autoClose: 3000
-      });
+      document.body.removeChild(savingToast);
+      alert('Journal element not found');
       return;
     }
     
@@ -1097,7 +1051,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     const rect = journalElement.getBoundingClientRect();
     
     // Use a much higher scale for 4K quality
-    const scale = 40; // Absolute maximum resolution for pixel perfection
+    const scale = 12; // Increased from 4 to 12 for ultra-high resolution
     
     // Create a wrapper for better quality handling
     const wrapper = document.createElement('div');
@@ -1133,17 +1087,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      logging: false, 
-      imageTimeout: 120000, // 2 minutes to ensure everything loads perfectly
+      logging: false,
+      imageTimeout: 30000, // 30 seconds timeout
       windowWidth: rect.width,
       windowHeight: rect.height,
       x: 0,
       y: 0,
       width: rect.width,
       height: rect.height,
-      letterRendering: true,
-      imageSmoothingEnabled: false,
-      foreignObjectRendering: true,
       onclone: (documentClone: Document) => {
         // Apply better rendering settings to the cloned document
         const clonedElement = documentClone.getElementById('journal-canvas');
@@ -1151,30 +1102,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
           clonedElement.style.width = rect.width + 'px';
           clonedElement.style.height = rect.height + 'px';
           // Enhance text rendering
-          clonedElement.style.textRendering = 'geometricPrecision';
-          (clonedElement.style as any).fontSmooth = 'always';
+          clonedElement.style.textRendering = 'optimizeLegibility';
           (clonedElement.style as any)['webkit-font-smoothing'] = 'antialiased';
           (clonedElement.style as any)['-webkit-font-smoothing'] = 'antialiased';
           (clonedElement.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
-          
-          // Apply high quality image rendering to all images
-          const images = clonedElement.querySelectorAll('img');
-          images.forEach((img: HTMLImageElement) => {
-            img.style.imageRendering = 'high-quality';
-            img.style.imageRendering = '-webkit-optimize-contrast';
-            img.style.transform = 'translateZ(0)';
-            img.style.backfaceVisibility = 'hidden';
-            img.style.willChange = 'transform';
-          });
-          
-          // Apply high quality rendering to all text elements
-          const textElements = clonedElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, span, div');
-          textElements.forEach((el: Element) => {
-            const htmlEl = el as HTMLElement;
-            htmlEl.style.textRendering = 'geometricPrecision';
-            (htmlEl.style as any)['-webkit-font-smoothing'] = 'antialiased';
-            (htmlEl.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
-          });
         }
       }
     }).then((canvas: HTMLCanvasElement) => {
@@ -1186,7 +1117,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           ctx.globalCompositeOperation = 'source-over';
         }
         
-        // Use direct canvas data to maintain highest quality - switched to PNG for lossless quality
+        // Use direct canvas data to maintain highest quality
         const imgData = canvas.toDataURL('image/png', 1.0);
         
         // Create download link
@@ -1195,29 +1126,35 @@ const JournalForm: React.FC<JournalFormProps> = ({
         link.href = imgData;
         link.click();
         
-        // Remove wrapper and update toast
+        // Remove wrapper and saving indicator
         document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
+        document.body.removeChild(savingToast);
         
         // Show success notification
-        toast.success('Saved 4K Ultra HD image to your device', {
-          position: 'top-right',
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true
-        });
+        const successToast = document.createElement('div');
+        successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+        successToast.innerHTML = `
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span>Saved 4K Ultra HD image to your device</span>
+        `;
+        document.body.appendChild(successToast);
+        
+        // Remove success indicator after 2 seconds
+        setTimeout(() => {
+          document.body.removeChild(successToast);
+        }, 2000);
       } catch (err: any) {
         console.error('Error converting canvas to PNG:', err);
         document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
+        document.body.removeChild(savingToast);
         retryImageSave(journalElement);
       }
     }).catch((err: any) => {
       console.error('Error with html2canvas:', err);
       document.body.removeChild(wrapper);
-      toast.dismiss(toastId);
+      document.body.removeChild(savingToast);
       retryImageSave(journalElement);
     });
   };
@@ -1229,15 +1166,21 @@ const JournalForm: React.FC<JournalFormProps> = ({
       return;
     }
     
-    // Show retry notification with toast
-    const toastId = toast.loading(`Retrying with alternative method (${attempts}/3)...`, {
-      position: 'top-right',
-      autoClose: false
-    });
+    // Show retry notification
+    const retryToast = document.createElement('div');
+    retryToast.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+    retryToast.innerHTML = `
+      <svg class="animate-spin w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Retrying with alternative method (${attempts}/3)...</span>
+    `;
+    document.body.appendChild(retryToast);
     
     // Get element dimensions
     const rect = element.getBoundingClientRect();
-    const scale = 16 - attempts * 2; // Increased base scale but still reducing with each retry: 14, 12, 10
+    const scale = 10 - attempts * 2; // Scale down slightly with each retry: 8, 6, 4
     
     // Create a wrapper for the clone to ensure clean rendering
     const wrapper = document.createElement('div');
@@ -1261,340 +1204,468 @@ const JournalForm: React.FC<JournalFormProps> = ({
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      logging: false,
-      imageTimeout: 60000,
+      logging: true, // Enable logging for debugging
+      imageTimeout: 60000, // Extended timeout for retry
+      width: rect.width,
+      height: rect.height,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+      x: rect.left,
+      y: rect.top,
+      scrollX: window.pageXOffset,
+      scrollY: window.pageYOffset,
       onclone: (documentClone: Document) => {
-        // Apply rendering optimizations
+        // Force better rendering
         const clonedElement = documentClone.getElementById('journal-canvas');
         if (clonedElement) {
           clonedElement.style.width = rect.width + 'px';
           clonedElement.style.height = rect.height + 'px';
+          clonedElement.style.transform = 'none';
+          clonedElement.style.transformOrigin = '0 0';
+          // Enhance text rendering quality
+          clonedElement.style.textRendering = 'optimizeLegibility';
+          (clonedElement.style as any)['-webkit-font-smoothing'] = 'antialiased';
+          (clonedElement.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
         }
       }
     }).then((canvas: HTMLCanvasElement) => {
-      try {
-        // Convert to image
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        
-        // Download
-        const link = document.createElement('a');
-        link.download = `journal-${new Date().toISOString().split('T')[0]}.jpg`;
-        link.href = imgData;
-        link.click();
-        
-        // Clean up
-        document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
-        
-        // Show success notification
-        toast.success('Image saved successfully', {
-          position: 'top-right',
-          autoClose: 3000
-        });
-      } catch (err: any) {
-        console.error(`Error in retry ${attempts}:`, err);
-        document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
-        setTimeout(() => {
-          retryImageSave(element, attempts + 1);
-        }, 1000);
-      }
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = `journal-${new Date().toISOString().split('T')[0]}-hd-retry${attempts}.png`;
+      link.href = imgData;
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(wrapper);
+      document.body.removeChild(retryToast);
+      
+      // Show success notification
+      const successToast = document.createElement('div');
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+      successToast.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>Saved high resolution image (alternative method ${attempts})</span>
+      `;
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        document.body.removeChild(successToast);
+      }, 2000);
     }).catch((err: any) => {
       console.error(`Retry ${attempts} with html2canvas failed:`, err);
       document.body.removeChild(wrapper);
-      toast.dismiss(toastId);
+      document.body.removeChild(retryToast);
       setTimeout(() => {
         retryImageSave(element, attempts + 1);
-      }, 1000);
+      }, 500 * attempts);
     });
   };
   
   // Most basic fallback with minimal options
   const applyBasicFallback = (element: HTMLElement) => {
-    // Show final fallback notification
-    const toastId = toast.loading('Trying simpler approach for compatibility...', {
-      position: 'top-right',
-      autoClose: false
-    });
+    const retryToast = document.createElement('div');
+    retryToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+    retryToast.innerHTML = `
+      <svg class="animate-spin w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Final fallback attempt...</span>
+    `;
+    document.body.appendChild(retryToast);
     
-    try {
-      // Get element dimensions
-      const rect = element.getBoundingClientRect();
+    // Simplest possible configuration but still with decent quality
+    html2canvas(element, {
+      scale: 3, // Still maintain reasonable quality in fallback
+      backgroundColor: '#ffffff',
+      logging: true,
+      useCORS: true,
+      allowTaint: true
+    }).then((canvas: HTMLCanvasElement) => {
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = `journal-${new Date().toISOString().split('T')[0]}-fallback.png`;
+      link.href = imgData;
+      link.click();
       
-      // Create wrapper
-      const wrapper = document.createElement('div');
-      wrapper.style.position = 'absolute';
-      wrapper.style.top = '-9999px';
-      wrapper.style.left = '-9999px';
-      document.body.appendChild(wrapper);
+      document.body.removeChild(retryToast);
       
-      // Clone element
-      const clone = element.cloneNode(true) as HTMLElement;
-      wrapper.appendChild(clone);
+      // Show success notification
+      const successToast = document.createElement('div');
+      successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+      successToast.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>Saved standard resolution image</span>
+      `;
+      document.body.appendChild(successToast);
       
-      // Use very basic settings
-      html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false
-      }).then((canvas: HTMLCanvasElement) => {
-        // Get image data and download
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        const link = document.createElement('a');
-        link.download = `journal-${new Date().toISOString().split('T')[0]}.jpg`;
-        link.href = imgData;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Clean up
-        document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
-        
-        // Show success
-        toast.success('Image saved using compatibility mode', {
-          position: 'top-right',
-          autoClose: 3000
-        });
-      }).catch((err: Error) => {
-        console.error('Final fallback failed:', err);
-        document.body.removeChild(wrapper);
-        toast.dismiss(toastId);
-        
-        // Show error with guidance
-        toast.error(
-          'Could not save as image. Try taking a screenshot instead.',
-          {
-            position: 'top-right',
-            autoClose: 5000
-          }
-        );
-      });
-    } catch (err: unknown) {
-      console.error('Error in basic fallback:', err);
-      toast.dismiss(toastId);
-      
-      toast.error(
-        'Could not save as image. Try taking a screenshot instead.',
-        {
-          position: 'top-right',
-          autoClose: 5000
-        }
-      );
-    }
+      setTimeout(() => {
+        document.body.removeChild(successToast);
+      }, 2000);
+    }).catch((err: any) => {
+      console.error('All retry attempts failed:', err);
+      document.body.removeChild(retryToast);
+      alert('Could not save image after multiple attempts. Please try a different method.');
+    });
   };
   
-  // Completely rewritten share function - ultra simplified
+  // New function to handle sharing
   const handleShare = async () => {
-    if (!journalRef.current) return;
+    setShowSaveOptions(false);
     
-    const journalElement = journalRef.current;
+    const journalElement = document.getElementById('journal-canvas');
+    if (!journalElement) return;
     
-    // Device detection
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isMobile = isIOS || isAndroid;
+    // Show sharing indicator
+    const sharingToast = document.createElement('div');
+    sharingToast.className = 'fixed top-4 right-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+    sharingToast.innerHTML = `
+      <svg class="animate-spin w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Preparing high quality image...</span>
+    `;
+    document.body.appendChild(sharingToast);
     
-    // Create a toast notification with progress bar
-    const toastId = toast.loading("Creating high-quality PDF...", {
-      position: "bottom-center",
-      autoClose: false,
-      closeButton: false,
-      style: { maxWidth: '320px', width: '100%' }
-    });
+    // Force a repaint before image generation
+    window.forceCanvasRedraw?.();
     
-    // Type alias for toast types used in update
-    type ToastUpdateType = 'success' | 'error' | 'info' | 'warning' | 'default';
-
-    const updateToast = (
-      content: React.ReactNode, 
-      type: ToastUpdateType = 'default', 
-      options: Partial<import('react-toastify').UpdateOptions> = {}
-    ) => {
-      toast.update(toastId, {
-        render: content,
-        type: type, // Pass the type directly
-        isLoading: false, // Assume no longer loading unless specified
-        ...options, // Spread other options like autoClose, closeButton, etc.
-      });
-    };
+    // Get the exact dimensions
+    const rect = journalElement.getBoundingClientRect();
     
-    updateToast("Initializing PDF export..."); // Initial message (type defaults to 'default')
+    // Create a wrapper for better quality handling
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.top = '-9999px';
+    wrapper.style.left = '-9999px';
+    wrapper.style.width = `${rect.width}px`;
+    wrapper.style.height = `${rect.height}px`;
+    document.body.appendChild(wrapper);
     
-    try {
-      // Step 1: Capture canvas with high quality
-      updateToast("Capturing journal content (High Quality)...", 'default', { 
-        progress: 0.2, 
-        isLoading: true // Keep showing spinner
-      }); 
-      
-      // Use higher scale for quality, consistent across devices if possible
-      const scale = 4; // Let's try scale 4 for both, aiming for quality
-      
-      const canvas = await html2canvas(journalElement, {
-        scale: scale,
+    // Clone the journal element into the wrapper to prevent display issues
+    const clone = journalElement.cloneNode(true) as HTMLElement;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.transform = 'none';
+    wrapper.appendChild(clone);
+    
+    // Check if Web Share API is available
+    if (navigator.share) {
+      // Wait for rendering to complete
+      setTimeout(async () => {
+        try {
+          // Use html2canvas for higher quality
+          const canvas = await html2canvas(clone, {
+            scale: 8, // High scale for sharing
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            onclone: (documentClone: Document) => {
+              // Apply better rendering settings
+              const clonedElement = documentClone.getElementById('journal-canvas');
+              if (clonedElement) {
+                clonedElement.style.width = rect.width + 'px';
+                clonedElement.style.height = rect.height + 'px';
+                clonedElement.style.textRendering = 'optimizeLegibility';
+                (clonedElement.style as any)['-webkit-font-smoothing'] = 'antialiased';
+                (clonedElement.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
+              }
+            }
+          });
+          
+          // Convert canvas to blob with highest quality
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob((blob: Blob | null) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Canvas to Blob conversion failed'));
+              }
+            }, 'image/png', 1.0);
+          });
+          
+          if (!blob) {
+            throw new Error('Could not generate image');
+          }
+          
+          // Create a file from the blob
+          const file = new File([blob], `journal-${new Date().toISOString().split('T')[0]}-hd.png`, { type: 'image/png' });
+          
+          // Remove sharing indicator and wrapper
+          document.body.removeChild(wrapper);
+          document.body.removeChild(sharingToast);
+          
+          await navigator.share({
+            title: 'My Journal Entry',
+            text: 'Check out my journal entry created with Web Journal!',
+            files: [file]
+          });
+        } catch (error: unknown) {
+          console.error('Error sharing:', error);
+          document.body.removeChild(wrapper);
+          document.body.removeChild(sharingToast);
+          
+          // Retry with increased delay if image generation failed
+          if (error instanceof Error && error.toString().includes('generate image')) {
+            retryImageShare(journalElement);
+            return;
+          }
+          
+          // Fallback for devices that support navigator.share but not file sharing
+          if (error instanceof Error && error.toString().includes('files')) {
+            try {
+              await navigator.share({
+                title: 'My Journal Entry',
+                text: 'Check out my journal entry created with Web Journal!'
+              });
+            } catch (fallbackError) {
+              alert('Sharing failed. Your device may not support this feature.');
+            }
+          } else {
+            alert('Sharing failed. Your device may not support this feature.');
+          }
+        }
+      }, 500);
+    } else {
+      document.body.removeChild(wrapper);
+      document.body.removeChild(sharingToast);
+      alert('Sharing is not supported on your device. Try saving the image and sharing it manually.');
+    }
+  };
+  
+  // Add retry function for image sharing
+  const retryImageShare = async (element: HTMLElement, attempts: number = 1) => {
+    if (attempts > 3) {
+      alert('Failed to share image after multiple attempts. Please try again later.');
+      return;
+    }
+    
+    const retryToast = document.createElement('div');
+    retryToast.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+    retryToast.innerHTML = `
+      <svg class="animate-spin w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Retrying share (${attempts}/3)...</span>
+    `;
+    document.body.appendChild(retryToast);
+    
+    // Force a repaint and wait longer between retries
+    window.forceCanvasRedraw?.();
+    
+    // Get element dimensions
+    const rect = element.getBoundingClientRect();
+    const scale = 10 - attempts * 2; // Scale down with each retry (8, 6, 4)
+    
+    // Create a wrapper for the clone
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.top = '-9999px';
+    wrapper.style.left = '-9999px';
+    wrapper.style.width = `${rect.width}px`;
+    wrapper.style.height = `${rect.height}px`;
+    document.body.appendChild(wrapper);
+    
+    // Clone the journal element
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.transform = 'none';
+    wrapper.appendChild(clone);
+    
+    // Wait for rendering with increased delay on each retry
+    setTimeout(async () => {
+      try {
+        // Try html2canvas first as it usually produces better quality
+        const canvas = await html2canvas(clone, {
+          scale: scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          logging: true,
+          onclone: (documentClone: Document) => {
+            const clonedElement = documentClone.getElementById('journal-canvas');
+            if (clonedElement) {
+              clonedElement.style.width = rect.width + 'px';
+              clonedElement.style.height = rect.height + 'px';
+              clonedElement.style.textRendering = 'optimizeLegibility';
+              (clonedElement.style as any)['-webkit-font-smoothing'] = 'antialiased';
+              (clonedElement.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
+            }
+          }
+        });
+        
+        // Convert to blob with highest quality
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob: Blob | null) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas to Blob conversion failed'));
+            }
+          }, 'image/png', 1.0);
+        });
+        
+        if (!blob) {
+          throw new Error('Could not generate image during retry');
+        }
+        
+        const file = new File([blob], `journal-${new Date().toISOString().split('T')[0]}-hd.png`, { type: 'image/png' });
+        
+        document.body.removeChild(wrapper);
+        document.body.removeChild(retryToast);
+        
+        await navigator.share({
+          title: 'My Journal Entry',
+          text: 'Check out my journal entry created with Web Journal!',
+          files: [file]
+        });
+      } catch (error) {
+        console.error(`Share retry ${attempts} failed:`, error);
+        
+        // Try htmlToImage as a fallback if html2canvas fails
+        try {
+          const blob = await htmlToImage.toBlob(clone, {
+            quality: 1.0,
+            pixelRatio: 4,
+            cacheBust: true,
+            skipFonts: false,
+            backgroundColor: '#ffffff',
+            width: rect.width * scale,
+            height: rect.height * scale
+          });
+          
+          if (!blob) {
+            throw new Error('Failed to create image blob');
+          }
+          
+          const file = new File([blob], `journal-${new Date().toISOString().split('T')[0]}-hd.png`, { type: 'image/png' });
+          
+          document.body.removeChild(wrapper);
+          document.body.removeChild(retryToast);
+          
+          await navigator.share({
+            title: 'My Journal Entry',
+            text: 'Check out my journal entry created with Web Journal!',
+            files: [file]
+          });
+          return;
+        } catch (fallbackError) {
+          console.error(`Share fallback retry ${attempts} failed:`, fallbackError);
+          document.body.removeChild(wrapper);
+          document.body.removeChild(retryToast);
+          
+          if (attempts < 3) {
+            // Increase wait time with each retry
+            setTimeout(() => {
+              retryImageShare(element, attempts + 1);
+            }, 700 * attempts);
+          } else {
+            alert('Sharing failed after multiple attempts. Please try saving the image instead.');
+          }
+        }
+      }
+    }, 700 * attempts);
+  };
+  
+  // New function to handle saving as PDF
+  const handleSaveAsPDF = () => {
+    setShowSaveOptions(false);
+    
+    const journalElement = document.getElementById('journal-canvas');
+    if (!journalElement) return;
+    
+    // Show PDF saving indicator
+    const savingToast = document.createElement('div');
+    savingToast.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50';
+    savingToast.innerHTML = `
+      <div class="bg-white p-4 rounded-md shadow-lg flex flex-col items-center">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-3"></div>
+        <p class="text-gray-800">Creating ULTRA HD PDF...</p>
+      </div>
+    `;
+    document.body.appendChild(savingToast);
+    
+    // Ultra HD PDF settings
+    const opt = {
+      margin: 0,
+      filename: `journal-${new Date().toISOString().split('T')[0]}-ultrahd.pdf`,
+      image: { type: 'png', quality: 1.0 }, // Maximum image quality
+      html2canvas: { 
+        scale: 8, // Ultra HD resolution (8x)
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 90000, // Increased timeout for higher scale
-        letterRendering: true
-      });
-      
-      // Step 2: Generate PDF
-      updateToast("Generating PDF document...", 'default', { 
-        progress: 0.5, 
-        isLoading: true 
-      });
-      
-      const imgWidth = 210; // A4 width mm
-      const pageHeight = 297; // A4 height mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pagesNeeded = Math.ceil(imgHeight / pageHeight);
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0); // High quality JPEG
-      
-      // Add image to PDF pages
-      updateToast("Adding content to PDF...", 'default', { 
-        progress: 0.7, 
-        isLoading: true 
-      });
-      let heightLeft = imgHeight;
-      let position = 0;
-      for (let i = 0; i < pagesNeeded; i++) {
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, -position, imgWidth, imgHeight);
-        position += pageHeight;
-        heightLeft -= pageHeight;
+        backgroundColor: '#f5f2e9',
+        logging: false
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait',
+        compress: false, // Don't compress for better quality
+        precision: 16 // Higher precision
       }
-      
-      // Step 3: Prepare output & attempt display/download
-      updateToast("Finalizing PDF...", 'default', { 
-        progress: 0.9, 
-        isLoading: true 
-      });
-      const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
-      
-      // Determine browser on iOS
-      const isChromeIOS = navigator.userAgent.match("CriOS");
-      const isFirefoxIOS = navigator.userAgent.match("FxiOS");
-      const isSafariIOS = isIOS && !isChromeIOS && !isFirefoxIOS;
-      
-      // Attempt download using the most reliable methods first
-      try {
-        // Method 1: Use pdf.save() - works well on Desktop, Android, and Safari iOS
-        pdf.save(filename);
-        
-        // Update toast with instructions based on OS/browser
-        if (isSafariIOS) {
-          updateToast(
-            <div>
-              <p className="font-bold">✅ PDF Download Initiated!</p>
-              <p className="text-sm">Check Safari downloads (⬇️ icon) or the Files app.</p>
-              <p className="text-xs mt-1">Once downloaded, open the PDF and use Share &gt; &apos;Copy to Goodnotes&apos;.</p>
-            </div>,
-            'success',
-            { autoClose: 15000, isLoading: false, closeButton: true }
-          );
-        } else if (isIOS) { // Chrome, Firefox, etc. on iOS
-          updateToast(
-            <div>
-              <p className="font-bold">✅ PDF Download Attempted</p>
-              <p className="text-sm">If download doesn&apos;t start, try opening:</p>
-              {/* Add button to open data URI as fallback */}
-              <button 
-                onClick={() => {
-                  try {
-                    const pdfDataUri = pdf.output('datauristring');
-                    window.open(pdfDataUri, '_blank');
-                  } catch (e) { 
-                    alert('Could not open PDF directly. Please check downloads.');
-                  }
-                }}
-                className="mt-2 py-1 px-2 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
-              >
-                Open PDF in New Tab
-              </button>
-              <p className="text-xs mt-1">Then use Share &gt; &apos;Copy to Goodnotes&apos;. Check Files app if needed.</p>
-            </div>,
-            'info', // Use info as pdf.save might not work reliably here
-            { autoClose: 20000, isLoading: false, closeButton: true }
-          );
-        } else {
-          // Non-iOS (Desktop, Android)
-          updateToast(
-            <div>
-              <p className="font-bold">✅ PDF Downloaded Successfully!</p>
-              <p className="text-sm">Check your downloads folder.</p>
-            </div>,
-            'success',
-            { autoClose: 5000, isLoading: false, closeButton: true }
-          );
-        }
-      } catch (saveError) {
-        console.error("pdf.save() failed:", saveError);
-        // Fallback error message if pdf.save fails
-        updateToast(
-          <div>
-            <p className="font-bold">Download Failed</p>
-            <p className="text-sm">Could not save the PDF. Please try again.</p>
-          </div>,
-          'error',
-          { autoClose: 7000, isLoading: false, closeButton: true }
-        );
-      }
-      
-    } catch (error) {
-      console.error("Error creating PDF:", error);
-      updateToast(
-        <div>
-          <p className="font-bold">PDF Generation Failed</p>
-          <p className="text-sm">An error occurred. Please try again.</p>
-        </div>,
-        'error',
-        { autoClose: 7000, isLoading: false, closeButton: true }
-      );
-    }
-  };
-  
-  // Handle PDF Save function (for dropdown menu)
-  const handleSaveAsPDF = async () => {
-    // Reuse the share functionality which now focuses on PDF export
-    handleShare();
-  };
-  
-  const journalRef = useRef<HTMLDivElement>(null);
-  
-  // Save journal data to localStorage
-  const saveJournalData = () => {
-    const draftData = {
-      location,
-      journalText,
-      images,
-      date: date.toISOString(),
-      textColors
     };
     
-    if (saveToLocalStorage('webjournal_draft', draftData)) {
-      showSavedNotification();
+    try {
+      // Use html2pdf for the highest possible quality
+      html2pdf()
+        .from(journalElement)
+        .set(opt)
+        .save()
+        .then(() => {
+          // Remove saving indicator
+          document.body.removeChild(savingToast);
+          
+          // Show success toast
+          const successToast = document.createElement('div');
+          successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+          successToast.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>Saved ULTRA HD PDF to your device</span>
+          `;
+          document.body.appendChild(successToast);
+          
+          // Remove success toast after 2 seconds
+          setTimeout(() => {
+            document.body.removeChild(successToast);
+          }, 2000);
+        })
+        .catch((err: unknown) => {
+          console.error('Error creating PDF:', err);
+          document.body.removeChild(savingToast);
+          
+          // Show error notification
+          const errorToast = document.createElement('div');
+          errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2';
+          errorToast.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            <span>Failed to create PDF. Please try again.</span>
+          `;
+          document.body.appendChild(errorToast);
+          
+          // Remove error toast after 4 seconds
+          setTimeout(() => {
+            document.body.removeChild(errorToast);
+          }, 4000);
+        });
+    } catch (err: unknown) {
+      console.error('Error initiating PDF creation:', err);
+      document.body.removeChild(savingToast);
+      alert('Could not create PDF. Please try again.');
     }
   };
-  
-  // Add a useEffect to ensure the location input gets and keeps focus when needed
-  useEffect(() => {
-    if (activeEditField === 'location' && locationInputRef.current) {
-      // Set a short timeout to ensure focus happens after rendering
-      const focusTimeout = setTimeout(() => {
-        locationInputRef.current?.focus();
-      }, 50);
-      
-      return () => clearTimeout(focusTimeout);
-    }
-  }, [activeEditField]);
-  
-  const [isSharing, setIsSharing] = useState(false);
   
   return (
     <div className="w-full max-w-6xl mx-auto relative">
@@ -1710,6 +1781,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </li>
                         <li>
                           <button 
+                            onClick={handleSaveAsImage} 
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            Save as Image
+                          </button>
+                        </li>
+                        <li>
+                          <button 
                             onClick={handleShare} 
                             className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
                           >
@@ -1738,7 +1820,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
             </div>
             
             <div className="p-4">
-              <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef}>
+              <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg">
                 <JournalCanvas
                   date={submitted ? submittedData.date : date}
                   location={submitted ? submittedData.location : location}
@@ -1786,29 +1868,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   <h3 className="font-medium text-[#1a1a1a]">Edit Content</h3>
                 </div>
                 <div className="p-4 space-y-4">
-                  {/* Date editing */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={submittedData.date.toISOString().split('T')[0]}
-                        onChange={(e) => {
-                          const newDate = new Date(e.target.value);
-                          setSubmittedData({
-                            ...submittedData,
-                            date: newDate,
-                            forceUpdate: Date.now(),
-                          });
-                        }}
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
                   {/* Location editing */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1891,7 +1950,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             accept="image/*"
                             onChange={(e) => handleAddImage(e)}
                             className="hidden"
-                            multiple // Add multiple attribute
                           />
                         </label>
                       )}
@@ -1915,7 +1973,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                 accept="image/*"
                                 onChange={(e) => handleReplaceImage(index, e)}
                                 className="hidden"
-                                multiple
                               />
                             </label>
                             <button

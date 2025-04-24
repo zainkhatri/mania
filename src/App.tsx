@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
 // Import components
@@ -33,6 +35,9 @@ function App() {
 
   return (
     <main className="min-h-screen relative bg-[#f5f2e9]">
+      {/* Toast Container for notifications */}
+      <ToastContainer position="bottom-center" />
+      
       {isLoading ? (
         <LoadingSpinner message="Loading your journal..." />
       ) : (

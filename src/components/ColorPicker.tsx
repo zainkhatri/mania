@@ -61,10 +61,10 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     const shadowColor = getShadowColor(newColor);
     
     // Call the onChange handler with updated colors
-    onChange({
+      onChange({
       locationColor: newColor,
-      locationShadowColor: shadowColor
-    });
+        locationShadowColor: shadowColor
+      });
   };
   
   // Handle shadow color change
@@ -107,9 +107,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
         {/* Color presets */}
         <div className="flex flex-wrap gap-2 mb-4">
           {colorPresets.map((color, index) => (
-            <button
+        <button
               key={index}
-              type="button"
+          type="button"
               className="w-8 h-8 rounded-md border shadow hover:scale-110 transition-transform"
               style={{ backgroundColor: color }}
               onClick={() => handlePresetClick(color)}
@@ -121,9 +121,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Main Color</label>
           <div className="flex items-center gap-3">
-            <div 
+          <div 
               className="w-10 h-10 rounded-md border shadow"
-              style={{ backgroundColor: colors.locationColor }}
+            style={{ backgroundColor: colors.locationColor }}
             />
             <input
               type="color"
@@ -139,9 +139,9 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Shadow Color</label>
           <div className="flex items-center gap-3">
-            <div 
+          <div 
               className="w-10 h-10 rounded-md border shadow"
-              style={{ backgroundColor: colors.locationShadowColor }}
+            style={{ backgroundColor: colors.locationShadowColor }}
             />
             <input
               type="color"

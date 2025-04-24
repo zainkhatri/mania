@@ -61,8 +61,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
             try {
               // Create a canvas to draw the image
               const canvas = document.createElement('canvas');
-              // Use a smaller size for performance
-              const size = 100;
+              // Use a larger size for better color sampling
+              const size = 200;
               canvas.width = size;
               canvas.height = size;
               
@@ -78,36 +78,41 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
               // Get the image data
               const imageData = ctx.getImageData(0, 0, size, size).data;
               
-              // Sample pixels at different locations
-              const samplePoints = [
-                // Center
-                Math.floor(size / 2) * (size * 4) + Math.floor(size / 2) * 4,
-                // Top left
-                20 * (size * 4) + 20 * 4,
-                // Top right
-                20 * (size * 4) + (size - 20) * 4,
-                // Bottom left
-                (size - 20) * (size * 4) + 20 * 4,
-                // Bottom right
-                (size - 20) * (size * 4) + (size - 20) * 4
-              ];
+              // Use more sample points across the image for better color detection
+              const candidateColors: {hex: string, hsl: {h: number, s: number, l: number}}[] = [];
               
-              for (const point of samplePoints) {
-                if (point >= 0 && point < imageData.length - 4) {
+              // Sample more points in a grid pattern
+              const gridStep = Math.floor(size / 6); // 6x6 grid sampling
+              
+              for (let y = gridStep; y < size; y += gridStep) {
+                for (let x = gridStep; x < size; x += gridStep) {
+                  const point = (y * size + x) * 4;
                   const r = imageData[point];
                   const g = imageData[point + 1];
                   const b = imageData[point + 2];
+                  const a = imageData[point + 3];
+                  
+                  // Skip transparent pixels
+                  if (a < 128) continue;
                   
                   // Convert to hex
                   const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
                   
-                  // Check if the color is not too dark or too light
+                  // Convert RGB to HSL for better color comparison
+                  const hsl = rgbToHsl(r, g, b);
+                  
+                  // Check brightness - exclude very dark or very light colors
                   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                  if (brightness > 30 && brightness < 220) {
-                    colors.push(hex);
+                  if (brightness > 40 && brightness < 225) {
+                    candidateColors.push({ hex, hsl });
                   }
                 }
               }
+              
+              // Sort and filter colors by uniqueness in HSL space
+              const uniqueColors = filterDiverseColors(candidateColors);
+              uniqueColors.forEach(color => colors.push(color));
+              
             } catch (err) {
               console.error("Error processing image:", err);
             }
@@ -123,14 +128,105 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         });
       }
       
-      // Remove duplicates and limit to 8 colors
-      const uniqueColors = Array.from(new Set(colors));
-      setExtractedColors(uniqueColors.slice(0, 8));
+      // Filter for unique, diverse colors
+      const diverseColors = selectDiverseColors(colors);
+      setExtractedColors(diverseColors.slice(0, 8));
     } catch (err) {
       console.error("Error extracting colors:", err);
     }
     
     setIsExtracting(false);
+  };
+  
+  // Helper function to convert RGB to HSL
+  const rgbToHsl = (r: number, g: number, b: number) => {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+  
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+  
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      
+      h /= 6;
+    }
+  
+    return { h: h * 360, s: s * 100, l: l * 100 };
+  };
+  
+  // Filter to reduce similar colors based on HSL difference
+  const filterDiverseColors = (colors: {hex: string, hsl: {h: number, s: number, l: number}}[]) => {
+    const result: string[] = [];
+    const usedHueRanges: {min: number, max: number}[] = [];
+    
+    // Group colors by hue segments
+    const hueGroups: {[key: string]: {hex: string, hsl: {h: number, s: number, l: number}}[]} = {};
+    
+    // First, group colors by similar hue (in 30° segments)
+    colors.forEach(color => {
+      const hueGroup = Math.floor(color.hsl.h / 30);
+      if (!hueGroups[hueGroup]) {
+        hueGroups[hueGroup] = [];
+      }
+      hueGroups[hueGroup].push(color);
+    });
+    
+    // Take the most saturated color from each hue group
+    Object.values(hueGroups).forEach(group => {
+      if (group.length > 0) {
+        // Sort by saturation (more saturated is visually more distinctive)
+        group.sort((a, b) => b.hsl.s - a.hsl.s);
+        result.push(group[0].hex);
+      }
+    });
+    
+    return result;
+  };
+  
+  // Select a diverse set of colors from all the candidates
+  const selectDiverseColors = (colors: string[]) => {
+    // Remove duplicates
+    const uniqueColors = Array.from(new Set(colors));
+    
+    // If we don't have many colors, return what we have
+    if (uniqueColors.length <= 8) return uniqueColors;
+    
+    // Convert to RGB for analysis
+    const colorData = uniqueColors.map(hex => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return { hex, r, g, b };
+    });
+    
+    // Sort colors by hue to get different color families
+    colorData.sort((a, b) => {
+      const aHue = rgbToHsl(a.r, a.g, a.b).h;
+      const bHue = rgbToHsl(b.r, b.g, b.b).h;
+      return aHue - bHue;
+    });
+    
+    // Take an evenly distributed sample from the sorted array
+    const result: string[] = [];
+    const step = colorData.length / 8;
+    
+    for (let i = 0; i < 8; i++) {
+      const index = Math.min(Math.floor(i * step), colorData.length - 1);
+      result.push(colorData[index].hex);
+    }
+    
+    return result;
   };
   
   const selectColor = (color: string) => {
