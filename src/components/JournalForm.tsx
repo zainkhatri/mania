@@ -1796,7 +1796,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         type="date"
                         value={submittedData.date.toISOString().split('T')[0]}
                         onChange={(e) => {
-                          const newDate = new Date(e.target.value);
+                          // Fix: Parse date string manually to avoid timezone issues
+                          const dateString = e.target.value;
+                          const [year, month, day] = dateString.split('-').map(Number);
+                          // Create date using local year, month (0-indexed), and day
+                          const newDate = new Date(year, month - 1, day);
+                          
                           setSubmittedData({
                             ...submittedData,
                             date: newDate,
