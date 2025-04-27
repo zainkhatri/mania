@@ -1942,9 +1942,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
           ) : (
             // Input form for creating journal
             <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
-              <div className="p-6 border-b border-[#e8e4d5]">
+              <div className="p-6 border-b border-[#e8e4d5] flex justify-between items-center">
                 <h3 className="text-xl font-semibold text-[#1a1a1a]">New Journal Entry</h3>
-                <p className="text-[#4a4a4a] mt-1">Fill in the details to create your journal</p>
+                {/* Removed subtitle paragraph */}
+                {/* Add New Journal button here */}
+                {!submitted && (
+                  <button 
+                    type="button" // Prevent form submission
+                    onClick={handleReset} 
+                    className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
+                  >
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    New Journal
+                  </button>
+                )}
               </div>
               
               <div className="p-6">
