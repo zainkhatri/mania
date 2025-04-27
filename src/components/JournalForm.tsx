@@ -554,18 +554,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Function to process and optimize image data for more reliable storage
   const optimizeImageForStorage = async (imageDataUrl: string): Promise<string> => {
     return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
+        const img = new Image();
+        img.onload = () => {
         // Create a canvas for simple resizing if needed
-        const canvas = document.createElement('canvas');
-        
+          const canvas = document.createElement('canvas');
+          
         // Determine if we need to resize
         const MAX_WIDTH = 1200;
         const MAX_HEIGHT = 1200;
         
-        let width = img.width;
-        let height = img.height;
-        
+          let width = img.width;
+          let height = img.height;
+          
         // Resize if image is too large
         if (width > MAX_WIDTH || height > MAX_HEIGHT) {
           if (width > height) {
@@ -578,11 +578,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
         }
         
         // Set canvas dimensions
-        canvas.width = width;
-        canvas.height = height;
-        
+          canvas.width = width;
+          canvas.height = height;
+          
         // Draw resized image
-        const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
           // Return a moderately compressed JPEG for storage
@@ -592,14 +592,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
           // Fall back to original if context not available
           resolve(imageDataUrl);
         }
-      };
-      
-      img.onerror = () => {
+        };
+        
+        img.onerror = () => {
         console.error('Failed to load image for optimization');
         resolve(imageDataUrl);
-      };
-      
-      img.src = imageDataUrl;
+        };
+        
+        img.src = imageDataUrl;
     });
   };
   
@@ -616,7 +616,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     // Process each file in parallel
     const processImage = async (file: File) => {
       return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
+      const reader = new FileReader();
         
         reader.onload = async (event) => {
           if (!event.target || typeof event.target.result !== 'string') {
@@ -630,15 +630,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
             resolve(optimizedImage);
           } catch (error) {
             reject(error);
-          }
-        };
+        }
+      };
         
         reader.onerror = () => {
           reject(new Error('Error reading file'));
         };
         
-        reader.readAsDataURL(file);
-      });
+      reader.readAsDataURL(file);
+    });
     };
     
     // Process all images and add them to the state
@@ -1133,7 +1133,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      logging: false, 
+      logging: false,
       imageTimeout: 120000, // 2 minutes to ensure everything loads perfectly
       windowWidth: rect.width,
       windowHeight: rect.height,
@@ -1277,16 +1277,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
         // Download
-        const link = document.createElement('a');
+      const link = document.createElement('a');
         link.download = `journal-${new Date().toISOString().split('T')[0]}.jpg`;
-        link.href = imgData;
-        link.click();
-        
-        // Clean up
-        document.body.removeChild(wrapper);
+      link.href = imgData;
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(wrapper);
         toast.dismiss(toastId);
-        
-        // Show success notification
+      
+      // Show success notification
         toast.success('Image saved successfully', {
           position: 'top-right',
           autoClose: 3000
@@ -1295,7 +1295,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         console.error(`Error in retry ${attempts}:`, err);
         document.body.removeChild(wrapper);
         toast.dismiss(toastId);
-        setTimeout(() => {
+      setTimeout(() => {
           retryImageSave(element, attempts + 1);
         }, 1000);
       }
@@ -1322,22 +1322,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
       const rect = element.getBoundingClientRect();
       
       // Create wrapper
-      const wrapper = document.createElement('div');
-      wrapper.style.position = 'absolute';
-      wrapper.style.top = '-9999px';
-      wrapper.style.left = '-9999px';
-      document.body.appendChild(wrapper);
-      
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.top = '-9999px';
+    wrapper.style.left = '-9999px';
+    document.body.appendChild(wrapper);
+    
       // Clone element
       const clone = element.cloneNode(true) as HTMLElement;
-      wrapper.appendChild(clone);
-      
+    wrapper.appendChild(clone);
+    
       // Use very basic settings
       html2canvas(element, {
         scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
         logging: false
       }).then((canvas: HTMLCanvasElement) => {
         // Get image data and download
@@ -1350,7 +1350,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         document.body.removeChild(link);
         
         // Clean up
-        document.body.removeChild(wrapper);
+          document.body.removeChild(wrapper);
         toast.dismiss(toastId);
         
         // Show success
@@ -1360,7 +1360,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         });
       }).catch((err: Error) => {
         console.error('Final fallback failed:', err);
-        document.body.removeChild(wrapper);
+          document.body.removeChild(wrapper);
         toast.dismiss(toastId);
         
         // Show error with guidance
@@ -1434,10 +1434,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
       const scale = 4; // Let's try scale 4 for both, aiming for quality
       
       const canvas = await html2canvas(journalElement, {
-        scale: scale,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
+          scale: scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
         logging: false,
         imageTimeout: 90000, // Increased timeout for higher scale
         letterRendering: true
@@ -1522,7 +1522,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
             'info', // Use info as pdf.save might not work reliably here
             { autoClose: 20000, isLoading: false, closeButton: true }
           );
-        } else {
+          } else {
           // Non-iOS (Desktop, Android)
           updateToast(
             <div>
@@ -1693,8 +1693,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"></path>
-                            </svg>
-                            Print
+                  </svg>
+                  Print
                           </button>
                         </li>
                         <li className="hidden md:block">

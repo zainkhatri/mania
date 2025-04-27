@@ -4,27 +4,12 @@ A beautiful digital journaling application that allows you to create and customi
 
 ## Features
 
-### 📝 Journal Entry Creation
-- Create journal entries with date, location, and text content
-- Write multi-paragraph text entries that automatically flow through the journal layout
-- Support for up to 3 images per journal entry
-- Automatic saving of draft entries
-
-### 🎨 Color Customization
-- **Image-Derived Colors**: Automatically extracts colors from your uploaded photos
-- Choose title colors that complement your images perfectly
-- Automatically generates matching shadow colors for a 3D text effect
-- Custom color picker for additional flexibility
-
-### 📸 Image Features
-- Upload and position images directly in your journal
-- Images are optimized automatically for better performance
-- Replace or remove images as needed
-
-### 📱 Display Features
-- Beautiful, notebook-style layout
-- Print your journals for physical copies
-- Create new entries at any time
+- 📝 Create journal entries with text and location details
+- 📅 Date selection for your memories
+- 🖼️ Upload and arrange up to 3 images per entry
+- 💾 Download your journal as a beautiful image
+- 🎨 Elegant cream and black aesthetic
+- 📱 Responsive design for all devices
 
 ## How to Use
 
