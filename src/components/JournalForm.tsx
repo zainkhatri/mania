@@ -13,6 +13,10 @@ import * as htmlToImage from 'html-to-image';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
+// Import from local copy of the library
+// @ts-ignore
+import imageCompression from '../lib/browser-image-compression';
 
 // Simple function that returns the original image without enhancement
 const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
@@ -32,7 +36,7 @@ declare global {
     FORCE_CANVAS_REDRAW: boolean;
     CURRENT_COLORS: TextColors;
     forceCanvasRedraw?: () => void;
-    html2pdf?: any;
+    html2pdf: typeof html2pdf;
   }
 }
 
@@ -45,11 +49,16 @@ window.CURRENT_COLORS = {
 
 interface JournalFormProps {
   templateUrl?: string;
+  isAuthenticated?: boolean;
+  saveButtonText?: string;
 }
 
 const JournalForm: React.FC<JournalFormProps> = ({ 
-  templateUrl = '/templates/cream-black-template.jpg' 
+  templateUrl = '/templates/cream-black-template.jpg',
+  isAuthenticated = false,
+  saveButtonText = 'Create Journal'
 }) => {
+  const navigate = useNavigate();
   const [location, setLocation] = useState('');
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -128,6 +137,115 @@ const JournalForm: React.FC<JournalFormProps> = ({
     saveNotificationTimer.current = setTimeout(() => {
       setShowSaveNotification(false);
     }, 2000);
+  };
+  
+  // Function to save journal entry to backend (to be implemented)
+  const saveJournalToBackend = async () => {
+    if (!isAuthenticated) {
+      toast.error("Please sign in to save your journal");
+      navigate("/login");
+      return;
+    }
+
+    try {
+      toast.info("Saving your journal...");
+      
+      // Break the journal text into paragraphs
+      const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
+      
+      // Get existing journals or initialize empty array
+      const existingJournals = JSON.parse(localStorage.getItem('journals') || '[]');
+      
+      // Get the journal count to create a sequential number
+      let journalCount = parseInt(localStorage.getItem('journal_count') || '0');
+      journalCount++; // Increment for the new journal
+      
+      // Create a unique ID for the journal entry with sequential numbering
+      const journalId = `journal_${journalCount}`;
+      
+      // Check if a journal with the same date already exists
+      const dateStr = date.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+      const journalWithSameDate = existingJournals.find((journal: { date: string }) => {
+        const journalDate = new Date(journal.date).toISOString().split('T')[0];
+        return journalDate === dateStr;
+      });
+      
+      if (journalWithSameDate) {
+        toast.error("A journal entry for this date already exists in your gallery");
+        return;
+      }
+      
+      // Generate a preview of the journal as a data URL for thumbnails
+      const preview = await generateJournalPreview();
+      
+      // For now, save to localStorage
+      const journalData = {
+        id: journalId,
+        number: journalCount, // Store the sequential number
+        date: date.toISOString(),
+        location: location,
+        text: textSections,
+        images: images,
+        textColors: textColors,
+        layoutMode: layoutMode,
+        createdAt: new Date().toISOString(),
+        preview: preview
+      };
+      
+      // Add new journal
+      existingJournals.push(journalData);
+      
+      // Save back to localStorage
+      localStorage.setItem('journals', JSON.stringify(existingJournals));
+      // Save the updated journal count
+      localStorage.setItem('journal_count', journalCount.toString());
+      
+      // Set as submitted data
+      setSubmittedData({
+        date,
+        location,
+        text: textSections,
+        images,
+        textColors,
+        layoutMode,
+        forceUpdate: Date.now(),
+      });
+      
+      setSubmitted(true);
+      
+      toast.success(`Journal ${journalCount} saved successfully to your gallery!`);
+    } catch (error) {
+      console.error("Error saving journal:", error);
+      toast.error("Failed to save journal. Please try again.");
+    }
+  };
+  
+  // Generate a thumbnail preview of the journal as a data URL
+  const generateJournalPreview = async (): Promise<string> => {
+    try {
+      const journalElement = document.querySelector('.relative.bg-\\[\\#f9f7f1\\]') as HTMLElement;
+      if (!journalElement) {
+        console.error('Journal element not found for preview generation');
+        return '';
+      }
+      
+      // Generate a high-quality preview
+      const canvas = await html2canvas(journalElement, {
+        scale: 2, // Higher resolution for better quality (was 0.25)
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#f9f7f1',
+        logging: false,
+        imageTimeout: 30000, // Longer timeout for higher quality
+        letterRendering: true // Better text rendering
+      });
+      
+      // Get data URL with higher quality
+      return canvas.toDataURL('image/jpeg', 0.9); // Increased quality (was 0.5)
+    } catch (error) {
+      console.error('Failed to generate journal preview:', error);
+      return '';
+    }
   };
   
   // Clean up timer on unmount
@@ -563,54 +681,85 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Function to process and optimize image data for more reliable storage
   const optimizeImageForStorage = async (imageDataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
+    try {
+      // Convert data URL to Blob
+      const fetchData = await fetch(imageDataUrl);
+      const blob = await fetchData.blob();
+      
+      // Convert Blob to File object as required by imageCompression
+      const file = new File([blob], "image.jpg", { type: "image/jpeg" });
+      
+      // Define compression options
+      const options = {
+        maxSizeMB: 1,              // Maximum size in MB
+        maxWidthOrHeight: 1200,    // Resize to max dimensions
+        useWebWorker: true,        // Use web worker for better performance
+        initialQuality: 0.8        // Initial quality setting (0-1)
+      };
+      
+      // Compress using browser-image-compression library
+      const compressedBlob = await imageCompression(file, options);
+      
+      // Convert back to data URL
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressedBlob);
+      });
+    } catch (error) {
+      console.warn('Advanced compression failed, falling back to basic compression', error);
+      
+      // Fallback to original resize logic if compression fails
+      return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-        // Create a canvas for simple resizing if needed
+          // Create a canvas for simple resizing if needed
           const canvas = document.createElement('canvas');
           
-        // Determine if we need to resize
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        
+          // Determine if we need to resize
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          
           let width = img.width;
           let height = img.height;
           
-        // Resize if image is too large
-        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-          if (width > height) {
-            height = Math.floor(height * (MAX_WIDTH / width));
-            width = MAX_WIDTH;
-          } else {
-            width = Math.floor(width * (MAX_HEIGHT / height));
-            height = MAX_HEIGHT;
+          // Resize if image is too large
+          if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+            if (width > height) {
+              height = Math.floor(height * (MAX_WIDTH / width));
+              width = MAX_WIDTH;
+            } else {
+              width = Math.floor(width * (MAX_HEIGHT / height));
+              height = MAX_HEIGHT;
+            }
           }
-        }
-        
-        // Set canvas dimensions
+          
+          // Set canvas dimensions
           canvas.width = width;
           canvas.height = height;
           
-        // Draw resized image
+          // Draw resized image
           const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          // Return a moderately compressed JPEG for storage
-          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          resolve(optimizedDataUrl);
-        } else {
-          // Fall back to original if context not available
-          resolve(imageDataUrl);
-        }
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Return a moderately compressed JPEG for storage
+            const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(optimizedDataUrl);
+          } else {
+            // Fall back to original if context not available
+            resolve(imageDataUrl);
+          }
         };
         
         img.onerror = () => {
-        console.error('Failed to load image for optimization');
-        resolve(imageDataUrl);
+          console.error('Failed to load image for optimization');
+          resolve(imageDataUrl);
         };
         
         img.src = imageDataUrl;
-    });
+      });
+    }
   };
   
   // Update handleImageUpload to optimize images and show loading indicator
@@ -790,6 +939,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Check authentication first
+    if (!isAuthenticated) {
+      toast.error("Please sign in to create a journal");
+      navigate("/login");
+      return;
+    }
+    
     // Break the journal text into paragraphs
     const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
     
@@ -818,6 +974,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
       showSavedNotification();
     } else {
       console.error('Error saving submitted journal');
+    }
+    
+    // If the button text includes "Gallery", also save to the backend
+    if (saveButtonText && saveButtonText.includes("Gallery")) {
+      saveJournalToBackend();
     }
   };
   
@@ -860,35 +1021,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       }, 50);
     }
     
-    // Save to localStorage (either draft or submitted based on current state)
-    if (submitted) {
-      const dataToSave = {
-        ...updatedData,
-        date: updatedData.date.toISOString()
-      };
-      
-      if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
-        showSavedNotification(newColors.locationColor);
-      } else {
-        console.error('Error saving color changes to submitted journal');
-      }
-    } else {
-      // For draft, we need to save to the draft format
-      const draftData = {
-        location,
-        journalText,
-        images,
-        date: date.toISOString(),
-        textColors: newColors,
-        forceUpdate: Date.now()  // Add timestamp here too
-      };
-      
-      if (saveToLocalStorage('webjournal_draft', draftData)) {
-        showSavedNotification(newColors.locationColor);
-      } else {
-        console.error('Error saving color changes to draft');
-      }
-    }
+    // We're removing the auto-save logic here to allow experimenting with colors
+    // without triggering automatic saves
   };
   
   // Handle location text edit
@@ -1400,6 +1534,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Completely rewritten share function - ultra simplified
   const handleShare = async () => {
+    // Check authentication first
+    if (!isAuthenticated) {
+      toast.error("Please sign in to share or download your journal");
+      navigate("/login");
+      return;
+    }
+    
     if (!journalRef.current) return;
     
     const journalElement = journalRef.current;
@@ -1573,6 +1714,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Handle PDF Save function (for dropdown menu)
   const handleSaveAsPDF = async () => {
+    // Check authentication before saving as PDF
+    if (!isAuthenticated) {
+      toast.error("Please sign in to create a PDF");
+      navigate("/login");
+      return;
+    }
+    
     // Reuse the share functionality which now focuses on PDF export
     handleShare();
   };
@@ -1610,553 +1758,353 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [isSharing, setIsSharing] = useState(false);
   
   return (
-    <div className="w-full max-w-6xl mx-auto relative">
-      {/* Save notification */}
-      {showSaveNotification && (
-        <motion.div 
-          className="save-notification fixed top-4 right-4 bg-green-100 border border-green-300 text-green-800 px-4 py-2 rounded-md shadow-md z-50 flex items-center gap-2"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          style={{
-            transition: 'all 0.3s ease'
-          }}
-        >
-          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          <span>Journal saved</span>
-        </motion.div>
-      )}
-      
-      {/* Add styles for the color-picked animation */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .save-notification.color-picked {
-          background-color: #f0f9ff !important;
-          border-color: #93c5fd !important;
-          color: #1e40af !important;
-        }
-        
-        .save-notification.color-picked svg {
-          color: #3b82f6 !important;
-        }
-        
-        .save-notification.color-picked .color-sample {
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-          transition: all 0.2s ease;
-        }
-        
-        .save-notification.color-picked .color-sample:hover {
-          transform: scale(1.2);
-        }
+    <div className="w-full">
+      {!submitted ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Input Form - Left Side */}
+          <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
+            <div className="p-6 border-b border-[#e8e4d5] flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-[#1a1a1a]">New Journal Entry</h3>
+              {!submitted && (
+                <button 
+                  type="button" // Prevent form submission
+                  onClick={handleReset} 
+                  className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  New Journal
+                </button>
+              )}
+            </div>
+            <div className="p-6">
+              <motion.form
+                onSubmit={handleSubmit}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="space-y-6"
+              >
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <label htmlFor="date" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                      <span>Date</span>
+                    </label>
+                    <input
+                      type="date"
+                      id="date"
+                      value={date.toISOString().split('T')[0]}
+                      onChange={(e) => setDate(new Date(e.target.value))}
+                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <label htmlFor="location" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                      </svg>
+                      <span>Location</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="location"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="e.g., MANIA, LA JOLLA, CA"
+                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
+                      required
+                    />
+                  </div>
 
-        @media print {
-          .edit-panel {
-            display: none;
-          }
-          .journal-preview {
-            width: 100%;
-            max-width: 100%;
-          }
-        }
-      `}} />
-      
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Journal Preview - Left side, 3/5 width on desktop */}
-        <div className="lg:col-span-3 journal-preview">
+                  {/* Images upload - moved up after location */}
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                      <span>Images {images.length > 0 && `(${images.length}/3)`}</span>
+                    </label>
+                    
+                    {images.length < 3 && (
+                      <div 
+                        className="border-2 border-dashed border-[#d1cdc0] rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#4a4a4a] transition-all duration-300 bg-white/30 backdrop-blur-sm hover:bg-white/50"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <svg className="w-10 h-10 text-[#4a4a4a] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        <p className="text-base text-[#4a4a4a] text-center mb-2">Tap to upload images</p>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleImageUpload}
+                          accept="image/*"
+                          multiple
+                          style={{ display: 'none' }}
+                          disabled={images.length >= 3}
+                        />
+                      </div>
+                    )}
+                    
+                    {images.length > 0 && (
+                      <motion.div 
+                        className="grid grid-cols-3 gap-2 mt-2"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {images.map((image, index) => (
+                          <div 
+                            key={index} 
+                            className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
+                          >
+                            <img 
+                              src={image} 
+                              alt={`Upload ${index + 1}`} 
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </div>
+
+                  {/* Color Picker */}
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                      </svg>
+                      <span>Colors</span>
+                    </label>
+                    <div className="bg-white rounded-lg shadow-sm border border-[#d1cdc0] p-3">
+                      <SimpleColorPicker 
+                        colors={textColors}
+                        onChange={handleColorChange}
+                        images={images}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Layout Style Toggle */}
+                  <LayoutToggle
+                    layoutMode={layoutMode}
+                    setLayoutMode={setLayoutMode}
+                  />
+                
+                  <div className="space-y-3">
+                    <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      </svg>
+                      <span>Journal Entry</span>
+                    </label>
+                    <textarea
+                      id="journalText"
+                      value={journalText}
+                      onChange={(e) => setJournalText(e.target.value)}
+                      placeholder="Write your journal entry here..."
+                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
+                      required
+                    />
+                    <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end pt-4 border-t border-[#e8e4d5]">
+                  <motion.button
+                    type="submit"
+                    className="px-6 py-3 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#333] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a]"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    disabled={isLoadingImage}
+                  >
+                    {isLoadingImage ? 'Processing...' : saveButtonText}
+                  </motion.button>
+                  
+                  <motion.button
+                    onClick={handleSaveAsPDF}
+                    className="px-6 py-3 bg-[#b5a890] text-white rounded-lg hover:bg-[#a39580] ml-3 focus:outline-none"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Download PDF
+                  </motion.button>
+                </div>
+              </motion.form>
+            </div>
+          </div>
+          
+          {/* Live Preview - Right Side */}
           <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
             <div className="p-4 border-b border-[#e8e4d5] flex justify-between items-center">
               <h3 className="text-xl font-semibold text-[#1a1a1a]">
-                {submitted ? "Your Journal" : "Journal Preview"}
+                Journal Preview
               </h3>
-              <div className="flex gap-3">
-                <div className="relative">
-                <button 
-                    onClick={() => {
-                      // On mobile, directly share; on desktop, show options
-                      const isMobile = window.innerWidth < 768;
-                      if (isMobile) {
-                        handleShare();
-                      } else {
-                        setShowSaveOptions(!showSaveOptions)
-                      }
-                    }} 
-                  className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
-                >
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="hidden md:block">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                    </svg>
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:hidden">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                    </svg>
-                    <span className="hidden md:inline">Print</span>
-                    <span className="md:hidden">Share</span>
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                  </button>
-                  
-                  {showSaveOptions && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                      <ul className="py-1">
-                        <li className="hidden md:block">
-                          <button 
-                            onClick={() => window.print()}
-                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"></path>
-                  </svg>
-                  Print
-                          </button>
-                        </li>
-                        <li className="hidden md:block">
-                          <button 
-                            onClick={handleSaveAsPDF} 
-                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                            </svg>
-                            Save as PDF
-                          </button>
-                        </li>
-                        <li>
-                          <button 
-                            onClick={handleShare} 
-                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                            </svg>
-                            Share
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
-                  )}
-                </div>
-                {submitted && (
-                  <button 
-                    onClick={handleReset} 
-                    className="px-4 py-2.5 bg-[#1a1a1a] hover:bg-[#333] text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
-                  >
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    New Entry
-                  </button>
-                )}
+              <div className="text-sm text-gray-500">
+                Updates as you type
               </div>
             </div>
             
             <div className="p-4">
               <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef}>
                 <JournalCanvas
-                  date={submitted ? submittedData.date : date}
-                  location={submitted ? submittedData.location : location}
-                  textSections={submitted ? submittedData.text : journalText.split('\n\n').filter(section => section.trim().length > 0)}
-                  images={submitted ? submittedData.images : images}
+                  date={date}
+                  location={location}
+                  textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
+                  images={images}
                   onNewEntry={handleReset}
                   templateUrl={templateUrl}
-                  textColors={submitted ? submittedData.textColors : textColors}
-                  layoutMode={submitted ? submittedData.layoutMode : layoutMode}
-                  editMode={submitted}
-                  onTextClick={handleTextClick}
-                  onImageDrag={(index, x, y) => {
-                    // Handle image dragging
-                    console.log(`Image ${index} dragged to ${x},${y}`);
-                  }}
-                  onImageClick={handleCanvasImageClick}
-                  forceUpdate={submitted ? submittedData.forceUpdate : undefined}
+                  textColors={textColors}
+                  layoutMode={layoutMode}
+                  editMode={false}
+                  onTextClick={() => {}}
+                  onImageDrag={() => {}}
+                  onImageClick={() => {}}
                 />
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Edit Panel - Right side, 2/5 width on desktop */}
-        <div className="lg:col-span-2 edit-panel">
-          {submitted ? (
-            // Editor panel for submitted journal
-            <div className="space-y-6">
-              {/* Color Editor */}
-              <div className="bg-white rounded-xl shadow-md overflow-hidden border border-[#d1cdc0]">
-                <div className="px-4 py-3 bg-[#f9f7f1] border-b border-[#d1cdc0]">
-                  <h3 className="font-medium text-[#1a1a1a]">Customize Colors</h3>
-                </div>
-                <div className="p-4">
-                  <SimpleColorPicker 
-                    colors={submittedData.textColors}
-                    onChange={handleColorChange}
-                    images={submittedData.images}
-                  />
-                </div>
-              </div>
-              
-              {/* Layout Style Toggle */}
-              <LayoutToggle
-                layoutMode={submittedData.layoutMode}
-                setLayoutMode={(mode) => {
-                  setSubmittedData({
-                    ...submittedData,
-                    layoutMode: mode,
-                    forceUpdate: Date.now(),
-                  });
-                }}
-              />
-              
-              {/* Text Editor */}
-              <div className="bg-white rounded-xl shadow-md overflow-hidden border border-[#d1cdc0]">
-                <div className="px-4 py-3 bg-[#f9f7f1] border-b border-[#d1cdc0]">
-                  <h3 className="font-medium text-[#1a1a1a]">Edit Content</h3>
-                </div>
-                <div className="p-4 space-y-4">
-                  {/* Date editing */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={submittedData.date.toISOString().split('T')[0]}
-                        onChange={(e) => {
-                          // Fix: Parse date string manually to avoid timezone issues
-                          const dateString = e.target.value;
-                          const [year, month, day] = dateString.split('-').map(Number);
-                          // Create date using local year, month (0-indexed), and day
-                          const newDate = new Date(year, month - 1, day);
-                          
-                          setSubmittedData({
-                            ...submittedData,
-                            date: newDate,
-                            forceUpdate: Date.now(),
-                          });
-                        }}
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Location editing */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={submittedData.location}
-                        onChange={handleLocationChange}
-                        ref={locationInputRef}
-                        placeholder="e.g., MANIA, LA JOLLA, CA"
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Text sections editing */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Text Sections
-                      </label>
-                      <button
-                        type="button"
-                        onClick={addNewTextSection}
-                        className="text-sm px-3 py-1.5 bg-[#f9f7f1] text-[#1a1a1a] rounded hover:bg-[#e8e4d5] transition-colors flex items-center gap-1"
-                      >
-                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                      {submittedData.text.map((section, index) => (
-                        <div key={index} className="relative bg-white rounded-md border border-gray-300 transition-all duration-200 hover:shadow-sm">
-                          <textarea
-                            value={section}
-                            onChange={(e) => handleTextSectionChange(e)}
-                            data-index={index}
-                            ref={(el) => {
-                              textSectionRefs.current[index] = el;
-                              if (activeTextSection === index && el) {
-                                el?.focus();
-                              }
-                            }}
-                            className="w-full rounded-md border-0 px-4 py-3 text-base focus:ring-1 focus:ring-[#1a1a1a] min-h-[100px] resize-y"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeTextSection(index)}
-                            className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors p-1.5"
-                          >
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Images editing */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Images
-                      </label>
-                      {submittedData.images.length < 3 && (
-                        <label className="text-xs px-2 py-1 bg-[#f9f7f1] text-[#1a1a1a] rounded hover:bg-[#e8e4d5] transition-colors flex items-center gap-1 cursor-pointer">
-                          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
+          <div className="p-4 border-b border-[#e8e4d5] flex justify-between items-center">
+            <h3 className="text-xl font-semibold text-[#1a1a1a]">
+              Your Journal
+            </h3>
+            <div className="flex gap-3">
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    // On mobile, directly share; on desktop, show options
+                    const isMobile = window.innerWidth < 768;
+                    if (isMobile) {
+                      handleShare();
+                    } else {
+                      setShowSaveOptions(!showSaveOptions)
+                    }
+                  }} 
+                  className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="hidden md:block">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                  </svg>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:hidden">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                  </svg>
+                  <span className="hidden md:inline">Print</span>
+                  <span className="md:hidden">Share</span>
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                
+                {showSaveOptions && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                    <ul className="py-1">
+                      <li className="hidden md:block">
+                        <button 
+                          onClick={() => window.print()}
+                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"></path>
                           </svg>
-                          Add
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleAddImage(e)}
-                            className="hidden"
-                            multiple // Add multiple attribute
-                          />
-                        </label>
-                      )}
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                      {submittedData.images.map((img, index) => (
-                        <div key={index} className="relative group bg-gray-100 aspect-square rounded-md overflow-hidden">
-                          <img
-                            src={img}
-                            alt={`Journal image ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                            <label className="w-8 h-8 rounded-full bg-white flex items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors">
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                              </svg>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleReplaceImage(index, e)}
-                                className="hidden"
-                                multiple
-                              />
-                            </label>
-                            <button
-                              onClick={() => handleRemoveImage(index)}
-                              className="w-8 h-8 rounded-full bg-white flex items-center justify-center hover:bg-gray-100 transition-colors"
-                            >
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                          Print
+                        </button>
+                      </li>
+                      <li className="hidden md:block">
+                        <button 
+                          onClick={handleSaveAsPDF} 
+                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                          </svg>
+                          Save as PDF
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={handleShare} 
+                          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                          </svg>
+                          Share
+                        </button>
+                      </li>
+                    </ul>
                   </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Input form for creating journal
-            <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
-              <div className="p-6 border-b border-[#e8e4d5] flex justify-between items-center">
-                <h3 className="text-xl font-semibold text-[#1a1a1a]">New Journal Entry</h3>
-                {/* Removed subtitle paragraph */}
-                {/* Add New Journal button here */}
-                {!submitted && (
-                  <button 
-                    type="button" // Prevent form submission
-                    onClick={handleReset} 
-                    className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
-                  >
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    New Journal
-                  </button>
                 )}
               </div>
-              
-              <div className="p-6">
-                <motion.form 
-                  onSubmit={handleSubmit} 
-                  className="space-y-6"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
+              {submitted && (
+                <button 
+                  onClick={handleReset} 
+                  className="px-4 py-2.5 bg-[#1a1a1a] hover:bg-[#333] text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
                 >
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <label htmlFor="date" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                        <span>Date</span>
-                      </label>
-                      <input
-                        type="date"
-                        id="date"
-                        value={date.toISOString().split('T')[0]}
-                        onChange={(e) => setDate(new Date(e.target.value))}
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <label htmlFor="location" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        <span>Location</span>
-                      </label>
-                      <input
-                        type="text"
-                        id="location"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="e.g., MANIA, LA JOLLA, CA"
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
-                        required
-                      />
-                    </div>
-
-                    {/* Images upload - moved up after location */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                        <span>Images {images.length > 0 && `(${images.length}/3)`}</span>
-                      </label>
-                      
-                      {images.length < 3 && (
-                        <div 
-                          className="border-2 border-dashed border-[#d1cdc0] rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#4a4a4a] transition-all duration-300 bg-white/30 backdrop-blur-sm hover:bg-white/50"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <svg className="w-10 h-10 text-[#4a4a4a] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                          </svg>
-                          <p className="text-base text-[#4a4a4a] text-center mb-2">Tap to upload images</p>
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            multiple
-                            style={{ display: 'none' }}
-                            disabled={images.length >= 3}
-                          />
-                        </div>
-                      )}
-                      
-                      {images.length > 0 && (
-                        <motion.div 
-                          className="grid grid-cols-3 gap-2 mt-2"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {images.map((image, index) => (
-                            <div 
-                              key={index} 
-                              className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
-                            >
-                              <img 
-                                src={image} 
-                                alt={`Upload ${index + 1}`} 
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index)}
-                                className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </div>
-
-                    {/* Color Picker */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                        </svg>
-                        <span>Colors</span>
-                      </label>
-                      <div className="bg-white rounded-lg shadow-sm border border-[#d1cdc0] p-3">
-                        <SimpleColorPicker 
-                          colors={textColors}
-                          onChange={handleColorChange}
-                          images={images}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Layout Style Toggle */}
-                    <LayoutToggle
-                      layoutMode={layoutMode}
-                      setLayoutMode={setLayoutMode}
-                    />
-                  
-                    <div className="space-y-3">
-                      <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        <span>Journal Entry</span>
-                      </label>
-                      <textarea
-                        id="journalText"
-                        value={journalText}
-                        onChange={(e) => setJournalText(e.target.value)}
-                        placeholder="Write your journal entry here..."
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
-                        required
-                      />
-                      <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end pt-4 border-t border-[#e8e4d5]">
-                    <motion.button
-                      type="submit"
-                      className="px-8 py-4 bg-[#1a1a1a] text-white text-base font-medium rounded-lg shadow-lg flex items-center gap-2 overflow-hidden relative"
-                      whileHover={{ 
-                        scale: 1.03,
-                        boxShadow: "0 0 15px rgba(26, 26, 26, 0.2)"
-                      }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <span>Save Journal</span>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                      </svg>
-                    </motion.button>
-                  </div>
-                </motion.form>
-              </div>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  New Entry
+                </button>
+              )}
+              
+              {submitted && isAuthenticated && (
+                <button 
+                  onClick={saveJournalToBackend}
+                  className="px-4 py-2.5 bg-[#b5a890] hover:bg-[#a39580] text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                  </svg>
+                  Save to Gallery
+                </button>
+              )}
             </div>
-          )}
+          </div>
+          
+          <div className="p-4">
+            <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef}>
+              <JournalCanvas
+                date={submitted ? submittedData.date : date}
+                location={submitted ? submittedData.location : location}
+                textSections={submitted ? submittedData.text : journalText.split('\n\n').filter(section => section.trim().length > 0)}
+                images={submitted ? submittedData.images : images}
+                onNewEntry={handleReset}
+                templateUrl={templateUrl}
+                textColors={submitted ? submittedData.textColors : textColors}
+                layoutMode={submitted ? submittedData.layoutMode : layoutMode}
+                editMode={submitted}
+                onTextClick={handleTextClick}
+                onImageDrag={(index, x, y) => {
+                  // Handle image dragging
+                  console.log(`Image ${index} dragged to ${x},${y}`);
+                }}
+                onImageClick={handleCanvasImageClick}
+                forceUpdate={submitted ? submittedData.forceUpdate : undefined}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
