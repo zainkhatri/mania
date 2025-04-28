@@ -5,6 +5,8 @@ import {
   signInWithPopup,
   signOut
 } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getAnalytics } from 'firebase/analytics';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -12,7 +14,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCpu-kfpn20-IOQC-QmGiOdm8cy9NtMkQo",
   authDomain: "mania-65325.firebaseapp.com",
   projectId: "mania-65325",
-  storageBucket: "mania-65325.appspot.com",
+  storageBucket: "mania-65325.firebasestorage.app",
   messagingSenderId: "194788144457",
   appId: "1:194788144457:web:fa6de7b299abb27c249698",
   measurementId: "G-5EDN5LE9D4"
@@ -21,8 +23,16 @@ const firebaseConfig = {
 // Initialize Firebase app
 const app = initializeApp(firebaseConfig);
 
+// Initialize Firebase Analytics
+let analytics = null;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+export { analytics };
 
 // Google signin
 export const signInWithGoogle = async () => {

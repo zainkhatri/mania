@@ -38,41 +38,41 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="p-8 bg-white rounded-lg shadow-lg w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Mania</h1>
-          <p className="text-gray-600">Your personal journal space</p>
+    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-[#f8f5f0] px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#1a1a1a] mb-2">Welcome to Mania</h1>
+          <p className="text-sm sm:text-base text-[#666666]">Your personal journal space</p>
         </div>
         
         <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
             disabled={isLoading}
-            className="flex items-center justify-center w-full py-3 px-4 bg-white border border-gray-300 rounded-md shadow-sm text-gray-700 hover:bg-gray-50 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center w-full py-3 px-4 bg-white border border-[#d1cdc0] rounded-xl shadow-sm text-[#333333] hover:bg-[#f8f5f0] transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:transform active:scale-[0.98]"
           >
-            {FaGoogle({ className: "text-red-500 mr-3", size: 20 })}
-            <span>{isLoading ? 'Signing in...' : 'Continue with Google'}</span>
+            {FaGoogle({ className: "text-red-500 mr-3 text-lg sm:text-xl" })}
+            <span className="text-sm sm:text-base">{isLoading ? 'Signing in...' : 'Continue with Google'}</span>
           </button>
         </div>
         
-        <div className="mt-8 text-center text-sm text-gray-500">
+        <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-[#666666]">
           <p>
             By continuing, you agree to our{' '}
-            <a href="#" className="text-blue-600 hover:underline">
+            <a href="#" className="text-[#1a1a1a] hover:underline">
               Terms of Service
             </a>{' '}
             and{' '}
-            <a href="#" className="text-blue-600 hover:underline">
+            <a href="#" className="text-[#1a1a1a] hover:underline">
               Privacy Policy
             </a>
           </p>
         </div>
         
-        <div className="mt-6 text-center">
+        <div className="mt-4 sm:mt-6 text-center">
           <button 
             onClick={() => navigate('/')} 
-            className="text-sm text-blue-600 hover:underline"
+            className="text-xs sm:text-sm text-[#1a1a1a] hover:underline"
           >
             &larr; Back to Home
           </button>
