@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import JournalCanvas, { ClickableTextArea } from './JournalCanvas';
 import SimpleColorPicker, { TextColors } from './TempColorPicker';
+import LayoutToggle from './LayoutToggle';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 // Import html2pdf properly
@@ -53,6 +54,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [date, setDate] = useState(new Date());
+  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [textColors, setTextColors] = useState<TextColors>({
@@ -65,6 +67,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     text: string[];
     images: string[];
     textColors: TextColors;
+    layoutMode: 'standard' | 'mirrored';
     forceUpdate?: number;
   }>({
     date: new Date(),
@@ -74,7 +77,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
     textColors: {
       locationColor: '#2D9CDB',
       locationShadowColor: '#1D3557',
-    }
+    },
+    layoutMode: 'standard'
   });
   
   // Save notification state
@@ -266,6 +270,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
         setSubmittedData(savedSubmittedJournal);
         setSubmitted(true);
         setTextColors(savedSubmittedJournal.textColors);
+        if (savedSubmittedJournal.layoutMode) {
+          setLayoutMode(savedSubmittedJournal.layoutMode);
+        }
         console.log('Restored submitted journal from localStorage');
         return; // Exit early if we found and restored a submitted journal
       } catch (error) {
@@ -286,6 +293,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
           locationColor: '#2D9CDB',
           locationShadowColor: '#1D3557',
         });
+        if (savedDraftJournal.layoutMode) {
+          setLayoutMode(savedDraftJournal.layoutMode);
+        }
         console.log('Restored draft journal from localStorage');
       } catch (error) {
         console.error('Error restoring draft journal:', error);
@@ -788,7 +798,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       location,
       text: textSections,
       images,
-      textColors
+      textColors,
+      layoutMode
     };
     
     setSubmittedData(newSubmittedData);
@@ -815,6 +826,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     setJournalText('');
     setImages([]);
     setDate(new Date());
+    setLayoutMode('standard');
     setSubmitted(false);
     setActiveEditField(null);
     setActiveTextSection(-1);
@@ -931,7 +943,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
   
-  // Handle clicking on text areas in the canvas
+  // Fix for layoutMode in the edit panel
   const handleTextClick = (area: ClickableTextArea) => {
     if (area.type === 'location') {
       setActiveEditField('location');
@@ -1574,7 +1586,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       journalText,
       images,
       date: date.toISOString(),
-      textColors
+      textColors,
+      layoutMode
     };
     
     if (saveToLocalStorage('webjournal_draft', draftData)) {
@@ -1747,6 +1760,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   onNewEntry={handleReset}
                   templateUrl={templateUrl}
                   textColors={submitted ? submittedData.textColors : textColors}
+                  layoutMode={submitted ? submittedData.layoutMode : layoutMode}
                   editMode={submitted}
                   onTextClick={handleTextClick}
                   onImageDrag={(index, x, y) => {
@@ -1779,6 +1793,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   />
                 </div>
               </div>
+              
+              {/* Layout Style Toggle */}
+              <LayoutToggle
+                layoutMode={submittedData.layoutMode}
+                setLayoutMode={(mode) => {
+                  setSubmittedData({
+                    ...submittedData,
+                    layoutMode: mode,
+                    forceUpdate: Date.now(),
+                  });
+                }}
+              />
               
               {/* Text Editor */}
               <div className="bg-white rounded-xl shadow-md overflow-hidden border border-[#d1cdc0]">
@@ -2083,6 +2109,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         />
                       </div>
                     </div>
+
+                    {/* Layout Style Toggle */}
+                    <LayoutToggle
+                      layoutMode={layoutMode}
+                      setLayoutMode={setLayoutMode}
+                    />
                   
                     <div className="space-y-3">
                       <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">

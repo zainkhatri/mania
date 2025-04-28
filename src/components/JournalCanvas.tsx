@@ -48,6 +48,7 @@ interface JournalCanvasProps {
   onNewEntry: () => void;
   templateUrl?: string; // Add optional template URL prop
   textColors?: TextColors; // Direct color customization
+  layoutMode?: 'standard' | 'mirrored'; // Layout mode for the journal
   editMode?: boolean; // Whether we're in edit mode
   onTextClick?: (area: ClickableTextArea) => void; // Callback when text is clicked
   onImageDrag?: (index: number, x: number, y: number) => void; // Callback when image is dragged
@@ -99,6 +100,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     locationColor: '#3498DB',
     locationShadowColor: '#AED6F1'
   },
+  layoutMode = 'standard', // Default to standard layout
   template = {
     name: 'Default',
     backgroundColor: '#111111', // Dark background
@@ -468,21 +470,43 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       const textColumnWidth = fullWidth * 0.45; // Wider text
       
       // Define grid layout that fills the entire canvas with no margins
-      const gridLayout = [
-        // Row 1 - Date spans full width
-        { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
-        // Row 2 - Location spans full width (moved higher - less Y offset from date)
-        { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
-        // Row 3 - Left image, right text
-        { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
-        { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
-        // Row 4 - Left text, right image
-        { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
-        { type: 'image', x: textColumnWidth+ 15, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
-        // Row 5 - Left image, right text
-        { type: 'image', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 },
-        { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 }
-      ];
+      let gridLayout;
+      
+      if (layoutMode === 'standard') {
+        // Standard layout (original): Images on left, text on right
+        gridLayout = [
+          // Row 1 - Date spans full width
+          { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
+          // Row 2 - Location spans full width (moved higher - less Y offset from date)
+          { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+          // Row 3 - Left image, right text
+          { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
+          // Row 4 - Left text, right image
+          { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
+          { type: 'image', x: textColumnWidth + 15, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+          // Row 5 - Left image, right text
+          { type: 'image', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 }
+        ];
+      } else {
+        // Mirrored layout: Text on left, images on right
+        gridLayout = [
+          // Row 1 - Date spans full width
+          { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
+          // Row 2 - Location spans full width (moved higher - less Y offset from date)
+          { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+          // Row 3 - Left text, right image
+          { type: 'text', x: 0, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
+          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          // Row 4 - Left image, right text
+          { type: 'image', x: 0, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
+          // Row 5 - Left text, right image
+          { type: 'text', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 },
+          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
+        ];
+      }
       
       // Extract text areas and image positions from grid layout
       const textAreas = gridLayout.filter(item => item.type === 'text');
@@ -853,7 +877,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     } catch (error) {
       console.error("Error drawing canvas:", error);
     }
-  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount]);
+  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode]);
 
   // Replace both export functions with a single ultra-high-quality export
   const exportUltraHDPDF = () => {
