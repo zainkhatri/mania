@@ -220,41 +220,22 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   
   // Format date in handwritten style
   const formatDate = (date: Date): string => {
-    // Helper function to get ordinal suffix
-    const getOrdinalSuffix = (day: number): string => {
-      if (day > 3 && day < 21) return 'TH';
-      switch (day % 10) {
-        case 1: return 'ST';
-        case 2: return 'ND';
-        case 3: return 'RD';
-        default: return 'TH';
-      }
+    const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+    const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    
+    const day = days[date.getDay()];
+    const month = months[date.getMonth()];
+    const dateNum = date.getDate();
+    const year = date.getFullYear();
+    
+    // Get ordinal suffix
+    const getOrdinal = (n: number): string => {
+      const s = ['TH', 'ST', 'ND', 'RD'];
+      const v = n % 100;
+      return s[(v - 20) % 10] || s[v] || s[0];
     };
 
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    
-    // Format the date without ordinal first
-    let dateStr = date.toLocaleDateString('en-US', options);
-    
-    // Extract the day number and add the ordinal suffix
-    const day = date.getDate();
-    const ordinalSuffix = getOrdinalSuffix(day);
-    
-    // Replace the day number with day + ordinal suffix
-    dateStr = dateStr.replace(/(\d+)/, `$1${ordinalSuffix}`);
-    
-    // Fix double commas - remove any existing comma after the day before adding our own
-    dateStr = dateStr.replace(/(\d+[A-Z]+),/, '$1');
-    
-    // Make sure there's a comma after the ordinal suffix
-    dateStr = dateStr.replace(/(\d+[A-Z]+)/, '$1,');
-    
-    return dateStr.toUpperCase();
+    return `${day}, ${month} ${dateNum}${getOrdinal(dateNum)}, ${year}`;
   };
 
   // Combine all text sections into one continuous text
@@ -476,9 +457,9 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         // Standard layout (original): Images on left, text on right
         gridLayout = [
           // Row 1 - Date spans full width
-          { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
-          // Row 2 - Location spans full width (moved higher - less Y offset from date)
-          { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+          { type: 'date', x: 0, y: currentYPosition, width: fullWidth, height: 60 },
+          // Row 2 - Location spans full width (reduced gap)
+          { type: 'location', x: 0, y: currentYPosition + 55, width: fullWidth, height: 60 },
           // Row 3 - Left image, right text
           { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
@@ -535,52 +516,42 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           const maxDateFontSize = calculateOptimalFontSize(
             ctx, 
             dateText, 
-            dateCell.width - 20, // Reduced padding
-            "'TitleFont', sans-serif", // Use title font for date
-            60, // min
-            150 // max
+            canvas.width - 20, // Use almost full canvas width
+            "'TitleFont', sans-serif",
+            40,
+            80
           );
           
-          // Set font and color - always black for date text
+          // Set font and color
           ctx.fontKerning = 'normal';
           ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
-          ctx.fillStyle = '#000000'; // Always black for the date
-          ctx.textAlign = 'left'; // Ensure text is left-aligned
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'left';
           
-          // Calculate metrics for the date text to determine its actual height
-          const dateMetrics = ctx.measureText(dateText);
-          // For minimal spacing, we'll use just the descent part of the font 
-          // since we want the letters to be very close without overlapping
-          let dateTextBaselineOffset;
-          if (dateMetrics.fontBoundingBoxDescent) {
-            dateTextBaselineOffset = dateMetrics.fontBoundingBoxDescent;
-          } else {
-            // Fallback: estimate descent as 0.2x the font size
-            dateTextBaselineOffset = maxDateFontSize * 0.2;
-          }
+          // Add subtle shadow for depth
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+          ctx.shadowBlur = 2;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
           
-          // Draw the date text (no shadow)
-          ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 35);
+          // Calculate text width to scale it properly
+          const textWidth = ctx.measureText(dateText).width;
+          const scale = (canvas.width - 20) / textWidth;
           
-          // Calculate the Y position for the location with minimal spacing
-          // Use the date baseline position + reduced spacing (moved higher)
-          currentYPosition = dateCell.y + 5 + dateTextBaselineOffset + minSpacingBetweenElements;
+          // Scale the text to fit full width
+          ctx.save();
+          ctx.translate(10, dateCell.y + 35);
+          ctx.scale(scale, 1);
+          ctx.fillText(dateText, 0, 0);
+          ctx.restore();
           
-          // Update the location cell's Y position
-          const locationCell = gridLayout.find(cell => cell.type === 'location');
-          if (locationCell) {
-            locationCell.y = currentYPosition;
-          }
+          // Reset shadow
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
         } catch (err) {
           console.error('Error drawing date:', err);
-          // Fallback position if date rendering fails
-          currentYPosition = topMargin + 100;
-          
-          // Update the location cell's Y position with fallback value
-          const locationCell = gridLayout.find(cell => cell.type === 'location');
-          if (locationCell) {
-            locationCell.y = currentYPosition;
-          }
         }
       }
       

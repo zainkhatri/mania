@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 // Import from local copy of the library
 // @ts-ignore
 import imageCompression from '../lib/browser-image-compression';
+import { apiService } from '../utils/api';
 
 // Simple function that returns the original image without enhancement
 const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
@@ -62,7 +63,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [location, setLocation] = useState('');
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => {
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset()); // Adjust for timezone
+    return today;
+  });
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -936,49 +941,23 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check authentication first
-    if (!isAuthenticated) {
-      toast.error("Please sign in to create a journal");
-      navigate("/login");
-      return;
-    }
-    
-    // Break the journal text into paragraphs
-    const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
-    
-    const newSubmittedData = {
-      date,
-      location,
-      text: textSections,
-      images,
-      textColors,
-      layoutMode
-    };
-    
-    setSubmittedData(newSubmittedData);
-    setSubmitted(true);
-    
-    // Clear draft storage since we're now submitted
-    clearLocalStorageItem('webjournal_draft');
-    
-    // Save to submitted storage
-    const dataToSave = {
-      ...newSubmittedData,
-      date: date.toISOString()
-    };
-    
-    if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
-      showSavedNotification();
-    } else {
-      console.error('Error saving submitted journal');
-    }
-    
-    // If the button text includes "Gallery", also save to the backend
-    if (saveButtonText && saveButtonText.includes("Gallery")) {
-      saveJournalToBackend();
+    try {
+      const journalData = {
+        title: `Journal Entry - ${date.toLocaleDateString()}`,
+        content: journalText,
+        date: date.toISOString(),
+        images,
+        layoutMode,
+      };
+
+      await apiService.createJournal(journalData);
+      setSubmitted(true);
+      navigate('/gallery'); // Redirect to gallery after saving
+    } catch (error) {
+      console.error('Error saving journal:', error);
     }
   };
   
@@ -1798,7 +1777,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       type="date"
                       id="date"
                       value={date.toISOString().split('T')[0]}
-                      onChange={(e) => setDate(new Date(e.target.value))}
+                      onChange={(e) => {
+                        const selectedDate = new Date(e.target.value);
+                        selectedDate.setMinutes(selectedDate.getMinutes() - selectedDate.getTimezoneOffset()); // Adjust for timezone
+                        setDate(selectedDate);
+                      }}
                       className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
                       required
                     />
