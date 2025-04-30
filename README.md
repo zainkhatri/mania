@@ -7,9 +7,10 @@ A beautiful digital journaling application that allows you to create and customi
 - 📝 Create journal entries with text and location details
 - 📅 Date selection for your memories
 - 🖼️ Upload and arrange up to 3 images per entry
-- 💾 Download your journal as a beautiful image
+- 💾 Download your journal as a PDF
 - 🎨 Elegant cream and black aesthetic
 - 📱 Responsive design for all devices
+- ⚡ Auto-save functionality for a seamless experience
 
 ## How to Use
 
@@ -24,15 +25,23 @@ A beautiful digital journaling application that allows you to create and customi
    - Or use the custom color picker for specific colors
 5. **Journal Text**: Write your journal entry content
    - Use double line breaks to create new paragraphs
-6. **Save**: Click "Save Journal" to complete your entry
+   - Your journal is automatically saved as you type
 
 ### Editing Your Journal
 
-After saving, you can still edit:
+After creating your journal, you can still edit:
 - Location name
 - Text content (add, edit, or remove sections)
 - Colors
 - Images (replace or remove)
+
+### Auto-Save Functionality
+
+The application features built-in auto-save functionality:
+- Your journal is automatically saved as you type
+- No need to manually save your work
+- A subtle notification appears when your journal is saved
+- Your journal remains saved even if you close the browser
 
 ### Color Picker
 
@@ -50,14 +59,11 @@ The color picker automatically extracts colors from your uploaded images to help
 
 ### Printing & Saving
 
-Click the "Print" button to print a physical copy of your journal on desktop.
+- **Download PDF**: Creates a downloadable PDF document of your journal
+- **Print**: Print a physical copy of your journal on desktop
+- **Share**: Share your journal via messaging, email, etc.
 
-For mobile devices, use the "Save" options:
-- **Save to Camera Roll**: Captures your journal as an image in your photo library
-- **Save to PDF**: Creates a downloadable PDF document of your journal
-- **Share**: Opens native sharing options to send your journal via messaging, email, etc.
-
-To access these options on mobile, tap the ⋮ (menu) icon next to the print button.
+To access these options, use the menu icon after creating your journal.
 
 ### Creating a New Entry
 
