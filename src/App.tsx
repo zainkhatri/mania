@@ -8,7 +8,6 @@ import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 import JournalForm from './components/JournalForm';
-import Gallery from './components/Gallery';
 import Login from './components/auth/Login';
 import Home from './components/Home';
 import StreakIndicator from './components/StreakIndicator';
@@ -39,7 +38,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
   // Effect to check if user is logged in using Firebase Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -56,10 +55,10 @@ function App() {
       }
       setLoading(false);
     });
-
+    
     return () => unsubscribe();
   }, []);
-  
+
   // Handle login
   const login = (token: string) => {
     // Note: actual login is handled by Firebase Auth
@@ -95,7 +94,7 @@ function App() {
       </div>
     );
   }
-  
+
   return (
     <AuthContext.Provider value={authContextValue}>
       <Router>
@@ -116,11 +115,6 @@ function App() {
                 {/* Desktop menu */}
                 <div className="hidden md:flex items-center gap-4">
                   {isAuthenticated && <StreakIndicator />}
-                  {isAuthenticated && (
-                    <Link to="/gallery" className="px-3 py-2 rounded-md text-sm font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]">
-                      Gallery
-                    </Link>
-                  )}
                   {isAuthenticated ? (
                     <button 
                       onClick={logout}
@@ -152,61 +146,54 @@ function App() {
                     ) : (
                       <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                  </svg>
                     )}
                   </button>
                 </div>
               </div>
             </div>
-
-            {/* Mobile menu */}
-            <AnimatePresence>
-              {isMobileMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="md:hidden absolute w-full bg-white shadow-lg"
-                >
-                  <div className="px-2 pt-2 pb-3 space-y-1">
-                    {isAuthenticated && (
-                      <>
-                        <div className="px-3 py-2">
-                          <StreakIndicator />
-                        </div>
-                        <Link
-                          to="/gallery"
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className="block px-3 py-2 rounded-md text-base font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]"
-                        >
-                          Gallery
-                        </Link>
-                      </>
-                    )}
-                    {isAuthenticated ? (
-                      <button
-                        onClick={() => {
-                          logout();
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]"
-                      >
-                        Sign out
-                      </button>
-                    ) : (
-                      <Link
-                        to="/login"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="block px-3 py-2 rounded-md text-base font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]"
-                      >
-                        Sign in
-                      </Link>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </nav>
+          
+          {/* Mobile menu */}
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+            <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="md:hidden absolute w-full bg-white shadow-lg"
+              >
+                <div className="px-2 pt-2 pb-3 space-y-1">
+                  {isAuthenticated && (
+                    <>
+                      <div className="px-3 py-2">
+                        <StreakIndicator />
+                      </div>
+                    </>
+                  )}
+                  {isAuthenticated ? (
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]"
+                    >
+                      Sign out
+                    </button>
+                  ) : (
+                    <Link
+                      to="/login"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block px-3 py-2 rounded-md text-base font-medium text-[#333333] hover:text-[#1a1a1a] hover:bg-[#f2efe9]"
+                    >
+                      Sign in
+                    </Link>
+                  )}
+                </div>
+            </motion.div>
+            )}
+          </AnimatePresence>
           
           {/* Main content */}
           <main className="flex-grow">
@@ -216,17 +203,7 @@ function App() {
                 path="/journal" 
                 element={
                   isAuthenticated ? (
-                    <JournalForm isAuthenticated={isAuthenticated} saveButtonText="Save to Gallery" />
-                  ) : (
-                    <Navigate to="/login" replace />
-                  )
-                } 
-              />
-              <Route 
-                path="/gallery" 
-                element={
-                  isAuthenticated ? (
-                    <Gallery />
+                    <JournalForm isAuthenticated={isAuthenticated} />
                   ) : (
                     <Navigate to="/login" replace />
                   )

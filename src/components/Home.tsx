@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
+import { clearJournalCache } from '../utils/storageUtils';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -8,6 +9,8 @@ const Home: React.FC = () => {
 
   const handleStart = () => {
     if (isAuthenticated) {
+      // Clear any previous journal drafts or submissions
+      clearJournalCache();
       navigate('/journal');
     } else {
       navigate('/login');

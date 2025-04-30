@@ -17,7 +17,8 @@ import { useNavigate } from 'react-router-dom';
 // Import from local copy of the library
 // @ts-ignore
 import imageCompression from '../lib/browser-image-compression';
-import { apiService } from '../utils/api';
+import { clearJournalCache } from '../utils/storageUtils';
+import { saveJournal, journalExistsForDate } from '../services/journalService';
 
 // Simple function that returns the original image without enhancement
 const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
@@ -63,11 +64,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [location, setLocation] = useState('');
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
-  const [date, setDate] = useState(() => {
-    const today = new Date();
-    today.setMinutes(today.getMinutes() - today.getTimezoneOffset()); // Adjust for timezone
-    return today;
-  });
+  const [date, setDate] = useState(new Date());
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -144,7 +141,55 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }, 2000);
   };
   
-  // Function to save journal entry to backend (to be implemented)
+  // Function to compress all images in the journal to reduce size
+  const compressJournalImages = async (images: string[]): Promise<string[]> => {
+    // If there are no images, return an empty array
+    if (!images || images.length === 0) return [];
+    
+    try {
+      // Process each image in parallel
+      const compressedImages = await Promise.all(images.map(async (imageDataUrl) => {
+        // If it's not a data URL, just return it
+        if (!imageDataUrl.startsWith('data:image')) return imageDataUrl;
+        
+        // Create an image element to load the image
+        const img = new Image();
+        img.src = imageDataUrl;
+        
+        // Wait for the image to load
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve; // Continue even if there's an error
+        });
+        
+        // Create a canvas to compress the image
+        const canvas = document.createElement('canvas');
+        
+        // Calculate new dimensions (50% of original size, but min 800px on longest side)
+        const maxDimension = Math.max(img.width, img.height);
+        const scale = maxDimension > 1600 ? 800 / maxDimension : 0.5;
+        
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        
+        // Draw the image at the new size
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return imageDataUrl; // Fallback to original if context fails
+        
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to JPEG with medium quality
+        return canvas.toDataURL('image/jpeg', 0.6);
+      }));
+      
+      return compressedImages;
+    } catch (error) {
+      console.error('Error compressing images:', error);
+      return images; // Return original images if compression fails
+    }
+  };
+  
+  // Function to save journal entry to Firestore
   const saveJournalToBackend = async () => {
     if (!isAuthenticated) {
       toast.error("Please sign in to save your journal");
@@ -152,58 +197,102 @@ const JournalForm: React.FC<JournalFormProps> = ({
       return;
     }
 
+    // Show a loading toast
+    const toastId = toast.loading("Saving your journal...");
+    
+    // Set a timeout for the saving process
+    const saveTimeout = setTimeout(() => {
+      toast.update(toastId, {
+        render: "Still working... Processing images takes time. Please wait.",
+        type: "info",
+        isLoading: true
+      });
+    }, 5000);
+
     try {
-      toast.info("Saving your journal...");
-      
+      // Validate content before saving
+      if (!location.trim()) {
+        clearTimeout(saveTimeout);
+        toast.update(toastId, { 
+          render: "Location is required", 
+          type: "error", 
+          isLoading: false,
+          autoClose: 3000
+        });
+        return;
+      }
+
       // Break the journal text into paragraphs
       const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
       
-      // Get existing journals or initialize empty array
-      const existingJournals = JSON.parse(localStorage.getItem('journals') || '[]');
-      
-      // Get the journal count to create a sequential number
-      let journalCount = parseInt(localStorage.getItem('journal_count') || '0');
-      journalCount++; // Increment for the new journal
-      
-      // Create a unique ID for the journal entry with sequential numbering
-      const journalId = `journal_${journalCount}`;
+      if (textSections.length === 0) {
+        clearTimeout(saveTimeout);
+        toast.update(toastId, { 
+          render: "Journal content is required", 
+          type: "error", 
+          isLoading: false,
+          autoClose: 3000
+        });
+        return;
+      }
       
       // Check if a journal with the same date already exists
       const dateStr = date.toISOString().split('T')[0]; // Get YYYY-MM-DD format
-      const journalWithSameDate = existingJournals.find((journal: { date: string }) => {
-        const journalDate = new Date(journal.date).toISOString().split('T')[0];
-        return journalDate === dateStr;
-      });
+      const dateExists = await journalExistsForDate(date.toISOString());
       
-      if (journalWithSameDate) {
-        toast.error("A journal entry for this date already exists in your gallery");
+      if (dateExists) {
+        clearTimeout(saveTimeout);
+        toast.update(toastId, { 
+          render: "A journal entry for this date already exists in your gallery", 
+          type: "error", 
+          isLoading: false,
+          autoClose: 3000
+        });
         return;
       }
+      
+      // Update the toast to indicate we're processing images
+      toast.update(toastId, { render: "Processing images..." });
+      
+      // Compress the images to reduce size
+      const compressedImages = await compressJournalImages(images);
+      
+      // Update the toast to indicate we're generating the preview
+      toast.update(toastId, { render: "Generating journal preview..." });
       
       // Generate a preview of the journal as a data URL for thumbnails
       const preview = await generateJournalPreview();
       
-      // For now, save to localStorage
+      if (!preview) {
+        clearTimeout(saveTimeout);
+        toast.update(toastId, { 
+          render: "Failed to generate journal preview, please try again", 
+          type: "error", 
+          isLoading: false,
+          autoClose: 3000
+        });
+        return;
+      }
+      
+      // Update toast to indicate we're saving to Firestore
+      toast.update(toastId, { render: "Saving to your account..." });
+      
+      // Prepare journal data for Firestore
       const journalData = {
-        id: journalId,
-        number: journalCount, // Store the sequential number
         date: date.toISOString(),
         location: location,
         text: textSections,
-        images: images,
+        images: compressedImages, // Use compressed images
         textColors: textColors,
         layoutMode: layoutMode,
-        createdAt: new Date().toISOString(),
         preview: preview
       };
       
-      // Add new journal
-      existingJournals.push(journalData);
+      // Save to Firestore database
+      const journalId = await saveJournal(journalData);
       
-      // Save back to localStorage
-      localStorage.setItem('journals', JSON.stringify(existingJournals));
-      // Save the updated journal count
-      localStorage.setItem('journal_count', journalCount.toString());
+      // Clear the timeout as we're done
+      clearTimeout(saveTimeout);
       
       // Set as submitted data
       setSubmittedData({
@@ -218,37 +307,81 @@ const JournalForm: React.FC<JournalFormProps> = ({
       
       setSubmitted(true);
       
-      toast.success(`Journal ${journalCount} saved successfully to your gallery!`);
+      // Update toast to success
+      toast.update(toastId, { 
+        render: `Journal saved successfully to your account!`, 
+        type: "success", 
+        isLoading: false,
+        autoClose: 3000
+      });
+      
+      // Clear journal caches to start fresh next time
+      clearJournalCache();
+      
+      // Show success message and reset form after saving
+      setTimeout(() => {
+        handleReset();
+        // Stay on the current page instead of navigating to gallery
+      }, 2500);
     } catch (error) {
+      // Clear the timeout
+      clearTimeout(saveTimeout);
+      
       console.error("Error saving journal:", error);
-      toast.error("Failed to save journal. Please try again.");
+      toast.update(toastId, { 
+        render: `Failed to save journal: ${error instanceof Error ? error.message : "Please try again"}`, 
+        type: "error", 
+        isLoading: false,
+        autoClose: 4000
+      });
     }
   };
   
   // Generate a thumbnail preview of the journal as a data URL
   const generateJournalPreview = async (): Promise<string> => {
     try {
-      const journalElement = document.querySelector('.relative.bg-\\[\\#f9f7f1\\]') as HTMLElement;
+      // Try to get journal element by ID (more reliable)
+      const journalElement = document.getElementById('journal-container');
+      
       if (!journalElement) {
-        console.error('Journal element not found for preview generation');
+        console.error('Journal container not found for preview generation');
+        toast.error('Could not generate journal preview. Please try again.');
         return '';
       }
+
+      // Apply high quality rendering to the element before capturing
+      const originalTransform = journalElement.style.transform;
+      journalElement.style.transform = 'none'; // Reset transform to avoid scaling issues
       
-      // Generate a high-quality preview
+      // Generate a lower resolution preview for faster processing
       const canvas = await html2canvas(journalElement, {
-        scale: 2, // Higher resolution for better quality (was 0.25)
+        scale: 1.0, // Lower resolution for much faster processing
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#f9f7f1',
         logging: false,
-        imageTimeout: 30000, // Longer timeout for higher quality
-        letterRendering: true // Better text rendering
+        imageTimeout: 20000, // Shorter timeout for faster saving
+        letterRendering: true, // Better text rendering
+        onclone: (documentClone: Document) => {
+          // Enhance rendering in the cloned document
+          const clonedElement = documentClone.getElementById('journal-container');
+          if (clonedElement) {
+            clonedElement.style.transform = 'none';
+            clonedElement.style.textRendering = 'optimizeLegibility';
+            (clonedElement.style as any)['-webkit-font-smoothing'] = 'antialiased';
+            (clonedElement.style as any)['-moz-osx-font-smoothing'] = 'grayscale';
+          }
+        }
       });
       
-      // Get data URL with higher quality
-      return canvas.toDataURL('image/jpeg', 0.9); // Increased quality (was 0.5)
+      // Restore original transform after capture
+      journalElement.style.transform = originalTransform;
+      
+      // Get data URL with moderate quality to reduce size
+      return canvas.toDataURL('image/jpeg', 0.6);
     } catch (error) {
       console.error('Failed to generate journal preview:', error);
+      toast.error('Could not generate journal preview. Please try again.');
       return '';
     }
   };
@@ -716,54 +849,54 @@ const JournalForm: React.FC<JournalFormProps> = ({
       console.warn('Advanced compression failed, falling back to basic compression', error);
       
       // Fallback to original resize logic if compression fails
-      return new Promise((resolve) => {
+    return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-          // Create a canvas for simple resizing if needed
+        // Create a canvas for simple resizing if needed
           const canvas = document.createElement('canvas');
           
-          // Determine if we need to resize
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
-          
+        // Determine if we need to resize
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        
           let width = img.width;
           let height = img.height;
           
-          // Resize if image is too large
-          if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-            if (width > height) {
-              height = Math.floor(height * (MAX_WIDTH / width));
-              width = MAX_WIDTH;
-            } else {
-              width = Math.floor(width * (MAX_HEIGHT / height));
-              height = MAX_HEIGHT;
-            }
+        // Resize if image is too large
+        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+          if (width > height) {
+            height = Math.floor(height * (MAX_WIDTH / width));
+            width = MAX_WIDTH;
+          } else {
+            width = Math.floor(width * (MAX_HEIGHT / height));
+            height = MAX_HEIGHT;
           }
-          
-          // Set canvas dimensions
+        }
+        
+        // Set canvas dimensions
           canvas.width = width;
           canvas.height = height;
           
-          // Draw resized image
+        // Draw resized image
           const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            // Return a moderately compressed JPEG for storage
-            const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            resolve(optimizedDataUrl);
-          } else {
-            // Fall back to original if context not available
-            resolve(imageDataUrl);
-          }
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Return a moderately compressed JPEG for storage
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(optimizedDataUrl);
+        } else {
+          // Fall back to original if context not available
+          resolve(imageDataUrl);
+        }
         };
         
         img.onerror = () => {
-          console.error('Failed to load image for optimization');
-          resolve(imageDataUrl);
+        console.error('Failed to load image for optimization');
+        resolve(imageDataUrl);
         };
         
         img.src = imageDataUrl;
-      });
+    });
     }
   };
   
@@ -941,23 +1074,49 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
   
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      const journalData = {
-        title: `Journal Entry - ${date.toLocaleDateString()}`,
-        content: journalText,
-        date: date.toISOString(),
-        images,
-        layoutMode,
-      };
-
-      await apiService.createJournal(journalData);
-      setSubmitted(true);
-      navigate('/gallery'); // Redirect to gallery after saving
-    } catch (error) {
-      console.error('Error saving journal:', error);
+    // Check authentication first
+    if (!isAuthenticated) {
+      toast.error("Please sign in to create a journal");
+      navigate("/login");
+      return;
+    }
+    
+    // Break the journal text into paragraphs
+    const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
+    
+    const newSubmittedData = {
+      date,
+      location,
+      text: textSections,
+      images,
+      textColors,
+      layoutMode
+    };
+    
+    setSubmittedData(newSubmittedData);
+    setSubmitted(true);
+    
+    // Clear draft storage since we're now submitted
+    clearLocalStorageItem('webjournal_draft');
+    
+    // Save to submitted storage
+    const dataToSave = {
+      ...newSubmittedData,
+      date: date.toISOString()
+    };
+    
+    if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
+      showSavedNotification();
+    } else {
+      console.error('Error saving submitted journal');
+    }
+    
+    // Always save to backend if user is authenticated
+    if (isAuthenticated) {
+      saveJournalToBackend();
     }
   };
   
@@ -1736,202 +1895,213 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   const [isSharing, setIsSharing] = useState(false);
   
+  // Auto-save the journal as the user types
+  useEffect(() => {
+    // Don't save if no content has been entered yet
+    if (!location && !journalText && images.length === 0) {
+      return;
+    }
+    
+    // Create a debounced auto-save
+    const autoSaveTimeout = setTimeout(() => {
+      // Store the draft in localStorage
+      const dataToSave = {
+        date: date.toISOString(),
+        location,
+        text: journalText.split('\n\n').filter(section => section.trim().length > 0),
+        images,
+        textColors,
+        layoutMode
+      };
+      
+      saveToLocalStorage('webjournal_draft', dataToSave);
+      showSavedNotification('#edf7ed');
+    }, 2000); // 2 second debounce
+    
+    return () => clearTimeout(autoSaveTimeout);
+  }, [location, journalText, images, textColors, layoutMode, date]);
+  
   return (
     <div className="w-full">
       {!submitted ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Input Form - Left Side */}
-          <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
-            <div className="p-6 border-b border-[#e8e4d5] flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-[#1a1a1a]">New Journal Entry</h3>
-              {!submitted && (
-                <button 
-                  type="button" // Prevent form submission
-                  onClick={handleReset} 
-                  className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
+            <div className="bg-white rounded-2xl shadow-xl border border-[#d1cdc0] overflow-hidden">
+              <div className="p-6 border-b border-[#e8e4d5] flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-[#1a1a1a]">New Journal Entry</h3>
+                {!submitted && (
+                  <button 
+                    type="button" // Prevent form submission
+                    onClick={handleReset} 
+                    className="px-4 py-2.5 bg-[#f8f8f8] hover:bg-[#efefef] text-[#333] rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-[#ddd] text-base"
+                  >
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    New Journal
+                  </button>
+                )}
+              </div>
+              <div className="p-6">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-5"
                 >
-                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                  </svg>
-                  New Journal
-                </button>
-              )}
-            </div>
-            <div className="p-6">
-              <motion.form
-                onSubmit={handleSubmit}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="space-y-6"
-              >
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <label htmlFor="date" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                      </svg>
-                      <span>Date</span>
-                    </label>
-                    <input
-                      type="date"
-                      id="date"
-                      value={date.toISOString().split('T')[0]}
-                      onChange={(e) => {
-                        const selectedDate = new Date(e.target.value);
-                        selectedDate.setMinutes(selectedDate.getMinutes() - selectedDate.getTimezoneOffset()); // Adjust for timezone
-                        setDate(selectedDate);
-                      }}
-                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <label htmlFor="location" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                      </svg>
-                      <span>Location</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="location"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="e.g., MANIA, LA JOLLA, CA"
-                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
-                      required
-                    />
-                  </div>
-
-                  {/* Images upload - moved up after location */}
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                      </svg>
-                      <span>Images {images.length > 0 && `(${images.length}/3)`}</span>
-                    </label>
-                    
-                    {images.length < 3 && (
-                      <div 
-                        className="border-2 border-dashed border-[#d1cdc0] rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#4a4a4a] transition-all duration-300 bg-white/30 backdrop-blur-sm hover:bg-white/50"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <svg className="w-10 h-10 text-[#4a4a4a] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                  <div className="space-y-4">
+                    <div className="space-y-3">
+                      <label htmlFor="date" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
-                        <p className="text-base text-[#4a4a4a] text-center mb-2">Tap to upload images</p>
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleImageUpload}
-                          accept="image/*"
-                          multiple
-                          style={{ display: 'none' }}
-                          disabled={images.length >= 3}
-                        />
-                      </div>
-                    )}
-                    
-                    {images.length > 0 && (
-                      <motion.div 
-                        className="grid grid-cols-3 gap-2 mt-2"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        {images.map((image, index) => (
-                          <div 
-                            key={index} 
-                            className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
-                          >
-                            <img 
-                              src={image} 
-                              alt={`Upload ${index + 1}`} 
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeImage(index)}
-                              className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* Color Picker */}
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                      </svg>
-                      <span>Colors</span>
-                    </label>
-                    <div className="bg-white rounded-lg shadow-sm border border-[#d1cdc0] p-3">
-                      <SimpleColorPicker 
-                        colors={textColors}
-                        onChange={handleColorChange}
-                        images={images}
+                        <span>Date</span>
+                      </label>
+                      <input
+                        type="date"
+                        id="date"
+                        value={date.toISOString().split('T')[0]}
+                        onChange={(e) => setDate(new Date(e.target.value))}
+                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                        required
                       />
                     </div>
-                  </div>
+                    
+                    <div className="space-y-3">
+                      <label htmlFor="location" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>Location</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="e.g., MANIA, LA JOLLA, CA"
+                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
+                        required
+                      />
+                    </div>
 
-                  {/* Layout Style Toggle */}
-                  <LayoutToggle
-                    layoutMode={layoutMode}
-                    setLayoutMode={setLayoutMode}
-                  />
-                
-                  <div className="space-y-3">
-                    <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                      </svg>
-                      <span>Journal Entry</span>
-                    </label>
-                    <textarea
-                      id="journalText"
-                      value={journalText}
-                      onChange={(e) => setJournalText(e.target.value)}
-                      placeholder="Write your journal entry here..."
-                      className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
-                      required
+                    {/* Images upload - moved up after location */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Images {images.length > 0 && `(${images.length}/3)`}</span>
+                      </label>
+                      
+                      {images.length < 3 && (
+                        <div 
+                          className="border-2 border-dashed border-[#d1cdc0] rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-[#4a4a4a] transition-all duration-300 bg-white/30 backdrop-blur-sm hover:bg-white/50"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <svg className="w-10 h-10 text-[#4a4a4a] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                          </svg>
+                          <p className="text-base text-[#4a4a4a] text-center mb-2">Tap to upload images</p>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                            accept="image/*"
+                            multiple
+                            style={{ display: 'none' }}
+                            disabled={images.length >= 3}
+                          />
+                        </div>
+                      )}
+                      
+                      {images.length > 0 && (
+                        <motion.div 
+                          className="grid grid-cols-3 gap-2 mt-2"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          {images.map((image, index) => (
+                            <div 
+                              key={index} 
+                              className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
+                            >
+                              <img 
+                                src={image} 
+                                alt={`Upload ${index + 1}`} 
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index)}
+                                className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </div>
+
+                    {/* Color Picker */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                        </svg>
+                        <span>Colors</span>
+                      </label>
+                      <div className="bg-white rounded-lg shadow-sm border border-[#d1cdc0] p-3">
+                        <SimpleColorPicker 
+                          colors={textColors}
+                          onChange={handleColorChange}
+                          images={images}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Layout Style Toggle */}
+                    <LayoutToggle
+                      layoutMode={layoutMode}
+                      setLayoutMode={setLayoutMode}
                     />
-                    <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end pt-4 border-t border-[#e8e4d5]">
-                  <motion.button
-                    type="submit"
-                    className="px-6 py-3 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#333] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a]"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    disabled={isLoadingImage}
-                  >
-                    {isLoadingImage ? 'Processing...' : saveButtonText}
-                  </motion.button>
                   
-                  <motion.button
-                    onClick={handleSaveAsPDF}
-                    className="px-6 py-3 bg-[#b5a890] text-white rounded-lg hover:bg-[#a39580] ml-3 focus:outline-none"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Download PDF
-                  </motion.button>
-                </div>
-              </motion.form>
-            </div>
+                    <div className="space-y-3">
+                      <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        <span>Journal Entry</span>
+                      </label>
+                      <textarea
+                        id="journalText"
+                        value={journalText}
+                        onChange={(e) => setJournalText(e.target.value)}
+                        placeholder="Write your journal entry here..."
+                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
+                        required
+                      />
+                      <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end pt-4 border-t border-[#e8e4d5]">
+                    <motion.button
+                      onClick={handleSaveAsPDF}
+                      className="px-6 py-3 bg-[#b5a890] text-white rounded-lg hover:bg-[#a39580] focus:outline-none"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Download PDF
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </div>
           </div>
           
           {/* Live Preview - Right Side */}
@@ -1946,7 +2116,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
             </div>
             
             <div className="p-4">
-              <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef}>
+              <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
                 <JournalCanvas
                   date={date}
                   location={location}
@@ -2035,9 +2205,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </button>
                       </li>
                     </ul>
-                  </div>
-                )}
-              </div>
+            </div>
+          )}
+        </div>
               {submitted && (
                 <button 
                   onClick={handleReset} 
@@ -2049,23 +2219,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   New Entry
                 </button>
               )}
-              
-              {submitted && isAuthenticated && (
-                <button 
-                  onClick={saveJournalToBackend}
-                  className="px-4 py-2.5 bg-[#b5a890] hover:bg-[#a39580] text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
-                >
-                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
-                  </svg>
-                  Save to Gallery
-                </button>
-              )}
-            </div>
+      </div>
           </div>
           
           <div className="p-4">
-            <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef}>
+            <div className="relative bg-[#f9f7f1] rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
               <JournalCanvas
                 date={submitted ? submittedData.date : date}
                 location={submitted ? submittedData.location : location}
