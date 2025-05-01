@@ -19,6 +19,9 @@ import { useNavigate } from 'react-router-dom';
 import imageCompression from '../lib/browser-image-compression';
 import { clearJournalCache } from '../utils/storageUtils';
 import { saveJournal, journalExistsForDate } from '../services/journalService';
+import { format } from 'date-fns';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import JournalEnhancer from './JournalEnhancer';
 
 // Simple function that returns the original image without enhancement
 const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
@@ -1920,7 +1923,36 @@ const JournalForm: React.FC<JournalFormProps> = ({
     
     return () => clearTimeout(autoSaveTimeout);
   }, [location, journalText, images, textColors, layoutMode, date]);
-  
+
+  // Inside the component, add a handler for suggestion clicks
+  const handleSuggestionClick = (suggestion: string) => {
+    // Append the suggestion as a question to the active text section
+    if (activeTextSection >= 0 && activeTextSection < submittedData.text.length) {
+      const currentText = submittedData.text[activeTextSection];
+      const updatedText = currentText + "\n\n" + suggestion;
+      
+      const newTextSections = [...submittedData.text];
+      newTextSections[activeTextSection] = updatedText;
+      
+      const updatedData = {
+        ...submittedData,
+        text: newTextSections
+      };
+      
+      setSubmittedData(updatedData);
+      
+      // Save to localStorage
+      const dataToSave = {
+        ...updatedData,
+        date: updatedData.date.toISOString()
+      };
+      
+      if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
+        showSavedNotification();
+      }
+    }
+  };
+
   return (
     <div className="w-full">
       {!submitted ? (
@@ -2072,12 +2104,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     />
                   
                     <div className="space-y-3">
-                      <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+                      <label htmlFor="journalText" className="block text-sm font-medium text-[#1a1a1a] flex items-center gap-2 mt-[-8px] mb-[4px]">
                         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-[#4a4a4a]">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                         </svg>
                         <span>Journal Entry</span>
                       </label>
+                      
                       <textarea
                         id="journalText"
                         value={journalText}
@@ -2086,6 +2119,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
                         required
                       />
+                      
+                      {/* Add Journal Enhancer Component */}
+                      <JournalEnhancer
+                        journalText={journalText}
+                        location={location}
+                        minWordCount={50}
+                        onSuggestionClick={(suggestion) => {
+                          setJournalText(prev => prev + "\n\n" + suggestion);
+                        }}
+                      />
+                      
                       <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
                     </div>
                   </div>

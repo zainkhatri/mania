@@ -1,79 +1,37 @@
-# Web Journal
+# Mania
 
-A beautiful digital journaling application that allows you to create and customize personal journal entries with images, text, and dynamic styling.
+Digital journaling without the pen in your hand.
 
-## Features
+## What is Mania?
 
-- 📝 Create journal entries with text and location details
-- 📅 Date selection for your memories
-- 🖼️ Upload and arrange up to 3 images per entry
-- 💾 Download your journal as a PDF
-- 🎨 Elegant cream and black aesthetic
-- 📱 Responsive design for all devices
-- ⚡ Auto-save functionality for a seamless experience
+Mania is a personal digital journaling app created by Zain that lets you create beautiful journal entries with images, text, and custom styling. Your entries are automatically saved as you type and can be exported as professional PDFs.
+
+## Key Features
+
+- **Auto-save** - Everything is saved as you type
+- **Image uploads** - Add up to 3 images per entry
+- **Smart color extraction** - Colors are automatically pulled from your images
+- **PDF export** - Download your journals as beautiful PDFs
+- **Clean design** - Elegant cream and black aesthetic
+- **Works everywhere** - Fully responsive on all devices
 
 ## How to Use
 
-### Creating a New Journal Entry
+1. **Pick a date** for your journal entry
+2. **Add a location** like "CHICAGO, ILLINOIS"
+3. **Upload photos** that capture your memory
+4. **Select colors** that complement your images
+5. **Write your thoughts** - double line breaks create new paragraphs
+6. **Export to PDF** whenever you're ready
 
-1. **Date**: Select the date for your journal entry
-2. **Location**: Enter the location (e.g., "CHICAGO, ILLINOIS")
-3. **Images**: Upload up to 3 images that represent your experience
-4. **Colors**: Choose colors for your location text:
-   - Colors are automatically extracted from your uploaded images
-   - Select a color that complements your images
-   - Or use the custom color picker for specific colors
-5. **Journal Text**: Write your journal entry content
-   - Use double line breaks to create new paragraphs
-   - Your journal is automatically saved as you type
+## Tech Stack
 
-### Editing Your Journal
+Built with React, Firebase, and modern web technologies.
 
-After creating your journal, you can still edit:
-- Location name
-- Text content (add, edit, or remove sections)
-- Colors
-- Images (replace or remove)
+## About the Creator
 
-### Auto-Save Functionality
+This project was entirely created by Zain as a personal project. 
 
-The application features built-in auto-save functionality:
-- Your journal is automatically saved as you type
-- No need to manually save your work
-- A subtle notification appears when your journal is saved
-- Your journal remains saved even if you close the browser
+---
 
-### Color Picker
-
-The color picker automatically extracts colors from your uploaded images to help you create a cohesive design:
-
-1. **Image-Derived Colors**: 
-   - After uploading images, colors are automatically extracted from them
-   - These colors appear in the "Colors From Your Images" section
-   - Click any color to apply it to your journal title
-
-2. **Custom Color**:
-   - Use the color input to select any specific color
-   - The system automatically creates a complementary shadow color
-   - Current color values are displayed for reference
-
-### Printing & Saving
-
-- **Download PDF**: Creates a downloadable PDF document of your journal
-- **Print**: Print a physical copy of your journal on desktop
-- **Share**: Share your journal via messaging, email, etc.
-
-To access these options, use the menu icon after creating your journal.
-
-### Creating a New Entry
-
-Click "New Entry" at any time to create a fresh journal entry.
-
-## Tips for Best Results
-
-1. **High-Quality Images**: Upload clear, colorful images for better color extraction
-2. **Varied Images**: Include images with different color palettes for more options
-3. **Image Placement**: Images are automatically positioned in the journal layout
-4. **Color Selection**: Choose title colors that stand out against the background
-
-Enjoy creating beautiful, personalized journal entries that capture your experiences! 
+*© Zain - Create journals without the pen in your hand.*
