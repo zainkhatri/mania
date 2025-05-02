@@ -20,7 +20,6 @@ import imageCompression from '../lib/browser-image-compression';
 import { clearJournalCache } from '../utils/storageUtils';
 import { saveJournal, journalExistsForDate } from '../services/journalService';
 import { format } from 'date-fns';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import JournalEnhancer from './JournalEnhancer';
 
 // Simple function that returns the original image without enhancement
@@ -1924,35 +1923,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
     return () => clearTimeout(autoSaveTimeout);
   }, [location, journalText, images, textColors, layoutMode, date]);
 
-  // Inside the component, add a handler for suggestion clicks
-  const handleSuggestionClick = (suggestion: string) => {
-    // Append the suggestion as a question to the active text section
-    if (activeTextSection >= 0 && activeTextSection < submittedData.text.length) {
-      const currentText = submittedData.text[activeTextSection];
-      const updatedText = currentText + "\n\n" + suggestion;
-      
-      const newTextSections = [...submittedData.text];
-      newTextSections[activeTextSection] = updatedText;
-      
-      const updatedData = {
-        ...submittedData,
-        text: newTextSections
-      };
-      
-      setSubmittedData(updatedData);
-      
-      // Save to localStorage
-      const dataToSave = {
-        ...updatedData,
-        date: updatedData.date.toISOString()
-      };
-      
-      if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
-        showSavedNotification();
-      }
-    }
-  };
-
   return (
     <div className="w-full">
       {!submitted ? (
@@ -2121,14 +2091,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       />
                       
                       {/* Add Journal Enhancer Component */}
-                      <JournalEnhancer
-                        journalText={journalText}
-                        location={location}
-                        minWordCount={50}
-                        onSuggestionClick={(suggestion) => {
-                          setJournalText(prev => prev + "\n\n" + suggestion);
-                        }}
-                      />
+                      {journalText.trim().length > 0 && (
+                        <JournalEnhancer
+                          journalText={journalText}
+                          location={location}
+                          minWordCount={20}
+                          showInitially={true}
+                        />
+                      )}
                       
                       <p className="text-xs text-gray-500">Use double line breaks to create new paragraphs.</p>
                     </div>

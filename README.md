@@ -14,6 +14,7 @@ Mania is a personal digital journaling app created by Zain that lets you create 
 - **PDF export** - Download your journals as beautiful PDFs
 - **Clean design** - Elegant cream and black aesthetic
 - **Works everywhere** - Fully responsive on all devices
+- **AI-powered journal prompts** - Get thoughtful follow-up questions based on your journal entries
 
 ## How to Use
 
@@ -24,9 +25,23 @@ Mania is a personal digital journaling app created by Zain that lets you create 
 5. **Write your thoughts** - double line breaks create new paragraphs
 6. **Export to PDF** whenever you're ready
 
+## Setup
+
+### OpenAI API Integration
+
+This application uses the OpenAI API to generate personalized journal prompts:
+
+1. Create an account on [OpenAI](https://openai.com) if you don't have one already
+2. Get your API key from the [API keys page](https://platform.openai.com/account/api-keys)
+3. Create a `.env` file in the root directory with the following content:
+   ```
+   REACT_APP_CHATGPTAPI=your_openai_api_key_here
+   ```
+4. The app uses the `gpt-4o-mini` model for the best balance of quality and cost efficiency
+
 ## Tech Stack
 
-Built with React, Firebase, and modern web technologies.
+Built with React, Firebase, OpenAI, and modern web technologies.
 
 ## About the Creator
 
