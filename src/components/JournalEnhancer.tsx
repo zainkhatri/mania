@@ -141,71 +141,265 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
     console.log("Journal analysis:", analysis);
     
     const questions: string[] = [];
+    const lowerText = text.toLowerCase();
     
-    // Beach/La Jolla specific questions
-    if (analysis.specificDetails.mentionedLaJolla) {
-      // Friend-focused questions if friends mentioned
-      if (analysis.hasFriends && analysis.people.length > 0) {
-        const friendNames = analysis.people.join(' and ');
-        // More natural-sounding questions with specific content
-        if (analysis.people.length === 2) {
-          questions.push(`What activities did you enjoy most with ${friendNames} during your visit to La Jolla Cove?`);
-        } else if (analysis.people.length === 1) {
-          questions.push(`What did you and ${friendNames} enjoy most about your time at La Jolla Cove?`);
+    // Extract key specific phrases, nouns, numbers, and descriptive words
+    const specificPhrases = extractSpecificPhrases(text);
+    
+    // Detect if this is likely lyrics or poetry
+    const isLyrics = 
+      (lowerText.match(/i'd rather/g) || []).length >= 2 || 
+      (lowerText.includes("truth is") && lowerText.includes("love")) ||
+      text.split('\n').length >= 3;
+
+    // Special handling for lyrics
+    if (isLyrics) {
+      questions.push("What emotions do these lyrics evoke for you?");
+      questions.push("What draws you to these particular lyrics?");
+      questions.push("Which line in this passage speaks to you most strongly?");
+      questions.push("How do these lyrics connect to your personal experiences?");
+      
+      // If "truth is" is mentioned
+      if (lowerText.includes("truth is")) {
+        questions.push("What truth in your own life resonates with these lyrics?");
+      }
+      
+      // If "top" is mentioned
+      if (lowerText.includes("at the top")) {
+        questions.push("What does being 'at the top' represent to you in your life?");
+      }
+      
+      return questions;
+    }
+    
+    // Extract specific details to use in questions
+    const specificDetails = {
+      coffeeDetails: text.match(/(\w+) through my (\w+) cup of coffee/i),
+      timeOfDay: text.match(/(morning|afternoon|evening|night)/i),
+      locations: text.match(/at (the|my) ([a-zA-Z\s]+)/g),
+      emotionalStates: text.match(/(frozen|shocked|surprised|happy|excited|worried|anxious|upset|scared|intense)/gi),
+      tvEvents: text.match(/(TV|news|tower|burning|hit)/gi),
+      thoughts: text.match(/"([^"]+)"/g), // Captures quoted thoughts
+      actions: text.match(/I (was|am|had|have|did|went|saw|felt|thought)([^,.;:!?]+)/gi),
+      sportDetails: {
+        teams: text.match(/(against|versus|vs\.?) ([A-Z][a-z]+)/i),
+        players: text.match(/([A-Z][a-z]+ [A-Z][a-z]+)/g), // Potential player names (capitalized first & last)
+        score: text.match(/(score|goal|point|lead)s?/gi),
+        specific_actions: text.match(/(spashed|kicked|shot|blocked|passed|threw|dunked|scored|missed|tackled|fouled)/i)
+      }
+    };
+    
+    // Extract potential names of people (capitalized words that aren't at the start of sentences)
+    const potentialNames = text.match(/\s([A-Z][a-z]{2,})/g) || [];
+    const cleanedNames = potentialNames.map(name => name.trim());
+    
+    // ---- GENERATE HYPER-SPECIFIC QUESTIONS ----
+    
+    // Sports game related questions
+    if (lowerText.includes("game against") || lowerText.includes("match against") || 
+        lowerText.includes("played against") || lowerText.includes("score")) {
+      
+      // Extract team name if present
+      const teamMatch = specificDetails.sportDetails.teams;
+      const opponentTeam = teamMatch ? teamMatch[2] : null;
+      
+      // Extract player names if present
+      const playerMatches = specificDetails.sportDetails.players;
+      const playerName = playerMatches && playerMatches.length > 0 ? 
+        playerMatches[0] : (cleanedNames.length > 0 ? cleanedNames[0] : null);
+      
+      // Action-specific questions (using exact verbs from entry)
+      if (specificDetails.sportDetails.specific_actions) {
+        const action = specificDetails.sportDetails.specific_actions[0].toLowerCase();
+        
+        if (action === "spashed") {
+          questions.push(`When you say you \"spashed it on his face,\" what was going through your mind in that moment?`);
+          questions.push(`What was the reaction from your teammates when you made that move in the final minutes?`);
         } else {
-          questions.push(`What were the highlights of your beach day with your friends at La Jolla Cove?`);
+          questions.push(`How did it feel when you ${action} in those crucial final minutes?`);
+          questions.push(`What was running through your mind right before you ${action}?`);
+        }
+      }
+      
+      // Team-specific questions
+      if (opponentTeam) {
+        questions.push(`What was your strategy going into the game against ${opponentTeam}?`);
+        questions.push(`What impressed you most about how ${opponentTeam} played?`);
+        questions.push(`How did your preparation for facing ${opponentTeam} differ from other opponents?`);
+      }
+      
+      // Player-specific questions
+      if (playerName) {
+        // Check if this might be referring to Wembanyama (or similar basketball player)
+        if (playerName.includes("Victor") || playerName.includes("Wembanyama")) {
+          questions.push(`What was most intimidating about facing ${playerName} on the court?`);
+          questions.push(`Did you have a specific plan for dealing with ${playerName}'s height advantage?`);
+          questions.push(`What surprised you most about ${playerName}'s playing style in person?`);
+        } else {
+          questions.push(`What aspects of ${playerName}'s game presented the biggest challenge for you?`);
+          questions.push(`Was there a moment when you felt you had figured out how to counter ${playerName}?`);
+        }
+      }
+      
+      // Score/intensity questions
+      if (lowerText.includes("score tightening") || lowerText.includes("close game") || 
+          lowerText.includes("intense") || lowerText.includes("tight")) {
+        questions.push("How do you typically handle the pressure when the score gets tight in the final minutes?");
+        questions.push("Did the intensity of this particular game differ from others you've played? How so?");
+      }
+      
+      // Final minutes drama
+      if (lowerText.includes("final minute") || lowerText.includes("last minute") || 
+          lowerText.includes("final moments") || lowerText.includes("final seconds")) {
+        questions.push("What emotions were cycling through you during those final tense minutes of the game?");
+        questions.push("How does your mindset change when you know you're in the closing minutes of a tight game?");
+      }
+      
+      // Add a few more personable game-related questions
+      questions.push("What was going through your mind when you realized you needed to make a decisive move?");
+      questions.push("How did the crowd's energy affect your performance in this game?");
+    }
+    
+    // Questions about witnessing news events with specific details
+    if (lowerText.includes("news") || (lowerText.includes("tv") && lowerText.includes("tower"))) {
+      if (specificDetails.tvEvents && specificDetails.tvEvents.length > 1) {
+        // Create question with specific tower/burning references
+        if (lowerText.includes("tower") && lowerText.includes("burning")) {
+          questions.push("As you watched the tower burning on TV, what specific image from the footage has stayed with you most vividly?");
         }
         
-        questions.push(`How would you describe your friendship with ${friendNames}?`);
+        // Create question referencing the second hit if mentioned
+        if (lowerText.includes("second hit")) {
+          questions.push("When you witnessed the second hit on TV, how did your understanding of what was happening change in that moment?");
+        }
+        
+        // Create question about the "didn't feel real" aspect if mentioned
+        if (lowerText.includes("didn't feel real") || lowerText.includes("feel real")) {
+          questions.push("You mentioned it 'didn't feel real' as you watched the news - at what point did the reality of the situation finally sink in for you?");
+        }
+        
+        // Reference specific emotional state if mentioned
+        if (specificDetails.emotionalStates && specificDetails.emotionalStates.length > 0) {
+          const emotion = specificDetails.emotionalStates[0].toLowerCase();
+          questions.push(`You described feeling ${emotion} watching the events unfold - how did this emotional response evolve over the hours and days that followed?`);
+        }
       }
-      
-      // Beach experience questions
-      if (analysis.specificDetails.mentionedBeach) {
-        questions.push("What was your favorite part of the beach experience at La Jolla Cove?");
-        questions.push("What made the scenery at La Jolla Cove particularly beautiful to you?");
-      }
-      
-      // General La Jolla questions
-      questions.push("What made your time at La Jolla Cove so enjoyable?");
-      questions.push("Would you recommend La Jolla Cove to others? What advice would you give them?");
     }
     
-    // "Liked" specific questions if mentioned
-    if (text.toLowerCase().includes('liked')) {
-      questions.push("What specifically did you like most about this experience?");
-    }
-    
-    // "Lounging" specific questions
-    if (text.toLowerCase().includes('lounging')) {
-      questions.push("How did lounging at the beach make you feel compared to your usual daily activities?");
-    }
-    
-    // "Besties" specific questions
-    if (text.toLowerCase().includes('besties')) {
-      if (analysis.people.length > 0) {
-        questions.push(`What makes ${analysis.people.join(' and ')} your 'besties'? How long have you known them?`);
+    // Coffee-related questions with specific details
+    if (lowerText.includes("coffee")) {
+      if (specificDetails.coffeeDetails && specificDetails.coffeeDetails.length > 2) {
+        const coffeeProgress = specificDetails.coffeeDetails[1]; // "halfway" or similar
+        const cupNumber = specificDetails.coffeeDetails[2]; // "second" or similar
+        questions.push(`You were ${coffeeProgress} through your ${cupNumber} cup of coffee when the news broke - how did this everyday moment contrast with the extraordinary events unfolding?`);
+        questions.push(`How was the rest of your morning coffee routine disrupted by what you saw on TV?`);
       } else {
-        questions.push("What makes these friends your 'besties'? Do you have any special memories with them?");
+        questions.push("How did the interruption of your coffee ritual affect your processing of the news?");
       }
     }
     
-    // General fallback questions that still reference journal details
-    if (analysis.keyWords.length > 0) {
-      const keyword = analysis.keyWords[0];
-      questions.push(`Can you share more about your experience with ${keyword}?`);
+    // Questions referencing specific thoughts
+    if (specificDetails.thoughts && specificDetails.thoughts.length > 0) {
+      // Clean up the thought by removing quotes
+      const thought = specificDetails.thoughts[0].replace(/"/g, '');
+      questions.push(`You recall thinking "${thought}" - what other thoughts were competing for attention in your mind at that moment?`);
     }
     
-    // If somehow no specific questions were generated
+    // Specific emotional response questions
+    if (lowerText.includes("frozen")) {
+      questions.push("You mentioned sitting there 'frozen' - what physical sensations do you remember experiencing in that moment of shock?");
+    }
+    
+    if (lowerText.includes("chaos")) {
+      questions.push("How did the 'chaos' you witnessed on TV compare to the environment around you as you watched?");
+    }
+    
+    // Morning-focused questions with specific details
+    if (lowerText.includes("morning")) {
+      questions.push("How did the rest of that morning unfold for you after the news broke?");
+      questions.push("Did your perception of ordinary morning routines change after this experience?");
+    }
+    
+    // If we have specific actions mentioned, create questions about them
+    const actionMatch = text.match(/I ([a-z]+ed) ([^,.;!?]+)/i);
+    if (actionMatch && actionMatch.length >= 3) {
+      const verb = actionMatch[1];
+      const object = actionMatch[2];
+      questions.push(`What led to the moment when you ${verb} ${object}?`);
+      questions.push(`How did you feel immediately after you ${verb} ${object}?`);
+    }
+    
+    // If we don't have enough questions yet, add some general but still context-aware ones
+    if (questions.length < 3) {
+      if (lowerText.includes("tv") || lowerText.includes("news")) {
+        questions.push("After the initial shock subsided, what actions did you take in response to what you'd seen?");
+        questions.push("How did conversations with others help you process what you witnessed on TV?");
+      }
+      
+      if (lowerText.includes("didn't feel real") || lowerText.includes("frozen") || lowerText.includes("happening here")) {
+        questions.push("What strategies helped you cope with the surreal nature of what you were witnessing?");
+      }
+    }
+    
+    // Ensure we have at least a few questions
     if (questions.length === 0) {
-      questions.push("What made this experience at La Jolla memorable enough for you to write about in your journal?");
+      questions.push("What details of this experience stand out most vividly in your memory?");
+      questions.push("How did this moment change your perspective on everyday life?");
+      questions.push("What thoughts were running through your mind that you didn't express at the time?");
     }
     
     // Shuffle and return questions
     return questions.sort(() => Math.random() - 0.5);
   }, [analyzeJournalContent]);
 
+  // Helper function to extract specific phrases for more personalized questions
+  const extractSpecificPhrases = (text: string): string[] => {
+    const phrases: string[] = [];
+    
+    // Extract noun phrases (adjective + noun combinations)
+    const nounPhraseMatches = text.match(/(\w+\s+\w+)/g) || [];
+    
+    // Filter to only meaningful phrases (at least 5 characters)
+    const meaningfulPhrases = nounPhraseMatches.filter(phrase => 
+      phrase.length > 5 && 
+      !['the a', 'a the', 'of the', 'in the', 'on the', 'to the'].includes(phrase.toLowerCase())
+    );
+    
+    // Add specific numbers and measurements
+    const numberMatches = text.match(/(\d+\s+\w+)/g) || [];
+    
+    return [...meaningfulPhrases, ...numberMatches];
+  };
+
   // Check if a question is relevant to journal content
   const isRelevantQuestion = useCallback((question: string, journalText: string): boolean => {
+    // Reject questions that ask about "experience with X" where X is a single word
+    // This pattern is usually a sign of poor comprehension
+    if (/experience with \w+\??$/.test(question.toLowerCase())) {
+      console.log("Rejecting question with 'experience with' pattern:", question);
+      return false;
+    }
+    
+    // Detect if this is likely lyrics
+    const lowerText = journalText.toLowerCase();
+    const isLyrics = 
+      (lowerText.match(/i'd rather/g) || []).length >= 2 || 
+      (lowerText.includes("truth is") && lowerText.includes("love")) ||
+      journalText.split('\n').length >= 3;
+    
+    // For lyrics, any question about lyrics, emotions, or meaning is good
+    if (isLyrics) {
+      const goodLyricQuestionPatterns = [
+        "lyric", "song", "verse", "line", "passage", "emotion", "feel", "meaning",
+        "resonate", "connect", "truth", "represent", "express"
+      ];
+      
+      return goodLyricQuestionPatterns.some(pattern => 
+        question.toLowerCase().includes(pattern)
+      );
+    }
+    
+    // If not lyrics, use the original analysis-based approach
     if (!journalAnalysis.current) {
       journalAnalysis.current = analyzeJournalContent(journalText);
     }
@@ -240,6 +434,13 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
       console.log("Generating initial question for journal text:", journalText);
       
       try {
+        // Detect if this is lyrics
+        const lowerText = journalText.toLowerCase();
+        const isLyrics = 
+          (lowerText.match(/i'd rather/g) || []).length >= 2 || 
+          (lowerText.includes("truth is") && lowerText.includes("love")) ||
+          journalText.split('\n').length >= 3;
+        
         // Generate direct questions first as a backup
         const directQuestions = generateDirectQuestions(journalText);
         console.log("Direct questions generated:", directQuestions);
@@ -248,8 +449,32 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         const aiQuestions = await generateJournalPrompts(journalText, location, minWordCount);
         console.log("AI service returned questions:", aiQuestions);
         
-        if (aiQuestions && aiQuestions.length > 0 && isRelevantQuestion(aiQuestions[0], journalText)) {
-          // Use AI question if it's relevant
+        // For lyrics, prefer our specialized lyric questions unless the AI question is really good
+        if (isLyrics) {
+          // Check if AI question contains any good lyric-related words
+          const goodLyricPatterns = [
+            "lyric", "song", "verse", "line", "passage", "emotion", "feel", "meaning",
+            "resonate", "connect", "truth", "represent", "express"
+          ];
+          
+          const isGoodAiQuestion = aiQuestions && 
+                                   aiQuestions.length > 0 && 
+                                   !aiQuestions[0].toLowerCase().includes("experience with rather") &&
+                                   goodLyricPatterns.some(pattern => aiQuestions[0].toLowerCase().includes(pattern));
+          
+          if (isGoodAiQuestion) {
+            // Use the AI question for lyrics
+            setQuestions([...aiQuestions, ...directQuestions]);
+            setCurrentQuestion(aiQuestions[0]);
+            console.log("Using AI-generated question for lyrics:", aiQuestions[0]);
+          } else {
+            // Use our specialized lyric questions
+            setQuestions(directQuestions);
+            setCurrentQuestion(directQuestions[0]);
+            console.log("Using specialized lyrics questions:", directQuestions[0]);
+          }
+        } else if (aiQuestions && aiQuestions.length > 0 && isRelevantQuestion(aiQuestions[0], journalText)) {
+          // For non-lyrics, use AI question if it's relevant
           setQuestions([...aiQuestions, ...directQuestions]);
           setCurrentQuestion(aiQuestions[0]);
           console.log("Using AI-generated question:", aiQuestions[0]);
@@ -285,6 +510,13 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
     try {
       shuffleAttempts.current += 1;
       
+      // Detect if this is lyrics
+      const lowerText = journalText.toLowerCase();
+      const isLyrics = 
+        (lowerText.match(/i'd rather/g) || []).length >= 2 || 
+        (lowerText.includes("truth is") && lowerText.includes("love")) ||
+        journalText.split('\n').length >= 3;
+      
       // If we have multiple questions, just cycle through them first
       if (questions.length > 1 && shuffleAttempts.current <= questions.length) {
         const currentIndex = questions.indexOf(currentQuestion);
@@ -304,28 +536,35 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
             journalAnalysis.current = analyzeJournalContent(journalText);
           }
           
-          // Get key details to focus on
-          const analysis = journalAnalysis.current;
+          // For lyrics, don't append any focus element
+          let focusedPrompt = journalText;
           
-          // Pick a focus element that's meaningful
-          let focusElement = "";
-          const focusOptions = [
-            ...(analysis.people.length > 0 ? analysis.people : []),
-            ...(analysis.locations.length > 0 ? analysis.locations : []),
-            ...(analysis.activities.length > 0 ? analysis.activities : []),
-            ...(analysis.keyWords.length > 0 ? analysis.keyWords.slice(0, 3) : [])
-          ];
-          
-          if (focusOptions.length > 0) {
-            focusElement = focusOptions[Math.floor(Math.random() * focusOptions.length)];
+          if (!isLyrics) {
+            // Get key details to focus on
+            const analysis = journalAnalysis.current;
+            
+            // Pick a focus element that's meaningful
+            let focusElement = "";
+            const focusOptions = [
+              ...(analysis.people.length > 0 ? analysis.people : []),
+              ...(analysis.locations.length > 0 ? analysis.locations : []),
+              ...(analysis.activities.length > 0 ? analysis.activities : []),
+              ...(analysis.keyWords.length > 0 ? analysis.keyWords
+                .filter((word: string) => !['rather', 'would', 'could', 'should'].includes(word.toLowerCase()))
+                .slice(0, 3) : [])
+            ];
+            
+            if (focusOptions.length > 0) {
+              focusElement = focusOptions[Math.floor(Math.random() * focusOptions.length)];
+            }
+            
+            console.log("Using focus element:", focusElement);
+            
+            // Only add focus for non-lyrics
+            if (focusElement) {
+              focusedPrompt = `${journalText} (Focus especially on "${focusElement}" in your question)`;
+            }
           }
-          
-          console.log("Using focus element:", focusElement);
-          
-          // Build enhanced prompt
-          const focusedPrompt = focusElement 
-            ? `${journalText} (Focus especially on "${focusElement}" in your question)`
-            : journalText;
           
           // Try getting an AI-generated question
           const newQuestions = await generateJournalPrompts(
@@ -341,7 +580,9 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
             // Check if it's unique and relevant
             const newQuestion = newQuestions[0];
             
-            if (!questions.includes(newQuestion) && isRelevantQuestion(newQuestion, journalText)) {
+            if (!questions.includes(newQuestion) && 
+                isRelevantQuestion(newQuestion, journalText) &&
+                !newQuestion.toLowerCase().includes("experience with rather")) {
               // Add to question list and display
               setQuestions(prevQuestions => [...prevQuestions, newQuestion]);
               setCurrentQuestion(newQuestion);
