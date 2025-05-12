@@ -250,6 +250,6 @@ const getUniqueDefaultPrompt = (journalText = '', location?: string): string => 
 // Create a service object with all the exported functions
 const gptService = {
   generateJournalPrompts
-};
+}; 
 
 export default gptService; 

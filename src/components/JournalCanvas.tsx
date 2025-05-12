@@ -220,6 +220,12 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   
   // Format date in handwritten style
   const formatDate = (date: Date): string => {
+    // Create a new date object that preserves the selected day without timezone issues
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    const adjustedDate = new Date(year, month, day, 12, 0, 0);
+    
     // Helper function to get ordinal suffix
     const getOrdinalSuffix = (day: number): string => {
       if (day > 3 && day < 21) return 'TH';
@@ -238,11 +244,10 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       day: 'numeric' 
     };
     
-    // Format the date without ordinal first
-    let dateStr = date.toLocaleDateString('en-US', options);
+    // Format the date without ordinal first using adjusted date
+    let dateStr = adjustedDate.toLocaleDateString('en-US', options);
     
     // Extract the day number and add the ordinal suffix
-    const day = date.getDate();
     const ordinalSuffix = getOrdinalSuffix(day);
     
     // Replace the day number with day + ordinal suffix
@@ -654,13 +659,13 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       // Draw continuous text that flows through all text boxes
       if (journalText) {
         try {
-          // Set bounds for font size
-          const minFontSize = 12;
-          const maxFontSize = 60;
+          // Calculate the optimal font size for text sections
+          const minFontSize = 14; // Slightly increased minimum font size
+          const maxFontSize = 70; // Increased from 60 to 70
           const totalLines = 21; // Total available lines across all text areas
           const words = journalText.split(' ');
           
-          // Use binary search to find the optimal font size
+          // Use binary search to find the largest font size that fits
           let low = minFontSize;
           let high = maxFontSize;
           let fontSize = minFontSize;
@@ -726,8 +731,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             fontSize += 1;
           }
           
-          // Reduce the font size by 25% to make it less squished
-          fontSize = Math.max(minFontSize, fontSize * 0.75);
+          // Adjust final font size for better readability (was 0.75, now 0.85 for larger text)
+          fontSize = Math.max(minFontSize, fontSize * 0.85);
           
           // Use the real text to do layout, but with the font size constrained by our reference calculation
           // The font size is now fixed based on 98 words and reduced by 25%

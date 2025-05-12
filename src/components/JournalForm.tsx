@@ -66,7 +66,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [location, setLocation] = useState('');
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
-  const [date, setDate] = useState(new Date());
+  
+  // Initialize date with noon time to avoid timezone issues
+  const initialDate = new Date();
+  initialDate.setHours(12, 0, 0, 0);
+  const [date, setDate] = useState(initialDate);
+  
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -83,7 +88,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
     layoutMode: 'standard' | 'mirrored';
     forceUpdate?: number;
   }>({
-    date: new Date(),
+    date: (() => {
+      const initialSubmittedDate = new Date();
+      initialSubmittedDate.setHours(12, 0, 0, 0);
+      return initialSubmittedDate;
+    })(),
     location: '',
     text: [],
     images: [],
@@ -546,7 +555,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
         setLocation(savedDraftJournal.location || '');
         setJournalText(savedDraftJournal.journalText || '');
         setImages(savedDraftJournal.images || []);
-        setDate(new Date(savedDraftJournal.date));
+        
+        // Parse the date string with timezone correction
+        const loadedDate = new Date(savedDraftJournal.date);
+        // Set time to noon to prevent date shifting
+        loadedDate.setHours(12, 0, 0, 0);
+        setDate(loadedDate);
+        
         setTextColors(savedDraftJournal.textColors || {
           locationColor: '#2D9CDB',
           locationShadowColor: '#1D3557',
@@ -1126,7 +1141,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
     setLocation('');
     setJournalText('');
     setImages([]);
-    setDate(new Date());
+    
+    // Create a new date with noon time to avoid timezone issues
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    setDate(today);
+    
     setLayoutMode('standard');
     setSubmitted(false);
     setActiveEditField(null);
@@ -1923,6 +1943,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
     return () => clearTimeout(autoSaveTimeout);
   }, [location, journalText, images, textColors, layoutMode, date]);
 
+  // Format date for the input element without timezone issues
+  const formatDateForInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   return (
     <div className="w-full">
       {!submitted ? (
@@ -1962,8 +1990,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       <input
                         type="date"
                         id="date"
-                        value={date.toISOString().split('T')[0]}
-                        onChange={(e) => setDate(new Date(e.target.value))}
+                        value={formatDateForInput(date)}
+                        onChange={(e) => {
+                          // Create date that preserves the selected day without timezone adjustments
+                          const [year, month, day] = e.target.value.split('-').map(Number);
+                          // Create new date with local timezone, setting time to noon to avoid any date shifting
+                          const selectedDate = new Date(year, month - 1, day, 12, 0, 0);
+                          setDate(selectedDate);
+                        }}
                         className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-3 text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm"
                         required
                       />
@@ -2086,7 +2120,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         value={journalText}
                         onChange={(e) => setJournalText(e.target.value)}
                         placeholder="Write your journal entry here..."
-                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-base"
+                        className="w-full rounded-lg border border-[#d1cdc0] shadow-sm focus:border-[#1a1a1a] focus:ring-[#1a1a1a] px-4 py-4 min-h-[180px] text-[#1a1a1a] transition-all duration-200 bg-white/50 backdrop-blur-sm text-lg"
                         required
                       />
                       

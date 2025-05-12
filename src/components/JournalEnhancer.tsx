@@ -266,8 +266,8 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         // Create question with specific tower/burning references
         if (lowerText.includes("tower") && lowerText.includes("burning")) {
           questions.push("As you watched the tower burning on TV, what specific image from the footage has stayed with you most vividly?");
-        }
-        
+    }
+    
         // Create question referencing the second hit if mentioned
         if (lowerText.includes("second hit")) {
           questions.push("When you witnessed the second hit on TV, how did your understanding of what was happening change in that moment?");
@@ -276,8 +276,8 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         // Create question about the "didn't feel real" aspect if mentioned
         if (lowerText.includes("didn't feel real") || lowerText.includes("feel real")) {
           questions.push("You mentioned it 'didn't feel real' as you watched the news - at what point did the reality of the situation finally sink in for you?");
-        }
-        
+    }
+    
         // Reference specific emotional state if mentioned
         if (specificDetails.emotionalStates && specificDetails.emotionalStates.length > 0) {
           const emotion = specificDetails.emotionalStates[0].toLowerCase();
@@ -540,26 +540,26 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
           let focusedPrompt = journalText;
           
           if (!isLyrics) {
-            // Get key details to focus on
-            const analysis = journalAnalysis.current;
-            
-            // Pick a focus element that's meaningful
-            let focusElement = "";
-            const focusOptions = [
-              ...(analysis.people.length > 0 ? analysis.people : []),
-              ...(analysis.locations.length > 0 ? analysis.locations : []),
-              ...(analysis.activities.length > 0 ? analysis.activities : []),
+          // Get key details to focus on
+          const analysis = journalAnalysis.current;
+          
+          // Pick a focus element that's meaningful
+          let focusElement = "";
+          const focusOptions = [
+            ...(analysis.people.length > 0 ? analysis.people : []),
+            ...(analysis.locations.length > 0 ? analysis.locations : []),
+            ...(analysis.activities.length > 0 ? analysis.activities : []),
               ...(analysis.keyWords.length > 0 ? analysis.keyWords
                 .filter((word: string) => !['rather', 'would', 'could', 'should'].includes(word.toLowerCase()))
                 .slice(0, 3) : [])
-            ];
-            
-            if (focusOptions.length > 0) {
-              focusElement = focusOptions[Math.floor(Math.random() * focusOptions.length)];
-            }
-            
-            console.log("Using focus element:", focusElement);
-            
+          ];
+          
+          if (focusOptions.length > 0) {
+            focusElement = focusOptions[Math.floor(Math.random() * focusOptions.length)];
+          }
+          
+          console.log("Using focus element:", focusElement);
+          
             // Only add focus for non-lyrics
             if (focusElement) {
               focusedPrompt = `${journalText} (Focus especially on "${focusElement}" in your question)`;
