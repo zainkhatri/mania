@@ -641,13 +641,16 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           ctx.restore();
           
           // Simplified shadow effect - just one shadow layer and main text (two colors total)
-          // Shadow layer
+          // Shadow layer with customizable offsets
+          const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
+          const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
+          
           ctx.fillStyle = locationShadowColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x + 15, yPosition + 5);
+          ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
 
           // Main text
           ctx.fillStyle = locationColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x + 10, yPosition - 3);
+          ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
         } catch (err) {
           console.error('Error drawing location:', err);
         }

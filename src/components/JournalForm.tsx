@@ -32,6 +32,9 @@ interface CustomWindow extends Window {
   FORCE_CANVAS_REDRAW: boolean;
   CURRENT_COLORS: TextColors;
   forceCanvasRedraw?: () => void;
+  shadowOffsetX?: number; // Add shadow X offset
+  shadowOffsetY?: number; // Add shadow Y offset 
+  shadowDarkness?: number; // Add shadow darkness level
 }
 
 // Declare global window properties for TypeScript
@@ -41,6 +44,9 @@ declare global {
     CURRENT_COLORS: TextColors;
     forceCanvasRedraw?: () => void;
     html2pdf: typeof html2pdf;
+    shadowOffsetX?: number; // Add shadow X offset
+    shadowOffsetY?: number; // Add shadow Y offset 
+    shadowDarkness?: number; // Add shadow darkness level
   }
 }
 
