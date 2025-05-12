@@ -62,7 +62,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   // Function to extract dominant colors from images
   const extractColorsFromImages = async (imageUrls: string[]) => {
     setIsExtracting(true);
-    const allColorCandidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}, source: 'image' | 'generated'}[] = [];
+    const allColorCandidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
     
     try {
       for (const imageUrl of imageUrls) {
@@ -78,7 +78,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
               // Create a canvas to draw the image
               const canvas = document.createElement('canvas');
               // Use a larger size for better color sampling
-              const size = Math.max(300, Math.min(img.width, img.height));
+              const size = 200;
               canvas.width = size;
               canvas.height = size;
               
@@ -88,135 +88,48 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                 return;
               }
               
-              // Draw the image on the canvas - centered and scaled to fit
-              const scale = size / Math.max(img.width, img.height);
-              const scaledWidth = img.width * scale;
-              const scaledHeight = img.height * scale;
-              const offsetX = (size - scaledWidth) / 2;
-              const offsetY = (size - scaledHeight) / 2;
-              
-              ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+              // Draw the image on the canvas
+              ctx.drawImage(img, 0, 0, size, size);
               
               // Get the image data
               const imageData = ctx.getImageData(0, 0, size, size).data;
               
-              // Extract colors using adaptive sampling
-              // More pixels for larger images, fewer for smaller ones
-              const sampleCount = Math.max(500, Math.min(2000, img.width * img.height / 100));
-              const candidateColors: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}, source: 'image' | 'generated'}[] = [];
+              // Use more sample points across the image for better color detection
+              const candidateColors: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
               
-              // Sample different areas of the image
-              // Use multiple strategies to find meaningful colors:
+              // Sample more points in a grid pattern
+              const gridStep = Math.floor(size / 20); // 20x20 grid sampling for more detailed colors
               
-              // 1. Grid sampling - regular grid across the image
-              const gridStep = Math.floor(Math.sqrt(size * size / (sampleCount * 0.5)));
-              for (let y = 0; y < size; y += gridStep) {
-                for (let x = 0; x < size; x += gridStep) {
+              for (let y = gridStep; y < size; y += gridStep) {
+                for (let x = gridStep; x < size; x += gridStep) {
                   const point = (y * size + x) * 4;
                   const r = imageData[point];
                   const g = imageData[point + 1];
                   const b = imageData[point + 2];
                   const a = imageData[point + 3];
                   
-                  // Skip transparent or near-transparent pixels
-                  if (a < 200) continue;
+                  // Skip transparent pixels
+                  if (a < 128) continue;
                   
                   // Convert to hex
                   const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
                   
-                  // Convert RGB to HSL for better color analysis
+                  // Convert RGB to HSL for better color comparison
                   const hsl = rgbToHsl(r, g, b);
                   
                   // Store RGB values for color difference calculation
                   const rgb = { r, g, b };
                   
-                  // Keep all colors except pure black/white/gray
-                  // Skip very desaturated colors (grays)
-                  if (hsl.s > 5) {
-                    candidateColors.push({ hex, hsl, rgb, source: 'image' });
+                  // Check brightness - exclude very dark or very light colors
+                  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                  if (brightness > 40 && brightness < 225) {
+                    candidateColors.push({ hex, hsl, rgb });
                   }
-                }
-              }
-              
-              // 2. Edge detection - sample pixels near edges for more interesting colors
-              // Simple edge detection by looking for color changes
-              for (let y = 1; y < size - 1; y += gridStep) {
-                for (let x = 1; x < size - 1; x += gridStep) {
-                  const pointC = (y * size + x) * 4;  // Center pixel
-                  const pointL = (y * size + (x-1)) * 4;  // Left pixel
-                  const pointR = (y * size + (x+1)) * 4;  // Right pixel
-                  const pointT = ((y-1) * size + x) * 4;  // Top pixel
-                  const pointB = ((y+1) * size + x) * 4;  // Bottom pixel
-                  
-                  // Calculate color differences between center and neighbors
-                  const diffL = Math.abs(imageData[pointC] - imageData[pointL]) + 
-                              Math.abs(imageData[pointC+1] - imageData[pointL+1]) + 
-                              Math.abs(imageData[pointC+2] - imageData[pointL+2]);
-                              
-                  const diffR = Math.abs(imageData[pointC] - imageData[pointR]) + 
-                              Math.abs(imageData[pointC+1] - imageData[pointR+1]) + 
-                              Math.abs(imageData[pointC+2] - imageData[pointR+2]);
-                              
-                  const diffT = Math.abs(imageData[pointC] - imageData[pointT]) + 
-                              Math.abs(imageData[pointC+1] - imageData[pointT+1]) + 
-                              Math.abs(imageData[pointC+2] - imageData[pointT+2]);
-                              
-                  const diffB = Math.abs(imageData[pointC] - imageData[pointB]) + 
-                              Math.abs(imageData[pointC+1] - imageData[pointB+1]) + 
-                              Math.abs(imageData[pointC+2] - imageData[pointB+2]);
-                  
-                  // If this is an edge pixel (big color difference), sample it
-                  if (diffL > 30 || diffR > 30 || diffT > 30 || diffB > 30) {
-                    const r = imageData[pointC];
-                    const g = imageData[pointC+1];
-                    const b = imageData[pointC+2];
-                    const a = imageData[pointC+3];
-                    
-                    // Skip transparent pixels
-                    if (a < 200) continue;
-                    
-                    // Convert to hex
-                    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-                    
-                    // Convert RGB to HSL for better color analysis
-                    const hsl = rgbToHsl(r, g, b);
-                    
-                    // Store RGB values for color difference calculation
-                    const rgb = { r, g, b };
-                    
-                    // Keep colors that have some saturation
-                    if (hsl.s > 5) {
-                      candidateColors.push({ hex, hsl, rgb, source: 'image' });
-                    }
-                  }
-                }
-              }
-              
-              // Group similar colors to find dominant ones
-              // This reduces the number of near-duplicates
-              const groupedColors: typeof candidateColors = [];
-              const GROUPING_THRESHOLD = 25; // Threshold for considering colors as similar
-              
-              for (const color of candidateColors) {
-                // Check if this color is similar to any in our grouped colors
-                let foundSimilar = false;
-                
-                for (const groupedColor of groupedColors) {
-                  const distance = calculateColorDifference(color.rgb, groupedColor.rgb);
-                  if (distance < GROUPING_THRESHOLD) {
-                    foundSimilar = true;
-                    break;
-                  }
-                }
-                
-                // If no similar color was found, add this to our grouped colors
-                if (!foundSimilar) {
-                  groupedColors.push(color);
                 }
               }
               
               // Add the candidate colors to our pool
-              allColorCandidates.push(...groupedColors);
+              allColorCandidates.push(...candidateColors);
               
             } catch (err) {
               console.error("Error processing image:", err);
@@ -233,7 +146,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         });
       }
       
-      // Create a palette with maximum color diversity, prioritizing image colors
+      // Create a palette with maximum color diversity
       const finalColors = createDiversePalette(allColorCandidates, 12);
       setExtractedColors(finalColors);
       
@@ -263,7 +176,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   
   // Create a diverse palette with good color distribution
   const createDiversePalette = (
-    candidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}, source?: 'image' | 'generated'}[],
+    candidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[],
     paletteSize: number
   ): string[] => {
     if (candidates.length === 0) {
@@ -271,6 +184,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
     }
     
     // Define color segments for better distribution
+    // We'll try to get at least one color from each major segment
     const HUE_SEGMENTS = [
       { name: 'reds', min: 355, max: 10 },
       { name: 'oranges', min: 10, max: 45 },
@@ -298,9 +212,11 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
     uniqueColors.forEach(color => {
       let h = color.hsl.h;
       
-      // More lenient filtering - keep more image colors
-      // Skip only extremely dark/light or extremely desaturated colors
-      if (color.hsl.l < 5 || color.hsl.l > 95 || color.hsl.s < 3) return;
+      // Skip very light or very dark colors
+      if (color.hsl.l < 15 || color.hsl.l > 85) return;
+      
+      // Skip colors with very low saturation
+      if (color.hsl.s < 15) return;
       
       // Find which segment this color belongs to
       for (const segment of HUE_SEGMENTS) {
@@ -317,104 +233,104 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       }
     });
     
-    // First, prioritize getting at least one color from each segment
-    const primarySelections: typeof candidates = [];
+    // Get representative colors from each segment
+    const representatives: typeof candidates = [];
     
-    // For each segment, get the most representative color
+    // For each segment, get the most vibrant and distinct colors
     Object.entries(segmentedColors).forEach(([segmentName, colors]) => {
       if (colors.length === 0) return;
       
-      // Sort colors by saturation (most saturated first)
+      // Sort by saturation (most saturated first)
       colors.sort((a, b) => b.hsl.s - a.hsl.s);
       
-      // Prioritize image colors over generated ones
-      const imageColors = colors.filter(c => c.source === 'image' || !c.source);
-      if (imageColors.length > 0) {
-        // Select most saturated image color
-        primarySelections.push(imageColors[0]);
-      } else if (colors.length > 0) {
-        // Fall back to most saturated generated color if no image colors
-        primarySelections.push(colors[0]);
+      // Get the most saturated color
+      representatives.push(colors[0]);
+      
+      // If we have many colors in this segment, also add one with different lightness
+      if (colors.length > 3) {
+        // Sort remaining colors by lightness
+        const remainingColors = colors.slice(1);
+        remainingColors.sort((a, b) => {
+          // Find the most different lightness from the already selected color
+          const lightnessDiffA = Math.abs(a.hsl.l - colors[0].hsl.l);
+          const lightnessDiffB = Math.abs(b.hsl.l - colors[0].hsl.l);
+          return lightnessDiffB - lightnessDiffA;
+        });
+        
+        // Add a color with very different lightness if it's distinct enough
+        if (remainingColors.length > 0 && 
+            Math.abs(remainingColors[0].hsl.l - colors[0].hsl.l) > 30 &&
+            calculateColorDifference(colors[0].rgb, remainingColors[0].rgb) > 120) {
+          representatives.push(remainingColors[0]);
+        }
       }
     });
     
     // Now select the most diverse set from our representatives
-    const selectedColors: {hex: string, rgb: {r: number, g: number, b: number}, source?: 'image' | 'generated'}[] = [];
+    const selectedColors: {hex: string, rgb: {r: number, g: number, b: number}}[] = [];
     
-    // Higher priority for image-sourced colors
-    primarySelections.sort((a, b) => {
-      // First sort by source (image colors first)
-      if ((a.source === 'image' || !a.source) && (b.source !== 'image' && b.source)) return -1;
-      if ((b.source === 'image' || !b.source) && (a.source !== 'image' && a.source)) return 1;
+    // Sort representatives by saturation for better initial selection
+    representatives.sort((a, b) => b.hsl.s - a.hsl.s);
+    
+    // Always include the most saturated color
+    if (representatives.length > 0) {
+      selectedColors.push({
+        hex: representatives[0].hex,
+        rgb: representatives[0].rgb
+      });
+    }
+    
+    // Use a greedy algorithm to add colors with maximum distance from existing ones
+    const MINIMUM_DIFFERENCE = 120; // Higher threshold for much more diversity
+    
+    while (selectedColors.length < paletteSize && representatives.length > 0) {
+      let bestIndex = -1;
+      let maxMinDistance = -1;
       
-      // Then by saturation
-      return b.hsl.s - a.hsl.s;
-    });
-    
-    // Select diverse colors, but prioritizing image-derived ones
-    // Use a greedy algorithm that considers both diversity and source
-    const MINIMUM_DIFFERENCE = 70; // Use a more moderate difference threshold to include more image colors
-    
-    for (const candidate of primarySelections) {
-      // Skip if we already have enough colors
-      if (selectedColors.length >= paletteSize) break;
+      // For each candidate, find its minimum distance to any selected color
+      for (let i = 0; i < representatives.length; i++) {
+        const candidate = representatives[i];
+        
+        // Skip already selected
+        if (selectedColors.some(c => c.hex === candidate.hex)) continue;
+        
+        // Find minimum distance to any selected color
+        let minDistance = Number.MAX_VALUE;
+        for (const selected of selectedColors) {
+          const distance = calculateColorDifference(candidate.rgb, selected.rgb);
+          minDistance = Math.min(minDistance, distance);
+        }
+        
+        // If this candidate has a greater minimum distance, it's more distinct
+        if (minDistance > maxMinDistance) {
+          maxMinDistance = minDistance;
+          bestIndex = i;
+        }
+      }
       
-      // Check if this color is distinct enough from already selected colors
-      let isDistinct = true;
-      for (const selected of selectedColors) {
-        const distance = calculateColorDifference(candidate.rgb, selected.rgb);
-        if (distance < MINIMUM_DIFFERENCE) {
-          isDistinct = false;
+      // Add the best candidate if found and if it's distinct enough
+      if (bestIndex !== -1 && maxMinDistance >= MINIMUM_DIFFERENCE) {
+        selectedColors.push({
+          hex: representatives[bestIndex].hex,
+          rgb: representatives[bestIndex].rgb
+        });
+        
+        // Remove this candidate from consideration
+        representatives.splice(bestIndex, 1);
+      } else {
+        // If the best candidate isn't distinct enough, try the next best one
+        if (bestIndex !== -1) {
+          representatives.splice(bestIndex, 1);
+        } else {
+          // No more candidates left
           break;
         }
       }
-      
-      // Add color if it's distinct
-      if (isDistinct) {
-        selectedColors.push({
-          hex: candidate.hex,
-          rgb: candidate.rgb,
-          source: candidate.source
-        });
-      }
     }
     
-    // If we don't have enough colors, go through all candidates to find more
+    // If we don't have enough colors, add generated ones
     if (selectedColors.length < paletteSize) {
-      // Create a flat list of all colors
-      const allCandidates = uniqueColors.filter(c => {
-        // Remove colors that are too similar to selected ones
-        for (const selected of selectedColors) {
-          const distance = calculateColorDifference(c.rgb, selected.rgb);
-          if (distance < MINIMUM_DIFFERENCE) return false;
-        }
-        return true;
-      });
-      
-      // Sort candidates prioritizing image colors and saturation
-      allCandidates.sort((a, b) => {
-        // First sort by source (image colors first)
-        if ((a.source === 'image' || !a.source) && (b.source !== 'image' && b.source)) return -1;
-        if ((b.source === 'image' || !b.source) && (a.source !== 'image' && a.source)) return 1;
-        
-        // Then by saturation
-        return b.hsl.s - a.hsl.s;
-      });
-      
-      // Add as many additional colors as needed
-      const needed = paletteSize - selectedColors.length;
-      for (let i = 0; i < Math.min(needed, allCandidates.length); i++) {
-        selectedColors.push({
-          hex: allCandidates[i].hex,
-          rgb: allCandidates[i].rgb,
-          source: allCandidates[i].source
-        });
-      }
-    }
-    
-    // If we still don't have enough colors, add generated colors from missing segments
-    if (selectedColors.length < paletteSize) {
-      // Find which hue segments are not represented
+      // Try to add colors from underrepresented hue segments
       const existingHues = selectedColors.map(c => {
         const hex = c.hex;
         const r = parseInt(hex.slice(1, 3), 16);
@@ -423,7 +339,9 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         return rgbToHsl(r, g, b).h;
       });
       
+      // Find which hue segments are not represented
       const missingSegments = HUE_SEGMENTS.filter(segment => {
+        // Check if any selected color falls in this segment
         return !existingHues.some(h => {
           if (segment.min > segment.max) {
             return h >= segment.min || h <= segment.max;
@@ -443,7 +361,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         if (hue > 360) hue -= 360;
         
         // Create a very saturated color
-        const rgb = hslToRgb(hue, 75, 55);
+        const rgb = hslToRgb(hue, 85, 60);
         const hex = `#${rgb.r.toString(16).padStart(2, '0')}${rgb.g.toString(16).padStart(2, '0')}${rgb.b.toString(16).padStart(2, '0')}`;
         
         additionalColors.push(hex);
@@ -451,7 +369,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       
       // If we still need more colors, add some from default palette
       if (selectedColors.length + additionalColors.length < paletteSize) {
-        const defaultColors = getDefaultColors(paletteSize * 2);
+        const defaultColors = getDefaultColors(paletteSize * 2); // Get more default colors than needed
         const needed = paletteSize - (selectedColors.length + additionalColors.length);
         
         // Filter defaults that are different enough from our selected colors

@@ -480,10 +480,10 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       if (layoutMode === 'standard') {
         // Standard layout (original): Images on left, text on right
         gridLayout = [
-          // Row 1 - Date spans full width
-          { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
-          // Row 2 - Location spans full width (moved higher - less Y offset from date)
-          { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+          // Row 1 - Date spans full width (moved up further)
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
+          // Row 2 - Location spans full width (moved up further)
+          { type: 'location', x: 0, y: currentYPosition + 15, width: fullWidth, height: 20 },
           // Row 3 - Left image, right text
           { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
@@ -497,10 +497,10 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       } else {
         // Mirrored layout: Text on left, images on right
         gridLayout = [
-          // Row 1 - Date spans full width
-          { type: 'date', x: 0, y: currentYPosition + 30, width: fullWidth, height: 60 },
-          // Row 2 - Location spans full width (moved higher - less Y offset from date)
-          { type: 'location', x: 0, y: currentYPosition + 40, width: fullWidth, height: 60 },
+          // Row 1 - Date spans full width (moved up further)
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 60 },
+          // Row 2 - Location spans full width (moved up further)
+          { type: 'location', x: 0, y: currentYPosition + 15, width: fullWidth, height: 60 },
           // Row 3 - Left text, right image
           { type: 'text', x: 0, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
@@ -525,7 +525,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           rotation: 0,
           flipH: false,
           flipV: false,
-          zIndex: 1
+          zIndex: 1 // Keeping this low so text appears on top
         }));
       
       // Track clickable areas for interactivity
@@ -564,8 +564,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             dateTextBaselineOffset = maxDateFontSize * 0.2;
           }
           
-          // Draw the date text (no shadow)
-          ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 35);
+          // Draw the date text (moved up further)
+          ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 25);
           
           // Calculate the Y position for the location with minimal spacing
           // Use the date baseline position + reduced spacing (moved higher)
@@ -620,7 +620,11 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
           ctx.textAlign = 'left'; // Ensure text is left-aligned
           
-          // For the location, we'll use the ascent part of the font for precise positioning
+          // For the location, we'll ensure it's drawn last (on top of everything)
+          // Draw title text on top of all other elements
+          ctx.save();
+          
+          // Calculate the text metrics for proper positioning
           const locationMetrics = ctx.measureText(location.toUpperCase());
           let locationBaseline;
           if (locationMetrics.fontBoundingBoxAscent) {
@@ -633,23 +637,23 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Position the location baseline for tight spacing
           const yPosition = locationCell.y + locationBaseline;
           
-          // Clear any previous text in this area to prevent ghosting
-          ctx.save();
-          ctx.fillStyle = "#ffffff";
-          ctx.globalAlpha = 0; // Make it invisible
-          ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
+          // Create a slight background to help text stand out over images
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
+          ctx.fillRect(locationCell.x, yPosition - locationBaseline, ctx.measureText(location.toUpperCase()).width + 10, locationBaseline + 30);
           ctx.restore();
           
-          // Simplified shadow effect - just one shadow layer and main text (two colors total)
           // Shadow layer with customizable offsets
           const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
           const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
           
           ctx.fillStyle = locationShadowColor;
+          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
           ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
 
           // Main text
           ctx.fillStyle = locationColor;
+          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
           ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
         } catch (err) {
           console.error('Error drawing location:', err);
