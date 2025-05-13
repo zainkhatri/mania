@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useRef } from 'react';
 import { FaGoogle } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle } from '../../firebase';
@@ -9,6 +9,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useContext(AuthContext);
   const [isLoading, setIsLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleGoogleLogin = async () => {
     try {
@@ -38,32 +39,56 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-[#f8f5f0] px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+    <div className="relative flex items-center justify-center min-h-[calc(100vh-4rem)] px-4 sm:px-6 lg:px-8 overflow-hidden">
+      {/* TV static background video */}
+      <video 
+        ref={videoRef}
+        className="absolute w-full h-full object-cover z-0 static-bg"
+        autoPlay 
+        loop 
+        muted
+        playsInline
+      >
+        <source src="/background/static.webm" type="video/webm" />
+        Your browser does not support the video tag.
+      </video>
+      
+      <div className="w-full max-w-md bg-black/70 backdrop-blur-md rounded-2xl shadow-lg p-6 sm:p-8 border border-white/20 z-10">
         <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#1a1a1a] mb-2">Welcome to Mania</h1>
-          <p className="text-sm sm:text-base text-[#666666]">Your personal journal space</p>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2 mania-title text-flicker">
+            <span className="title-container">
+              {['m', 'a', 'n', 'i', 'a'].map((letter, index) => (
+                <span 
+                  key={`letter-${index}`}
+                  className={index === 0 ? "letter-highlight" : "letter-normal"}
+                >
+                  {letter}
+                </span>
+              ))}
+            </span>
+          </h1>
+          <p className="text-sm sm:text-base text-white/80">Your personal journal space</p>
         </div>
         
         <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
             disabled={isLoading}
-            className="flex items-center justify-center w-full py-3 px-4 bg-white border border-[#d1cdc0] rounded-xl shadow-sm text-[#333333] hover:bg-[#f8f5f0] transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:transform active:scale-[0.98]"
+            className="flex items-center justify-center w-full py-3 px-4 bg-black/60 border border-white/30 rounded-xl shadow-sm text-white hover:bg-black/80 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:transform active:scale-[0.98]"
           >
             {FaGoogle({ className: "text-red-500 mr-3 text-lg sm:text-xl" })}
             <span className="text-sm sm:text-base">{isLoading ? 'Signing in...' : 'Continue with Google'}</span>
           </button>
         </div>
         
-        <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-[#666666]">
+        <div className="mt-6 sm:mt-8 text-center text-xs sm:text-sm text-white/60">
           <p>
             By continuing, you agree to our{' '}
-            <a href="#" className="text-[#1a1a1a] hover:underline">
+            <a href="#" className="text-white/90 hover:text-white transition-colors">
               Terms of Service
             </a>{' '}
             and{' '}
-            <a href="#" className="text-[#1a1a1a] hover:underline">
+            <a href="#" className="text-white/90 hover:text-white transition-colors">
               Privacy Policy
             </a>
           </p>
@@ -72,7 +97,7 @@ const Login: React.FC = () => {
         <div className="mt-4 sm:mt-6 text-center">
           <button 
             onClick={() => navigate('/')} 
-            className="text-xs sm:text-sm text-[#1a1a1a] hover:underline"
+            className="text-xs sm:text-sm text-white/80 hover:text-white transition-colors"
           >
             &larr; Back to Home
           </button>

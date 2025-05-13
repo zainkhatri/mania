@@ -143,8 +143,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   useEffect(() => {
     // Add timestamp to prevent caching of the font files
     const timestamp = new Date().getTime();
-    const contentFontUrl = `/font/zain.ttf?v=${timestamp}`; // For journal content
-    const titleFontUrl = `/font/titles.ttf?v=${timestamp}`; // Corrected font name for location
+    const contentFontUrl = `${process.env.PUBLIC_URL}/font/zain.ttf?v=${timestamp}`; // For journal content
+    const titleFontUrl = `${process.env.PUBLIC_URL}/font/titles.ttf?v=${timestamp}`; // Corrected font name for location
     
     // Load the fonts
     const loadFonts = async () => {
@@ -541,14 +541,14 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             ctx, 
             dateText, 
             dateCell.width - 20, // Reduced padding
-            "'TitleFont', sans-serif", // Use title font for date
+            "'TitleFont', sans-serif", // Use title font for date - reverting to original
             60, // min
             150 // max
           );
           
           // Set font and color - always black for date text
           ctx.fontKerning = 'normal';
-          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
+          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`; // Reverting to original font
           ctx.fillStyle = '#000000'; // Always black for the date
           ctx.textAlign = 'left'; // Ensure text is left-aligned
           
@@ -565,6 +565,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           }
           
           // Draw the date text (moved up further)
+          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`; // Reverting to original font
           ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 25);
           
           // Calculate the Y position for the location with minimal spacing
@@ -637,23 +638,23 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Position the location baseline for tight spacing
           const yPosition = locationCell.y + locationBaseline;
           
-          // Create a slight background to help text stand out over images
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
-          ctx.fillRect(locationCell.x, yPosition - locationBaseline, ctx.measureText(location.toUpperCase()).width + 10, locationBaseline + 30);
+          // Clear any previous text in this area to prevent ghosting
+          ctx.save();
+          ctx.fillStyle = "#ffffff";
+          ctx.globalAlpha = 0; // Make it invisible
+          ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
           ctx.restore();
           
+          // Simplified shadow effect - just one shadow layer and main text (two colors total)
           // Shadow layer with customizable offsets
           const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
           const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
           
           ctx.fillStyle = locationShadowColor;
-          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
           ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
 
           // Main text
           ctx.fillStyle = locationColor;
-          ctx.globalCompositeOperation = 'source-over'; // Ensure we're drawing on top
           ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
         } catch (err) {
           console.error('Error drawing location:', err);
@@ -746,7 +747,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
-          const fontString = `${fontSize}px ZainCustomFont, Arial, sans-serif`; // Keep original font for content
+          const fontString = `${fontSize}px ZainCustomFont, Arial, sans-serif`; // Reverting to original font
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           

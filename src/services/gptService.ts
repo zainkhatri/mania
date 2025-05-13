@@ -23,9 +23,11 @@ const recentQuestions: string[] = [];
 
 // Initialize OpenAI with logging and error handling
 try {
-  if (apiKey && apiKey !== 'your_openai_api_key_here') {
+  // Only initialize if we have a valid API key
+  if (apiKey && apiKey !== 'your_openai_api_key_here' && apiKey.length > 20) {
     openai = new OpenAI({
       apiKey: apiKey,
+      dangerouslyAllowBrowser: true // Allow running in browser environment
     });
     console.log('OpenAI API initialized successfully');
   } else {

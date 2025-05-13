@@ -4,6 +4,10 @@ import './index.css'; // This imports Tailwind CSS
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Import the font files directly
+import './font/zain.ttf';
+import './font/titles.ttf';
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

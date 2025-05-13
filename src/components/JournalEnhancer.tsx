@@ -15,17 +15,44 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
   minWordCount = 50,
   showInitially = false
 }) => {
-  const [isVisible, setIsVisible] = useState<boolean>(showInitially);
+  const [isVisible, setIsVisible] = useState<boolean>(false); // Default to hidden
   const [currentQuestion, setCurrentQuestion] = useState<string>("");
   const [questions, setQuestions] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<boolean>(showInitially);
+  const [expanded, setExpanded] = useState<boolean>(false); // Default to collapsed
   const [isShuffling, setIsShuffling] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isGlitching, setIsGlitching] = useState<boolean>(false); // For glitch effect
   
   // Use refs for tracking shuffle states to avoid dependency cycles
   const shuffleAttempts = useRef(0);
   const isGeneratingQuestion = useRef(false);
   const journalAnalysis = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Only show the enhancer when user stops typing
+  useEffect(() => {
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    if (journalText.trim().length >= minWordCount) {
+      // Set a delay before showing the enhancer (1.5 seconds after typing stops)
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsVisible(true);
+      }, 1500);
+    } else {
+      // Hide if below minimum word count
+      setIsVisible(false);
+    }
+    
+    // Cleanup function
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [journalText, minWordCount]);
 
   // Extract locations from text for beach scenario - extracted keywords are used in the questions
   const extractLocations = useCallback((text: string): string[] => {
@@ -499,9 +526,17 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
     generateInitialQuestion();
   }, [journalText, location, minWordCount, generateDirectQuestions, isRelevantQuestion]);
 
-  // Handle getting another question
+  // Handle getting another question - add static effect
   const handleGetAnotherQuestion = async () => {
     if (isGeneratingQuestion.current) return; // Prevent multiple calls
+    
+    // Trigger static effect
+    setIsGlitching(true);
+    
+    // Remove static effect after animation completes
+    setTimeout(() => {
+      setIsGlitching(false);
+    }, 800);
     
     isGeneratingQuestion.current = true;
     setIsShuffling(true);
@@ -644,82 +679,241 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
 
   return (
     <AnimatePresence>
+      {isVisible && journalText.trim().length > minWordCount && (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        className="mt-2 mb-4 bg-white rounded-lg border border-[#d1cdc0] shadow-sm overflow-hidden"
+          className="mt-4 border border-white/20 rounded-lg shadow-sm overflow-hidden bg-black/60 backdrop-blur-md"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ 
+            opacity: 1, 
+            y: 0,
+            transition: { duration: 0.3 }
+          }}
+          exit={{ opacity: 0, y: -10 }}
       >
         <div 
-          className={`bg-[#f9f7f1] px-4 py-3 flex justify-between items-center cursor-pointer ${expanded ? 'border-b border-[#e8e4d5]' : ''}`}
+            className="px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-black/80"
           onClick={() => setExpanded(!expanded)}
         >
-          <div className="flex items-center gap-2">
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="text-[#b5a890]">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            <div className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            <span className="font-medium text-sm text-[#1a1a1a]">
-              Make this juicier... ☕️
-            </span>
-            <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">AI</span>
+              <h3 className="text-base md:text-lg font-medium text-white">Need inspiration?</h3>
           </div>
-          <div className="flex items-center gap-2">
-            <svg 
-              width="14" 
-              height="14" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24" 
-              className={`text-[#a39580] transition-transform ${expanded ? 'rotate-180' : ''}`}
+            <motion.div
+              animate={{ rotate: expanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-          </div>
+            </motion.div>
         </div>
         
-        <AnimatePresence>
           {expanded && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="px-4 py-3"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="px-4 py-3 border-t border-white/10"
             >
-              {isShuffling || isLoading ? (
-                <div className="space-y-2">
-                  <div className="w-full text-left p-3 rounded-lg bg-white border border-[#e8e4d5] font-medium text-base overflow-hidden relative h-[60px]">
-                    <div className="flex justify-center items-center h-full">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 rounded-full bg-[#b5a890] animate-bounce"></div>
-                        <div className="w-2 h-2 rounded-full bg-[#b5a890] animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                        <div className="w-2 h-2 rounded-full bg-[#b5a890] animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                      </div>
-                    </div>
+              {isLoading ? (
+                <div className="flex items-center py-2">
+                  <div className="animate-pulse flex space-x-3 items-center">
+                    <div className="rounded-full bg-gray-600 h-4 w-4"></div>
+                    <div className="h-3 bg-gray-600 rounded w-36"></div>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="w-full text-left p-3 rounded-lg bg-white border border-[#e8e4d5] font-medium text-base">
-                    {currentQuestion}
-                  </div>
-                  <div className="flex justify-end items-center gap-2 mt-2">
-                    <button
-                      onClick={handleGetAnotherQuestion}
-                      disabled={isShuffling || isGeneratingQuestion.current}
-                      className={`text-xs flex items-center gap-1 ${isShuffling || isGeneratingQuestion.current ? 'text-gray-400 cursor-not-allowed' : 'text-[#b5a890] hover:text-[#a39580] cursor-pointer'} py-1.5 px-3 rounded border border-[#e8e4d5] hover:border-[#d1cdc0] transition-colors font-medium`}
-                    >
-                      <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                      </svg>
-                      Get another question
-                    </button>
-                  </div>
+                <div>
+                  <p className={`text-sm text-white relative ${isGlitching ? 'static-text' : ''}`}>{currentQuestion}</p>
                 </div>
               )}
+              
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={handleGetAnotherQuestion}
+                  disabled={isShuffling}
+                  className={`px-3 py-1.5 text-xs font-medium rounded text-white relative
+                  ${isShuffling ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}
+                  transition-all duration-200 flex items-center
+                  ${isGlitching ? 'static-btn' : ''}`}
+                >
+                  <span className={isGlitching ? 'static-content' : ''}>
+                    {isShuffling ? (
+                      <>
+                        <svg className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Try another
+                      </>
+                    )}
+                  </span>
+                </button>
+              </div>
             </motion.div>
           )}
-        </AnimatePresence>
+
+          {/* CSS for TV Static Effect */}
+          <style dangerouslySetInnerHTML={{ __html: `
+            /* TV static base effect */
+            @keyframes tv-static {
+              0% { background-position: 0 0; }
+              20% { background-position: 20% -20%; }
+              40% { background-position: -20% 20%; }
+              60% { background-position: 10% 30%; }
+              80% { background-position: -10% -10%; }
+              100% { background-position: 0 0; }
+            }
+            
+            /* Flickering scanlines animation */
+            @keyframes scanlines {
+              0% { background-position: 0 0; }
+              100% { background-position: 0 100%; }
+            }
+            
+            /* Flicker animation for the old TV effect */
+            @keyframes flicker {
+              0% { opacity: 0.85; }
+              10% { opacity: 0.9; }
+              20% { opacity: 0.8; }
+              30% { opacity: 0.95; }
+              40% { opacity: 0.8; }
+              50% { opacity: 0.9; }
+              60% { opacity: 0.7; }
+              70% { opacity: 0.95; }
+              80% { opacity: 0.8; }
+              90% { opacity: 0.9; }
+              100% { opacity: 0.85; }
+            }
+            
+            /* Base static effect */
+            .static-text {
+              position: relative;
+              display: inline-block;
+              z-index: 1;
+              color: #000;
+              padding: 2px;
+              border-radius: 2px;
+            }
+            
+            /* The main static noise overlay */
+            .static-text::before {
+              content: "";
+              position: absolute;
+              left: -5px;
+              top: -5px;
+              right: -5px;
+              bottom: -5px;
+              background-image: 
+                linear-gradient(
+                  to bottom,
+                  transparent 50%,
+                  rgba(0, 0, 0, 0.1) 51%
+                ),
+                url("data:image/png;base64,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");
+              background-size: 100% 2px, 150px;
+              opacity: 0;
+              mix-blend-mode: multiply;
+              z-index: -1;
+              animation: 
+                tv-static 0.2s steps(5) infinite,
+                flicker 0.15s infinite;
+              transition: opacity 0.1s;
+            }
+            
+            /* Scan lines overlay */
+            .static-text::after {
+              content: "";
+              position: absolute;
+              left: -2px;
+              top: -2px;
+              right: -2px;
+              bottom: -2px;
+              background: linear-gradient(
+                to bottom,
+                transparent,
+                rgba(255, 255, 255, 0.4) 50%,
+                transparent 51%,
+                transparent
+              );
+              background-size: 100% 4px;
+              pointer-events: none;
+              z-index: 0;
+              opacity: 0.3;
+              animation: scanlines 10s linear infinite;
+            }
+
+            /* Only show static when glitching */
+            .static-text::before {
+              opacity: 0.5;
+            }
+            
+            /* Button static effect */
+            .static-btn {
+              position: relative;
+              overflow: hidden;
+            }
+            
+            .static-btn::before {
+              content: "";
+              position: absolute;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background-image: 
+                linear-gradient(
+                  to bottom,
+                  transparent 50%,
+                  rgba(0, 0, 0, 0.2) 51%
+                ),
+                url("data:image/png;base64,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");
+              background-size: 100% 3px, 120px;
+              opacity: 0.4;
+              mix-blend-mode: multiply;
+              animation: 
+                tv-static 0.2s steps(5) infinite,
+                flicker 0.15s infinite;
+              pointer-events: none;
+            }
+            
+            /* Additional jitter effect */
+            @keyframes jitter {
+              0%, 100% { transform: translate(0, 0) }
+              10% { transform: translate(-1px, 1px) }
+              20% { transform: translate(1px, -1px) }
+              30% { transform: translate(-1px, -1px) }
+              40% { transform: translate(1px, 1px) }
+              50% { transform: translate(-1px, 0) }
+              60% { transform: translate(1px, 0) }
+              70% { transform: translate(0, 1px) }
+              80% { transform: translate(0, -1px) }
+              90% { transform: translate(-1px, 1px) }
+            }
+            
+            /* Apply jitter to the question text when static is on */
+            .static-text {
+              animation: jitter 0.1s linear infinite;
+            }
+            
+            /* Make the content visible on top of effects */
+            .static-content {
+              position: relative;
+              z-index: 2;
+            }
+          ` }} />
       </motion.div>
+      )}
     </AnimatePresence>
   );
 };

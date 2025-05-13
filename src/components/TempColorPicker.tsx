@@ -17,8 +17,19 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
 
   // Extract colors from images when the component mounts or images change
   useEffect(() => {
-    if (images.length > 0) {
+    console.log('SimpleColorPicker: Images received:', images.length);
+    // Always reset the extracted colors when images prop changes
+    setExtractedColors([]);
+    
+    if (images && images.length > 0) {
+      console.log('SimpleColorPicker: Extracting colors from images');
+      // Force immediate color extraction with a clean state
+      setIsExtracting(true);
       extractColorsFromImages(images);
+    } else {
+      console.log('SimpleColorPicker: No images available for color extraction');
+      // Set default colors when no images are available
+      setExtractedColors(getDefaultColors(12));
     }
   }, [images]);
 
@@ -61,12 +72,25 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   
   // Function to extract dominant colors from images
   const extractColorsFromImages = async (imageUrls: string[]) => {
+    console.log('Starting color extraction from', imageUrls.length, 'images');
     setIsExtracting(true);
     const allColorCandidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
     
     try {
-      for (const imageUrl of imageUrls) {
-        if (!imageUrl) continue;
+      if (!imageUrls || imageUrls.length === 0) {
+        console.error('No valid images provided for color extraction');
+        setIsExtracting(false);
+        return;
+      }
+
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i];
+        if (!imageUrl) {
+          console.warn('Empty image URL at index', i);
+          continue;
+        }
+        
+        console.log(`Processing image ${i+1}/${imageUrls.length}`);
         
         // Create an image element to load the image
         const img = new Image();
@@ -75,15 +99,17 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         await new Promise<void>((resolve, reject) => {
           img.onload = () => {
             try {
+              console.log(`Image ${i+1} loaded, size:`, img.width, 'x', img.height);
               // Create a canvas to draw the image
               const canvas = document.createElement('canvas');
               // Use a larger size for better color sampling
-              const size = 200;
+              const size = 300; // Increased for better sampling
               canvas.width = size;
               canvas.height = size;
               
               const ctx = canvas.getContext('2d');
               if (!ctx) {
+                console.error('Failed to get canvas context for image', i);
                 resolve();
                 return;
               }
@@ -98,7 +124,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
               const candidateColors: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
               
               // Sample more points in a grid pattern
-              const gridStep = Math.floor(size / 20); // 20x20 grid sampling for more detailed colors
+              const gridStep = Math.floor(size / 30); // More samples (30x30 grid)
+              let colorCount = 0;
               
               for (let y = gridStep; y < size; y += gridStep) {
                 for (let x = gridStep; x < size; x += gridStep) {
@@ -122,23 +149,25 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                   
                   // Check brightness - exclude very dark or very light colors
                   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                  if (brightness > 40 && brightness < 225) {
+                  if (brightness > 30 && brightness < 230) { // Wider range for more colors
                     candidateColors.push({ hex, hsl, rgb });
+                    colorCount++;
                   }
                 }
               }
               
+              console.log(`Found ${colorCount} potential colors in image ${i+1}`);
               // Add the candidate colors to our pool
               allColorCandidates.push(...candidateColors);
               
             } catch (err) {
-              console.error("Error processing image:", err);
+              console.error("Error processing image:", err, "at index", i);
             }
             resolve();
           };
           
-          img.onerror = () => {
-            console.error("Failed to load image:", imageUrl);
+          img.onerror = (e) => {
+            console.error("Failed to load image:", imageUrl, "at index", i, "Error:", e);
             resolve();
           };
           
@@ -146,8 +175,17 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         });
       }
       
+      console.log(`Total color candidates extracted: ${allColorCandidates.length}`);
+      if (allColorCandidates.length === 0) {
+        console.warn('No colors were extracted from images. Using default colors.');
+        setExtractedColors(getDefaultColors(12));
+        setIsExtracting(false);
+        return;
+      }
+      
       // Create a palette with maximum color diversity
       const finalColors = createDiversePalette(allColorCandidates, 12);
+      console.log('Final colors extracted:', finalColors);
       setExtractedColors(finalColors);
       
     } catch (err) {
@@ -472,8 +510,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         if (t < 1/2) return q;
         if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
         return p;
-      };
-      
+  };
+  
       const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
       const p = 2 * l - q;
       
@@ -488,7 +526,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       b: Math.round(b * 255)
     };
   };
-  
+    
   // Add shadow effect customization
   const [shadowDarkness, setShadowDarkness] = useState<number>(0.7); // Default 0.7 (30% darker)
   const [shadowOffsetX, setShadowOffsetX] = useState<number>(5); 
@@ -539,23 +577,23 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   const sortedColors = sortColorsByHue(extractedColors);
   
   return (
-    <div className="p-5 bg-white rounded-lg">
-      <h3 className="text-xl font-semibold mb-4 text-gray-800">Choose Title Color</h3>
+    <div className="p-5 bg-black/70 backdrop-blur-md rounded-lg border border-white/20">
+      <h3 className="text-xl font-semibold mb-4 text-white">Choose Title Color</h3>
       
       {/* Image-derived colors */}
       {extractedColors.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-sm text-gray-600 mb-3 font-medium">Colors From Your Images</h4>
+          <h4 className="text-sm text-gray-300 mb-3 font-medium">Colors From Your Images</h4>
           <div className="grid grid-cols-4 gap-4">
             {sortedColors.map((color, i) => (
               <button
                 key={`image-${i}`}
-                className={`w-14 h-14 rounded-lg shadow hover:shadow-md transition-all duration-200 ${
+                className={`w-14 h-14 rounded-lg shadow hover:shadow-md transition-all duration-200 border-2 border-white ${
                   colors.locationColor === color 
-                    ? 'ring-2 ring-offset-2 ring-gray-500 transform scale-105' 
+                    ? 'ring-2 ring-offset-2 ring-white/70 transform scale-105' 
                     : 'hover:scale-105'
                 }`}
-                style={{
+                style={{ 
                   backgroundColor: color,
                 }}
                 onClick={() => selectColor(color)}
@@ -567,8 +605,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       )}
       
       {isExtracting && (
-        <div className="text-sm text-gray-500 mb-4 flex items-center">
-          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <div className="text-sm text-gray-300 mb-4 flex items-center">
+          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
@@ -577,8 +615,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       )}
       
       {/* Custom color picker */}
-      <div className="mt-6 pt-5 border-t border-gray-200">
-        <label className="block text-sm font-medium mb-3 text-gray-600">Custom Color</label>
+      <div className="mt-6 pt-5 border-t border-white/10">
+        <label className="block text-sm font-medium mb-3 text-gray-300">Custom Color</label>
         <div className="flex items-center gap-4">
           <input
             type="color"
@@ -591,15 +629,15 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
             }}
           />
           <div className="flex-1 text-sm">
-            <div className="mb-1"><span className="text-gray-600 inline-block w-16">Current:</span> <span className="font-mono">{colors.locationColor}</span></div>
-            <div><span className="text-gray-600 inline-block w-16">Shadow:</span> <span className="font-mono">{colors.locationShadowColor}</span></div>
+            <div className="mb-1"><span className="text-gray-300 inline-block w-16">Current:</span> <span className="font-mono text-white">{colors.locationColor}</span></div>
+            <div><span className="text-gray-300 inline-block w-16">Shadow:</span> <span className="font-mono text-white">{colors.locationShadowColor}</span></div>
           </div>
         </div>
         
         {/* Advanced Settings Toggle */}
         <button 
           onClick={() => setShowAdvancedSettings(prev => !prev)}
-          className="mt-4 text-sm flex items-center text-gray-600 hover:text-gray-800 transition-colors gap-1"
+          className="mt-4 text-sm flex items-center text-gray-300 hover:text-white transition-colors gap-1"
         >
           <span>Advanced Settings</span>
           <svg 
@@ -617,11 +655,11 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
         
         {/* Shadow Effect Controls - Only shown when advanced settings are expanded */}
         {showAdvancedSettings && (
-          <div className="mt-3 space-y-4 pt-3 border-t border-gray-100">
-            <h4 className="text-sm font-medium text-gray-700">Shadow Effect</h4>
+          <div className="mt-3 space-y-4 pt-3 border-t border-white/10">
+            <h4 className="text-sm font-medium text-gray-200">Shadow Effect</h4>
             
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Shadow Darkness: {Math.round((1 - shadowDarkness) * 100)}%</label>
+              <label className="block text-xs text-gray-300 mb-1">Shadow Darkness: {Math.round((1 - shadowDarkness) * 100)}%</label>
               <input 
                 type="range" 
                 min="0.4" 
@@ -642,13 +680,13 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                     setTimeout(() => window.forceCanvasRedraw?.(), 10);
                   }
                 }}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">X Offset: {shadowOffsetX}px</label>
+                <label className="block text-xs text-gray-300 mb-1">X Offset: {shadowOffsetX}px</label>
                 <input 
                   type="range" 
                   min="0" 
@@ -663,12 +701,12 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                       setTimeout(() => window.forceCanvasRedraw?.(), 10);
                     }
                   }}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
               
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Y Offset: {shadowOffsetY}px</label>
+                <label className="block text-xs text-gray-300 mb-1">Y Offset: {shadowOffsetY}px</label>
                 <input 
                   type="range" 
                   min="0" 
@@ -683,7 +721,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                       setTimeout(() => window.forceCanvasRedraw?.(), 10);
                     }
                   }}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>

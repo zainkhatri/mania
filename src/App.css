@@ -39,18 +39,18 @@
 
 /* Base styles and font setup */
 body {
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
   color: #1a1a1a;
   background-color: #f5f2e9;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Libre Baskerville', Georgia, serif;
+  font-family: 'ZainCustomFont', Georgia, serif !important;
   font-weight: 600;
 }
 
 button, a {
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
 /* Custom scrollbar for an elegant feel */

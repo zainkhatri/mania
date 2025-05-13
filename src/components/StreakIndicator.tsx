@@ -62,10 +62,10 @@ const StreakIndicator: React.FC = () => {
 
   return (
     <span
-      className="flex items-center gap-1 px-3 py-1 rounded-full bg-white border border-yellow-300 shadow-sm text-yellow-700 font-semibold select-none"
+      className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-black/80 backdrop-blur-sm border border-yellow-500/50 shadow-md text-yellow-400 text-base font-semibold select-none"
       title={streakInfo.currentStreak > 0 ? `${streakInfo.currentStreak}-day streak` : 'No streak yet'}
     >
-      <span role="img" aria-label="fire">🔥</span>
+      <span role="img" aria-label="fire" className="text-lg">🔥</span>
       {streakInfo.currentStreak > 0 ? `${streakInfo.currentStreak}-day streak` : 'No streak'}
     </span>
   );

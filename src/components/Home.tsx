@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { clearJournalCache } from '../utils/storageUtils';
@@ -6,7 +6,11 @@ import { clearJournalCache } from '../utils/storageUtils';
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useContext(AuthContext);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showGlitch, setShowGlitch] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Function to handle starting the journal
   const handleStart = () => {
     if (isAuthenticated) {
       // Clear any previous journal drafts or submissions
@@ -17,18 +21,71 @@ const Home: React.FC = () => {
     }
   };
 
+  // Effect to create dynamic title style cycling
+  useEffect(() => {
+    const styleInterval = setInterval(() => {
+      // Pick a random letter to highlight instead of cycling sequentially
+      const randomIndex = Math.floor(Math.random() * 5);
+      setHighlightIndex(randomIndex);
+    }, 200); // Fast random cycling
+    
+    const glitchInterval = setInterval(() => {
+      // Random glitch effect
+      if (Math.random() > 0.7) {
+        setShowGlitch(true);
+        setTimeout(() => setShowGlitch(false), 150);
+      }
+    }, 1200);
+    
+    return () => {
+      clearInterval(styleInterval);
+      clearInterval(glitchInterval);
+    };
+  }, []);
+
+  // Render the title with one highlighted letter at a time
+  const renderTitle = () => {
+    const word = "mania";
+    
+    return (
+      <span className="title-container">
+        {word.split('').map((letter, index) => (
+          <span 
+            key={`letter-${index}-${highlightIndex}`}
+            className={index === highlightIndex 
+              ? "letter-highlight" 
+              : "letter-normal"}
+          >
+            {letter}
+          </span>
+        ))}
+      </span>
+    );
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[70vh] bg-[#f8f5f0] px-4 sm:px-6 lg:px-8">
-      <h1 className="font-serif text-5xl md:text-7xl font-bold text-[#232323] mb-4 md:mb-6 text-center">mania</h1>
-      <p className="text-xl md:text-2xl text-[#333333] mb-8 md:mb-12 text-center max-w-md">
+    <div className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden">
+      {/* Content overlay */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8 home-overlay">
+        <h1 
+          className="font-bold text-7xl md:text-9xl mb-4 md:mb-6 text-center mania-title text-white text-flicker"
+          style={{ 
+            filter: showGlitch ? 'hue-rotate(90deg) brightness(1.5)' : 'none',
+            transition: 'filter 0.1s'
+          }}
+        >
+          {renderTitle()}
+        </h1>
+        <p className="text-xl md:text-2xl text-white mb-8 md:mb-12 text-center max-w-md backdrop-blur-sm bg-black bg-opacity-20 p-4 rounded-lg">
         Create zain's journals without the pen in your hand.
       </p>
       <button
         onClick={handleStart}
-        className="flex items-center px-6 md:px-8 py-4 md:py-5 bg-[#181818] text-white text-xl md:text-2xl font-bold rounded-2xl shadow-md hover:bg-[#232323] transition-all active:transform active:scale-95"
+          className="flex items-center px-8 md:px-10 py-5 md:py-6 bg-black bg-opacity-70 text-white text-2xl md:text-3xl font-bold rounded-2xl shadow-md hover:bg-opacity-90 transition-all active:transform active:scale-95 backdrop-blur-sm border border-white border-opacity-20"
       >
         <span className="mr-3">↓</span> Start Journaling
       </button>
+      </div>
     </div>
   );
 };

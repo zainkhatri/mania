@@ -25,10 +25,39 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>mania | zain's journals</title>
-    <!-- Google Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Fonts Preloading -->
+    <link rel="preload" href="%PUBLIC_URL%/font/zain.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="%PUBLIC_URL%/font/titles.ttf" as="font" type="font/ttf" crossorigin />
+    <!-- Remove Google Fonts -->
+    <style>
+      /* Inline critical font styles */
+      @font-face {
+        font-family: 'ZainCustomFont';
+        src: url('%PUBLIC_URL%/font/zain.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+      
+      @font-face {
+        font-family: 'TitleFont';
+        src: url('%PUBLIC_URL%/font/titles.ttf') format('truetype');
+        font-weight: bold;
+        font-style: normal;
+        font-display: swap;
+      }
+      
+      /* Add Libre Baskerville for the "m" in "mania" */
+      @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap');
+      
+      body {
+        font-family: 'ZainCustomFont', sans-serif !important;
+      }
+      
+      .mania-title .m {
+        font-family: 'Libre Baskerville', Georgia, serif !important;
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
