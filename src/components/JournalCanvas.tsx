@@ -481,9 +481,9 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         // Standard layout (original): Images on left, text on right
         gridLayout = [
           // Row 1 - Date spans full width (moved up further)
-          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
-          // Row 2 - Location spans full width (moved up further)
-          { type: 'location', x: 10, y: currentYPosition + 15, width: fullWidth, height: 20 },
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 30 },
+          // Row 2 - Location spans full width (moved closer to date)
+          { type: 'location', x: 10, y: currentYPosition + 10, width: fullWidth, height: 20 },
           // Row 3 - Left image, right text
           { type: 'image', x: 0, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
@@ -499,8 +499,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         gridLayout = [
           // Row 1 - Date spans full width (moved up further)
           { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
-          // Row 2 - Location spans full width (moved up further)
-          { type: 'location', x: 10, y: currentYPosition + 5, width: fullWidth, height: 30 },
+          // Row 2 - Location spans full width (moved closer to date)
+          { type: 'location', x: 10, y: currentYPosition, width: fullWidth, height: 30 },
           // Row 3 - Left text, right image (mirroring Row 3 of Style 1)
           { type: 'text', x: 0, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
@@ -509,7 +509,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
           // Row 5 - Left text, right image (mirroring Row 5 of Style 1)
           { type: 'text', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 },
-          { type: 'image', x: textColumnWidth + 20, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
+          { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
         ];
       }
       
@@ -570,7 +570,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           
           // Calculate the Y position for the location with minimal spacing
           // Use the date baseline position + reduced spacing (moved higher)
-          currentYPosition = dateCell.y + 5 + dateTextBaselineOffset + minSpacingBetweenElements;
+          currentYPosition = dateCell.y + dateTextBaselineOffset + minSpacingBetweenElements - 5; // Reduced by 5px
           
           // Update the location cell's Y position
           const locationCell = gridLayout.find(cell => cell.type === 'location');
@@ -590,76 +590,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         }
       }
       
-      // Draw location below date
+      // Get the location cell for later use (moved drawing to end)
       const locationCell = gridLayout.find(cell => cell.type === 'location');
-      if (locationCell && location) {
-        try {
-          // Find optimal font size for location
-          const maxLocationFontSize = calculateOptimalFontSize(
-            ctx, 
-            location, 
-            locationCell.width - 20, // Reduced padding
-            "'TitleFont', sans-serif", // Use title font for location
-            60, // min
-            150 // max
-          );
-          
-          // Determine colors - use direct selection if provided, otherwise use default  
-          const locationColor = window.FORCE_CANVAS_REDRAW 
-            ? window.CURRENT_COLORS.locationColor 
-            : (textColors.locationColor || '#3498DB');
-          const locationShadowColor = window.FORCE_CANVAS_REDRAW 
-            ? window.CURRENT_COLORS.locationShadowColor 
-            : (textColors.locationShadowColor || '#AED6F1');
-          
-          // Log the color values for debugging
-          console.log("Applying location colors:", {
-            mainColor: locationColor,
-            shadowColor: locationShadowColor
-          });
-          
-          ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
-          ctx.textAlign = 'left'; // Ensure text is left-aligned
-          
-          // For the location, we'll ensure it's drawn last (on top of everything)
-          // Draw title text on top of all other elements
-          ctx.save();
-          
-          // Calculate the text metrics for proper positioning
-          const locationMetrics = ctx.measureText(location.toUpperCase());
-          let locationBaseline;
-          if (locationMetrics.fontBoundingBoxAscent) {
-            locationBaseline = locationMetrics.fontBoundingBoxAscent;
-          } else {
-            // Fallback: estimate ascent as 0.8x the font size
-            locationBaseline = maxLocationFontSize * 0.8;
-          }
-          
-          // Position the location baseline for tight spacing
-          const yPosition = locationCell.y + locationBaseline;
-          
-          // Clear any previous text in this area to prevent ghosting
-          ctx.save();
-          ctx.fillStyle = "#ffffff";
-          ctx.globalAlpha = 0; // Make it invisible
-          ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
-          ctx.restore();
-          
-          // Simplified shadow effect - just one shadow layer and main text (two colors total)
-          // Shadow layer with customizable offsets
-          const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
-          const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
-          
-          ctx.fillStyle = locationShadowColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
-
-          // Main text
-          ctx.fillStyle = locationColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
-        } catch (err) {
-          console.error('Error drawing location:', err);
-        }
-      }
       
       // Get combined text from all sections
       const journalText = getCombinedText();
@@ -868,6 +800,78 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         }
       } catch (err) {
         console.error('Error drawing images:', err);
+      }
+      
+      // Draw location LAST (after all other elements) to ensure it's on top of everything
+      if (locationCell && location) {
+        try {
+          // Find optimal font size for location
+          const maxLocationFontSize = calculateOptimalFontSize(
+            ctx, 
+            location, 
+            locationCell.width - 20, // Reduced padding
+            "'TitleFont', sans-serif", // Use title font for location
+            60, // min
+            150 // max
+          );
+          
+          // Determine colors - use direct selection if provided, otherwise use default  
+          const locationColor = window.FORCE_CANVAS_REDRAW 
+            ? window.CURRENT_COLORS.locationColor 
+            : (textColors.locationColor || '#3498DB');
+          const locationShadowColor = window.FORCE_CANVAS_REDRAW 
+            ? window.CURRENT_COLORS.locationShadowColor 
+            : (textColors.locationShadowColor || '#AED6F1');
+          
+          // Log the color values for debugging
+          console.log("Applying location colors:", {
+            mainColor: locationColor,
+            shadowColor: locationShadowColor
+          });
+          
+          ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
+          ctx.textAlign = 'left'; // Ensure text is left-aligned
+          
+          // For the location, we'll ensure it's drawn last (on top of everything)
+          // Draw title text on top of all other elements
+          ctx.save();
+          
+          // Calculate the text metrics for proper positioning
+          const locationMetrics = ctx.measureText(location.toUpperCase());
+          let locationBaseline;
+          if (locationMetrics.fontBoundingBoxAscent) {
+            locationBaseline = locationMetrics.fontBoundingBoxAscent;
+          } else {
+            // Fallback: estimate ascent as 0.8x the font size
+            locationBaseline = maxLocationFontSize * 0.8;
+          }
+          
+          // Position the location baseline for tight spacing
+          const yPosition = locationCell.y + locationBaseline;
+          
+          // Clear any previous text in this area to prevent ghosting
+          ctx.save();
+          ctx.fillStyle = "#ffffff";
+          ctx.globalAlpha = 0; // Make it invisible
+          ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
+          ctx.restore();
+          
+          // Simplified shadow effect - just one shadow layer and main text (two colors total)
+          // Shadow layer with customizable offsets
+          const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
+          const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
+          
+          ctx.fillStyle = locationShadowColor;
+          ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
+
+          // Main text
+          ctx.fillStyle = locationColor;
+          ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
+          
+          ctx.restore();
+        } catch (err) {
+          console.error('Error drawing location:', err);
+        }
       }
       
       // Add location to clickable areas

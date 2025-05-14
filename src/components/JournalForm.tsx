@@ -969,16 +969,26 @@ const JournalForm: React.FC<JournalFormProps> = ({
       // Convert Blob to File object as required by imageCompression
       const file = new File([blob], "image.jpg", { type: "image/jpeg" });
       
-      // Define compression options
+      // Define compression options with more conservative settings for mobile
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const options = {
-        maxSizeMB: 1,              // Maximum size in MB
-        maxWidthOrHeight: 1200,    // Resize to max dimensions
-        useWebWorker: true,        // Use web worker for better performance
-        initialQuality: 0.8        // Initial quality setting (0-1)
+        maxSizeMB: isMobile ? 0.8 : 1,              // Smaller size on mobile
+        maxWidthOrHeight: isMobile ? 1000 : 1200,   // Smaller dimensions on mobile
+        useWebWorker: false,                        // Disable web workers to avoid issues on mobile
+        initialQuality: isMobile ? 0.7 : 0.8,       // Lower quality on mobile
+        maxIteration: 2                            // Limit compression iterations
       };
       
-      // Compress using browser-image-compression library
-      const compressedBlob = await imageCompression(file, options);
+      // Compress using browser-image-compression library with timeout
+      const compressPromise = imageCompression(file, options);
+      
+      // Add timeout to avoid hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Image compression timed out')), 10000);
+      });
+      
+      // Race the promises to handle timeout
+      const compressedBlob = await Promise.race([compressPromise, timeoutPromise]) as File;
       
       // Convert back to data URL
       return new Promise((resolve, reject) => {
@@ -1046,175 +1056,122 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
+    // Limit number of files to prevent overloading memory
+    const maxFiles = 3 - images.length;
+    if (maxFiles <= 0) {
+      toast.error('Maximum of 3 images allowed');
+      return;
+    }
+    
     // Process all selected files instead of just the first one
-    const files = Array.from(e.target.files);
+    let files = Array.from(e.target.files);
+    
+    // Limit to maximum allowed
+    if (files.length > maxFiles) {
+      files = files.slice(0, maxFiles);
+      toast.info(`Only using ${maxFiles} image${maxFiles > 1 ? 's' : ''} (maximum 3 total)`);
+    }
     
     // Show loading indicator 
     setIsLoadingImage(true);
     
-    // Helper functions for color extraction
-    const extractDominantColors = (imageUrl: string): Promise<string[]> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        
-        img.onload = () => {
-          // Create a canvas to draw the image
-          const canvas = document.createElement('canvas');
-          const size = 150;
-          canvas.width = size;
-          canvas.height = size;
-          
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(['#3498DB']); // Fallback color
-            return;
-          }
-          
-          // Draw the image
-          ctx.drawImage(img, 0, 0, size, size);
-          
-          // Sample colors from different regions
-          const regions = [
-            {x: size/4, y: size/4},  // Top-left
-            {x: size*3/4, y: size/4},  // Top-right
-            {x: size/2, y: size/2},  // Center
-            {x: size/4, y: size*3/4},  // Bottom-left
-            {x: size*3/4, y: size*3/4},  // Bottom-right
-          ];
-          
-          // Extract colors
-          const extractedColors: string[] = [];
-          
-          regions.forEach(({x, y}) => {
-            const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            const hex = `#${pixel[0].toString(16).padStart(2, '0')}${
-              pixel[1].toString(16).padStart(2, '0')}${
-              pixel[2].toString(16).padStart(2, '0')}`;
-            
-            // Skip colors that are too dark or too light
-            const brightness = (pixel[0] * 299 + pixel[1] * 587 + pixel[2] * 114) / 1000;
-            if (brightness > 30 && brightness < 220) {
-              extractedColors.push(hex);
-            }
-          });
-          
-          // Add fallback if no good colors found
-          if (extractedColors.length === 0) {
-            extractedColors.push('#3498DB');
-          }
-          
-          resolve(extractedColors);
-        };
-        
-        img.onerror = () => {
-          console.error("Failed to load image for color extraction");
-          resolve(['#3498DB']); // Fallback color
-        };
-        
-        img.src = imageUrl;
-      });
-    };
-    
-    // Process each file in parallel
-    const processImage = async (file: File) => {
-      return new Promise<{originalImage: string, enhancedImage: string}>((resolve, reject) => {
-      const reader = new FileReader();
-        
-        reader.onload = async (event) => {
-          if (!event.target || typeof event.target.result !== 'string') {
-            reject(new Error('Failed to read file'));
-            return;
-          }
-          
-          try {
-            // Optimize the image
-            const optimizedImage = await optimizeImageForStorage(event.target.result);
-            
-            // Apply AI enhancement
-            const enhancedImage = await enhanceImageWithAI(optimizedImage);
-            
-            // Return both versions
-            resolve({
-              originalImage: optimizedImage,
-              enhancedImage: enhancedImage
-            });
-          } catch (error) {
-            reject(error);
+    // Process files one at a time to reduce memory pressure on mobile
+    const processFilesSequentially = async () => {
+      const results = [];
+      for (const file of files) {
+        try {
+          const result = await processImage(file);
+          results.push(result);
+          // Small delay between processing images to avoid UI freezes
+          await new Promise(r => setTimeout(r, 100));
+        } catch (error) {
+          console.error('Error processing image:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to process image');
         }
-      };
-        
-        reader.onerror = () => {
-          reject(new Error('Error reading file'));
-        };
-        
-      reader.readAsDataURL(file);
-    });
+      }
+      return results;
     };
     
-    // Process all images and add them to the state
-    Promise.all(files.map(processImage))
+    // Use sequential processing instead of Promise.all
+    processFilesSequentially()
       .then(async (processedImages) => {
-        // Extract original images and enhanced images
-        const originalImages = processedImages.map(img => img.originalImage);
-        const enhancedImages = processedImages.map(img => img.enhancedImage);
-        
-        // Update state with original images (we'll use enhanced ones for AI features)
-        const newImages = [...images, ...originalImages];
-        setImages(newImages);
-        
-        // FORCE COLOR EXTRACTION: Extract colors from the first processed image
-        if (originalImages.length > 0) {
-          try {
-            console.log("Extracting colors from newly uploaded image...");
-            const extractedColors = await extractDominantColors(originalImages[0]);
-            
-            if (extractedColors.length > 0) {
-              // Get the most vibrant color
-              const newColor = extractedColors[0];
-              
-              // Create a complementary shadow color (30% darker)
-              const r = parseInt(newColor.slice(1, 3), 16);
-              const g = parseInt(newColor.slice(3, 5), 16);
-              const b = parseInt(newColor.slice(5, 7), 16);
-              
-              const shadowR = Math.floor(r * 0.7);
-              const shadowG = Math.floor(g * 0.7);
-              const shadowB = Math.floor(b * 0.7);
-              
-              const shadowColor = `#${shadowR.toString(16).padStart(2, '0')}${
-                shadowG.toString(16).padStart(2, '0')}${
-                shadowB.toString(16).padStart(2, '0')}`;
-              
-              // Apply the new color scheme
-              const newColors = {
-                locationColor: newColor,
-                locationShadowColor: shadowColor
-              };
-              
-              console.log("Setting colors from image:", newColors);
-              setTextColors(newColors);
-              
-              // Force canvas redraw
-              window.CURRENT_COLORS = newColors;
-              if (window.forceCanvasRedraw) {
-                setTimeout(() => window.forceCanvasRedraw?.(), 50);
-              }
-              
-              // Show notification with the extracted color
-              showSavedNotification(newColor);
-            }
-          } catch (error) {
-            console.error("Error extracting colors:", error);
+        try {
+          if (processedImages.length === 0) {
+            throw new Error('No images could be processed');
           }
+          
+          // Extract original images and enhanced images
+          const originalImages = processedImages.map(img => img.originalImage);
+          
+          // Update state with original images (we'll use enhanced ones for AI features)
+          const newImages = [...images, ...originalImages];
+          setImages(newImages);
+          
+          // FORCE COLOR EXTRACTION: Extract colors from the first processed image
+          if (originalImages.length > 0) {
+            try {
+              console.log("Extracting colors from newly uploaded image...");
+              const extractedColors = await extractDominantColors(originalImages[0]);
+              
+              if (extractedColors.length > 0) {
+                // Get the most vibrant color
+                const newColor = extractedColors[0];
+                
+                // Create a complementary shadow color (30% darker)
+                const r = parseInt(newColor.slice(1, 3), 16);
+                const g = parseInt(newColor.slice(3, 5), 16);
+                const b = parseInt(newColor.slice(5, 7), 16);
+                
+                const shadowR = Math.floor(r * 0.7);
+                const shadowG = Math.floor(g * 0.7);
+                const shadowB = Math.floor(b * 0.7);
+                
+                const shadowColor = `#${shadowR.toString(16).padStart(2, '0')}${
+                  shadowG.toString(16).padStart(2, '0')}${
+                  shadowB.toString(16).padStart(2, '0')}`;
+                
+                // Apply the new color scheme
+                const newColors = {
+                  locationColor: newColor,
+                  locationShadowColor: shadowColor
+                };
+                
+                console.log("Setting colors from image:", newColors);
+                setTextColors(newColors);
+                
+                // Add a delay before forcing redraw to prevent UI freeze
+                setTimeout(() => {
+                  // Force canvas redraw with memory cleanup
+                  window.CURRENT_COLORS = newColors;
+                  if (window.forceCanvasRedraw) {
+                    // Request animation frame to ensure browser is ready
+                    requestAnimationFrame(() => {
+                      // Check again in case it was undefined between frames
+                      if (typeof window.forceCanvasRedraw === 'function') {
+                        window.forceCanvasRedraw();
+                      }
+                    });
+                  }
+                  
+                  // Show notification with the extracted color
+                  showSavedNotification(newColor);
+                }, 300);
+              }
+            } catch (error) {
+              console.error("Error extracting colors:", error);
+            }
+          }
+          
+          // Save to local storage
+          saveJournalData();
+        } catch (error) {
+          console.error('Error processing images:', error);
+          toast.error('Could not process images. Please try again.');
         }
-        
-        // Save to local storage
-        saveJournalData();
       })
       .catch(error => {
         console.error('Error processing images:', error);
-        alert('There was an error processing one or more images. Please try different images or formats.');
+        toast.error('There was an error processing one or more images. Please try a different image.');
       })
       .finally(() => {
         setIsLoadingImage(false);
@@ -2211,6 +2168,146 @@ const JournalForm: React.FC<JournalFormProps> = ({
     };
   }, []);
 
+  // Create a ref for the camera input
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  
+  // Detect if on mobile
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // Helper functions for color extraction
+  const extractDominantColors = (imageUrl: string): Promise<string[]> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      
+      img.onload = () => {
+        // Create a canvas to draw the image
+        const canvas = document.createElement('canvas');
+        const size = 150;
+        canvas.width = size;
+        canvas.height = size;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(['#3498DB']); // Fallback color
+          return;
+        }
+        
+        // Draw the image
+        ctx.drawImage(img, 0, 0, size, size);
+        
+        // Sample colors from different regions
+        const regions = [
+          {x: size/4, y: size/4},  // Top-left
+          {x: size*3/4, y: size/4},  // Top-right
+          {x: size/2, y: size/2},  // Center
+          {x: size/4, y: size*3/4},  // Bottom-left
+          {x: size*3/4, y: size*3/4},  // Bottom-right
+        ];
+        
+        // Extract colors
+        const extractedColors: string[] = [];
+        
+        regions.forEach(({x, y}) => {
+          const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+          const hex = `#${pixel[0].toString(16).padStart(2, '0')}${
+            pixel[1].toString(16).padStart(2, '0')}${
+            pixel[2].toString(16).padStart(2, '0')}`;
+          
+          // Skip colors that are too dark or too light
+          const brightness = (pixel[0] * 299 + pixel[1] * 587 + pixel[2] * 114) / 1000;
+          if (brightness > 30 && brightness < 220) {
+            extractedColors.push(hex);
+          }
+        });
+        
+        // Add fallback if no good colors found
+        if (extractedColors.length === 0) {
+          extractedColors.push('#3498DB');
+        }
+        
+        resolve(extractedColors);
+      };
+      
+      img.onerror = () => {
+        console.error("Failed to load image for color extraction");
+        resolve(['#3498DB']); // Fallback color
+      };
+      
+      img.src = imageUrl;
+    });
+  };
+  
+  // Process each file
+  const processImage = async (file: File) => {
+    return new Promise<{originalImage: string, enhancedImage: string}>((resolve, reject) => {
+      // First check file size - reject oversized files immediately
+      const maxSizeInMB = 10;
+      if (file.size > maxSizeInMB * 1024 * 1024) {
+        reject(new Error(`Image too large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maximum size is ${maxSizeInMB}MB.`));
+        return;
+      }
+      
+      const reader = new FileReader();
+      
+      // Add timeout to prevent hanging on problematic files
+      const timeoutId = setTimeout(() => {
+        reader.abort();
+        reject(new Error('Image reading timed out. Please try a different image.'));
+      }, 15000);
+      
+      reader.onload = async (event) => {
+        clearTimeout(timeoutId);
+        
+        if (!event.target || typeof event.target.result !== 'string') {
+          reject(new Error('Failed to read file'));
+          return;
+        }
+        
+        try {
+          // Optimize the image with memory management
+          const optimizedImage = await optimizeImageForStorage(event.target.result);
+          
+          // Apply AI enhancement with fallback
+          let enhancedImage;
+          try {
+            enhancedImage = await enhanceImageWithAI(optimizedImage);
+          } catch (enhanceError) {
+            console.error('Image enhancement failed, using original:', enhanceError);
+            enhancedImage = optimizedImage;
+          }
+          
+          // Return both versions
+          resolve({
+            originalImage: optimizedImage,
+            enhancedImage: enhancedImage
+          });
+        } catch (error) {
+          console.error('Image processing error:', error);
+          reject(error);
+        }
+      };
+      
+      reader.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Error reading file'));
+      };
+      
+      reader.onabort = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('File reading was aborted'));
+      };
+      
+      // Read as data URL with error handling
+      try {
+        reader.readAsDataURL(file);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        reject(new Error('Failed to start reading file'));
+      }
+    });
+  };
+
   return (
     <div className="relative journal-form-container">
       {/* TV static background video */}
@@ -2309,23 +2406,47 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       </label>
                       
                       {images.length < 3 && (
-                        <div 
-                          className="border-2 border-dashed border-white/20 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-white/40 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                          </svg>
-                          <p className="text-base text-gray-300 text-center mb-2">Tap to upload images</p>
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            multiple
-                            style={{ display: 'none' }}
-                            disabled={images.length >= 3}
-                          />
+                        <div className="space-y-4">
+                          <div 
+                            className="border-2 border-dashed border-white/20 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-white/40 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            <p className="text-base text-gray-300 text-center mb-2">Tap to upload images</p>
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleImageUpload}
+                              accept="image/*"
+                              multiple
+                              style={{ display: 'none' }}
+                              disabled={images.length >= 3}
+                            />
+                          </div>
+                          
+                          {isMobile && (
+                            <div 
+                              className="border-2 border-dashed border-white/20 rounded-lg p-4 flex items-center justify-center cursor-pointer hover:border-white/40 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40"
+                              onClick={() => cameraInputRef.current?.click()}
+                            >
+                              <svg className="w-6 h-6 text-gray-300 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                              </svg>
+                              <p className="text-base text-gray-300">Use Camera</p>
+                              <input
+                                type="file"
+                                ref={cameraInputRef}
+                                onChange={handleImageUpload}
+                                accept="image/*"
+                                capture="environment"
+                                style={{ display: 'none' }}
+                                disabled={images.length >= 3}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                       
