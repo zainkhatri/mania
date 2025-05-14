@@ -483,13 +483,13 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Row 1 - Date spans full width (moved up further)
           { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
           // Row 2 - Location spans full width (moved up further)
-          { type: 'location', x: 0, y: currentYPosition + 15, width: fullWidth, height: 20 },
+          { type: 'location', x: 10, y: currentYPosition + 15, width: fullWidth, height: 20 },
           // Row 3 - Left image, right text
-          { type: 'image', x: 0, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          { type: 'image', x: 0, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           // Row 4 - Left text, right image
           { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 15, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+          { type: 'image', x: textColumnWidth + 25, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
           // Row 5 - Left image, right text
           { type: 'image', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 }
@@ -498,18 +498,18 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         // Mirrored layout: Text on left, images on right
         gridLayout = [
           // Row 1 - Date spans full width (moved up further)
-          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 60 },
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
           // Row 2 - Location spans full width (moved up further)
-          { type: 'location', x: 0, y: currentYPosition + 15, width: fullWidth, height: 60 },
-          // Row 3 - Left text, right image
+          { type: 'location', x: 10, y: currentYPosition + 5, width: fullWidth, height: 30 },
+          // Row 3 - Left text, right image (mirroring Row 3 of Style 1)
           { type: 'text', x: 0, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + 50, width: imageColumnWidth - 20, height: rowHeight - 30 },
-          // Row 4 - Left image, right text
-          { type: 'image', x: 0, y: topMargin + -10 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+          { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          // Row 4 - Left image, right text (mirroring Row 4 of Style 1)
+          { type: 'image', x: 0, y: topMargin + -30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
-          // Row 5 - Left text, right image
+          // Row 5 - Left text, right image (mirroring Row 5 of Style 1)
           { type: 'text', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 },
-          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
+          { type: 'image', x: textColumnWidth + 20, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
         ];
       }
       

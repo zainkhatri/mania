@@ -12,20 +12,20 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
         </svg>
-        <span>Layout Style</span>
+        <span className="text-2xl">Layout Style</span>
       </label>
       
       <div className="flex flex-wrap gap-4">
         <div
           onClick={() => setLayoutMode('standard')}
-          className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+          className={`relative p-6 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
             layoutMode === 'standard' 
               ? 'border-white bg-black/60 shadow-md' 
               : 'border-gray-600 bg-black/40 hover:border-gray-400'
           }`}
         >
           <div className="flex flex-col items-center gap-2">
-            <div className="w-full h-24 bg-[#1a1a1a]/70 rounded-md p-2 flex flex-col space-y-1">
+            <div className="w-full h-32 bg-[#1a1a1a]/70 rounded-md p-2 flex flex-col space-y-1">
               {/* Top row */}
               <div className="w-full h-1/4 flex items-center justify-center">
                 <div className="w-full h-2 bg-gray-500 rounded-full"></div>
@@ -55,12 +55,12 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
                 </div>
               </div>
             </div>
-            <span className="text-sm font-medium text-white">Style 1</span>
-            <span className="text-xs text-gray-400">Images on left</span>
+            <span className="text-xl font-medium text-white">Style 1</span>
+            <span className="text-lg text-gray-400">Images on left</span>
           </div>
           {layoutMode === 'standard' && (
             <div className="absolute -top-2 -right-2 bg-white rounded-full p-1">
-              <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
               </svg>
             </div>
@@ -69,14 +69,14 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
 
         <div
           onClick={() => setLayoutMode('mirrored')}
-          className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+          className={`relative p-6 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
             layoutMode === 'mirrored' 
               ? 'border-white bg-black/60 shadow-md' 
               : 'border-gray-600 bg-black/40 hover:border-gray-400'
           }`}
         >
           <div className="flex flex-col items-center gap-2">
-            <div className="w-full h-24 bg-[#1a1a1a]/70 rounded-md p-2 flex flex-col space-y-1">
+            <div className="w-full h-32 bg-[#1a1a1a]/70 rounded-md p-2 flex flex-col space-y-1">
               {/* Top row */}
               <div className="w-full h-1/4 flex items-center justify-center">
                 <div className="w-full h-2 bg-gray-500 rounded-full"></div>
@@ -106,12 +106,12 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
                 <div className="w-1/2 h-full pl-1 bg-gray-400 rounded-sm"></div>
               </div>
             </div>
-            <span className="text-sm font-medium text-white">Style 2</span>
-            <span className="text-xs text-gray-400">Images on right</span>
+            <span className="text-xl font-medium text-white">Style 2</span>
+            <span className="text-lg text-gray-400">Images on right</span>
           </div>
           {layoutMode === 'mirrored' && (
             <div className="absolute -top-2 -right-2 bg-white rounded-full p-1">
-              <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
               </svg>
             </div>

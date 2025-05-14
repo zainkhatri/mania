@@ -22,6 +22,60 @@ import { saveJournal, journalExistsForDate } from '../services/journalService';
 import { format } from 'date-fns';
 import JournalEnhancer from './JournalEnhancer';
 import ColorPicker from './ColorPicker';
+// Import DatePicker
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+
+// Apply custom styles to the DatePicker
+const datePickerStyles = `
+  .react-datepicker {
+    font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background-color: #121212 !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  }
+  
+  .react-datepicker__header {
+    background-color: #1a1a1a !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .react-datepicker__current-month, 
+  .react-datepicker__day-name, 
+  .react-datepicker__day, 
+  .react-datepicker__time-name {
+    color: white !important;
+  }
+  
+  .react-datepicker__day:hover, 
+  .react-datepicker__month-text:hover, 
+  .react-datepicker__quarter-text:hover, 
+  .react-datepicker__year-text:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .react-datepicker__day--selected, 
+  .react-datepicker__day--keyboard-selected {
+    background-color: #3182ce !important;
+    color: white !important;
+  }
+  
+  .react-datepicker__navigation {
+    color: white !important;
+  }
+  
+  .react-datepicker__triangle {
+    border-bottom-color: #1a1a1a !important;
+  }
+  
+  .react-datepicker__navigation-icon::before,
+  .react-datepicker__year-read-view--down-arrow,
+  .react-datepicker__month-read-view--down-arrow {
+    border-color: white !important;
+  }
+`;
 
 // Simple function that returns the original image without enhancement
 const enhanceImageWithAI = async (imageDataUrl: string): Promise<string> => {
@@ -2146,6 +2200,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
     return `${year}-${month}-${day}`;
   };
 
+  // Add the styles to the document
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = datePickerStyles;
+    document.head.appendChild(styleElement);
+    
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+
   return (
     <div className="relative journal-form-container">
       {/* TV static background video */}
@@ -2179,16 +2244,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
             {/* Input Form - Left Side */}
             <div className="bg-black rounded-2xl shadow-xl border border-white/20 overflow-hidden h-fit">
               <div className="p-6 border-b border-white/10 flex justify-center items-center">
-                  <button 
-                    type="button" // Prevent form submission
-                    onClick={handleReset} 
-                  className="px-6 py-3.5 bg-black/40 hover:bg-black/60 text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm border border-white/30 text-lg font-semibold"
-                  >
-                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    New Journal
-                  </button>
+                  {/* No button here */}
               </div>
               <div className="p-6">
                 <motion.div
@@ -2205,18 +2261,21 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </svg>
                         <span>Date</span>
                       </label>
-                      <input
-                        type="date"
-                        id="date"
-                        value={formatDateForInput(date)}
-                        onChange={(e) => {
-                          // Create date that preserves the selected day without timezone adjustments
-                          const [year, month, day] = e.target.value.split('-').map(Number);
-                          // Create new date with local timezone, setting time to noon to avoid any date shifting
-                          const selectedDate = new Date(year, month - 1, day, 12, 0, 0);
-                          setDate(selectedDate);
+                      <DatePicker
+                        selected={date}
+                        onChange={(selectedDate: Date | null) => {
+                          if (selectedDate) {
+                            // Set time to noon to avoid timezone issues
+                            const adjustedDate = new Date(selectedDate);
+                            adjustedDate.setHours(12, 0, 0, 0);
+                            setDate(adjustedDate);
+                          }
                         }}
                         className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-3 text-white transition-all duration-200 bg-black/30 backdrop-blur-sm"
+                        calendarClassName="black-theme-calendar"
+                        dateFormat="yyyy-MM-dd"
+                        popperClassName="black-theme-popper"
+                        popperPlacement="bottom-start"
                         required
                       />
                     </div>
@@ -2356,7 +2415,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     </div>
                   </div>
                   
-                  <div className="flex justify-end pt-4 border-t border-white/10">
+                  <div className="flex justify-between pt-4 border-t border-white/10">
+                    <button 
+                      type="button"
+                      onClick={handleReset} 
+                      className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
+                    >
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                      </svg>
+                      Clear Journal
+                    </button>
                     <motion.button
                       onClick={handleSaveAsPDF}
                       className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none"
@@ -2484,13 +2553,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   
                 <button 
                   onClick={handleReset} 
-                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
-                >
-                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                  </svg>
-                  New Entry
-                </button>
+                     className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm text-base"
+                  >
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                   Clear Journal
+                  </button>
       </div>
           </div>
           

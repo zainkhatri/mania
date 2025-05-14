@@ -293,7 +293,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         // Create question with specific tower/burning references
         if (lowerText.includes("tower") && lowerText.includes("burning")) {
           questions.push("As you watched the tower burning on TV, what specific image from the footage has stayed with you most vividly?");
-    }
+        }
     
         // Create question referencing the second hit if mentioned
         if (lowerText.includes("second hit")) {
@@ -303,7 +303,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         // Create question about the "didn't feel real" aspect if mentioned
         if (lowerText.includes("didn't feel real") || lowerText.includes("feel real")) {
           questions.push("You mentioned it 'didn't feel real' as you watched the news - at what point did the reality of the situation finally sink in for you?");
-    }
+        }
     
         // Reference specific emotional state if mentioned
         if (specificDetails.emotionalStates && specificDetails.emotionalStates.length > 0) {
@@ -679,243 +679,86 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
 
   return (
     <AnimatePresence>
-      {isVisible && journalText.trim().length > minWordCount && (
-      <motion.div
-          className="mt-4 border border-white/20 rounded-lg shadow-sm overflow-hidden bg-black/60 backdrop-blur-md"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ 
-            opacity: 1, 
-            y: 0,
-            transition: { duration: 0.3 }
-          }}
-          exit={{ opacity: 0, y: -10 }}
-      >
-        <div 
-            className="px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-black/80"
-          onClick={() => setExpanded(!expanded)}
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.3 }}
+          className="mt-4 relative"
         >
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-              <h3 className="text-base md:text-lg font-medium text-white">Need inspiration?</h3>
-          </div>
-            <motion.div
-              animate={{ rotate: expanded ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
+          <div 
+            className={`border border-white/30 rounded-lg shadow-md overflow-hidden transition-all duration-300 ${expanded ? 'bg-black/40' : 'bg-black/30'} backdrop-blur-sm`}
+          >
+            {/* Header with AI icon and expand button */}
+            <div 
+              className="p-4 flex justify-between items-center cursor-pointer"
+              onClick={() => setExpanded(!expanded)}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            </motion.div>
-        </div>
-        
-          {expanded && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-              className="px-4 py-3 border-t border-white/10"
-            >
-              {isLoading ? (
-                <div className="flex items-center py-2">
-                  <div className="animate-pulse flex space-x-3 items-center">
-                    <div className="rounded-full bg-gray-600 h-4 w-4"></div>
-                    <div className="h-3 bg-gray-600 rounded w-36"></div>
-                  </div>
+              <div className="flex items-center gap-2">
+                <div className="text-blue-400">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor"/>
+                    <path d="M12 6C10.9 6 10 6.9 10 8C10 9.1 10.9 10 12 10C13.1 10 14 9.1 14 8C14 6.9 13.1 6 12 6Z" fill="currentColor"/>
+                    <path d="M12 14C10.9 14 10 14.9 10 16C10 17.1 10.9 18 12 18C13.1 18 14 17.1 14 16C14 14.9 13.1 14 12 14Z" fill="currentColor"/>
+                    <path d="M20 10C18.9 10 18 10.9 18 12C18 13.1 18.9 14 20 14C21.1 14 22 13.1 22 12C22 10.9 21.1 10 20 10Z" fill="currentColor"/>
+                    <path d="M4 10C2.9 10 2 10.9 2 12C2 13.1 2.9 14 4 14C5.1 14 6 13.1 6 12C6 10.9 5.1 10 4 10Z" fill="currentColor"/>
+                  </svg>
                 </div>
-              ) : (
-                <div>
-                  <p className={`text-sm text-white relative ${isGlitching ? 'static-text' : ''}`}>{currentQuestion}</p>
-                </div>
-              )}
-              
-              <div className="flex justify-end mt-2">
-                <button
-                  onClick={handleGetAnotherQuestion}
-                  disabled={isShuffling}
-                  className={`px-3 py-1.5 text-xs font-medium rounded text-white relative
-                  ${isShuffling ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}
-                  transition-all duration-200 flex items-center
-                  ${isGlitching ? 'static-btn' : ''}`}
-                >
-                  <span className={isGlitching ? 'static-content' : ''}>
-                    {isShuffling ? (
-                      <>
-                        <svg className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Try another
-                      </>
-                    )}
-                  </span>
-                </button>
+                <h3 className="text-3xl font-medium text-white">Need inspiration?</h3>
               </div>
-            </motion.div>
-          )}
-
-          {/* CSS for TV Static Effect */}
-          <style dangerouslySetInnerHTML={{ __html: `
-            /* TV static base effect */
-            @keyframes tv-static {
-              0% { background-position: 0 0; }
-              20% { background-position: 20% -20%; }
-              40% { background-position: -20% 20%; }
-              60% { background-position: 10% 30%; }
-              80% { background-position: -10% -10%; }
-              100% { background-position: 0 0; }
-            }
+              <svg 
+                className={`w-7 h-7 text-white transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </div>
             
-            /* Flickering scanlines animation */
-            @keyframes scanlines {
-              0% { background-position: 0 0; }
-              100% { background-position: 0 100%; }
-            }
-            
-            /* Flicker animation for the old TV effect */
-            @keyframes flicker {
-              0% { opacity: 0.85; }
-              10% { opacity: 0.9; }
-              20% { opacity: 0.8; }
-              30% { opacity: 0.95; }
-              40% { opacity: 0.8; }
-              50% { opacity: 0.9; }
-              60% { opacity: 0.7; }
-              70% { opacity: 0.95; }
-              80% { opacity: 0.8; }
-              90% { opacity: 0.9; }
-              100% { opacity: 0.85; }
-            }
-            
-            /* Base static effect */
-            .static-text {
-              position: relative;
-              display: inline-block;
-              z-index: 1;
-              color: #000;
-              padding: 2px;
-              border-radius: 2px;
-            }
-            
-            /* The main static noise overlay */
-            .static-text::before {
-              content: "";
-              position: absolute;
-              left: -5px;
-              top: -5px;
-              right: -5px;
-              bottom: -5px;
-              background-image: 
-                linear-gradient(
-                  to bottom,
-                  transparent 50%,
-                  rgba(0, 0, 0, 0.1) 51%
-                ),
-                url("data:image/png;base64,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");
-              background-size: 100% 2px, 150px;
-              opacity: 0;
-              mix-blend-mode: multiply;
-              z-index: -1;
-              animation: 
-                tv-static 0.2s steps(5) infinite,
-                flicker 0.15s infinite;
-              transition: opacity 0.1s;
-            }
-            
-            /* Scan lines overlay */
-            .static-text::after {
-              content: "";
-              position: absolute;
-              left: -2px;
-              top: -2px;
-              right: -2px;
-              bottom: -2px;
-              background: linear-gradient(
-                to bottom,
-                transparent,
-                rgba(255, 255, 255, 0.4) 50%,
-                transparent 51%,
-                transparent
-              );
-              background-size: 100% 4px;
-              pointer-events: none;
-              z-index: 0;
-              opacity: 0.3;
-              animation: scanlines 10s linear infinite;
-            }
-
-            /* Only show static when glitching */
-            .static-text::before {
-              opacity: 0.5;
-            }
-            
-            /* Button static effect */
-            .static-btn {
-              position: relative;
-              overflow: hidden;
-            }
-            
-            .static-btn::before {
-              content: "";
-              position: absolute;
-              top: 0;
-              left: 0;
-              right: 0;
-              bottom: 0;
-              background-image: 
-                linear-gradient(
-                  to bottom,
-                  transparent 50%,
-                  rgba(0, 0, 0, 0.2) 51%
-                ),
-                url("data:image/png;base64,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");
-              background-size: 100% 3px, 120px;
-              opacity: 0.4;
-              mix-blend-mode: multiply;
-              animation: 
-                tv-static 0.2s steps(5) infinite,
-                flicker 0.15s infinite;
-              pointer-events: none;
-            }
-            
-            /* Additional jitter effect */
-            @keyframes jitter {
-              0%, 100% { transform: translate(0, 0) }
-              10% { transform: translate(-1px, 1px) }
-              20% { transform: translate(1px, -1px) }
-              30% { transform: translate(-1px, -1px) }
-              40% { transform: translate(1px, 1px) }
-              50% { transform: translate(-1px, 0) }
-              60% { transform: translate(1px, 0) }
-              70% { transform: translate(0, 1px) }
-              80% { transform: translate(0, -1px) }
-              90% { transform: translate(-1px, 1px) }
-            }
-            
-            /* Apply jitter to the question text when static is on */
-            .static-text {
-              animation: jitter 0.1s linear infinite;
-            }
-            
-            /* Make the content visible on top of effects */
-            .static-content {
-              position: relative;
-              z-index: 2;
-            }
-          ` }} />
-      </motion.div>
+            {/* Expandable content */}
+            {expanded && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="px-5 pb-5"
+              >
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <p className={`text-3xl text-white ${isGlitching ? 'glitch-text' : ''}`}>
+                        {currentQuestion || 'What thoughts were running through your mind that you didn\'t express at the time?'}
+                      </p>
+                    </div>
+                    
+                    <div className="flex justify-between gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGetAnotherQuestion();
+                        }}
+                        className="px-5 py-4 bg-blue-600 text-white rounded-lg text-2xl flex-1 hover:bg-blue-700 focus:outline-none transition-colors"
+                      >
+                        Try another
+                      </button>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
 };
 
-export default JournalEnhancer; 
+export default JournalEnhancer;

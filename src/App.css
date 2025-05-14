@@ -91,3 +91,133 @@ button, a {
   background-color: #1a1a1a;
   color: #f5f2e9;
 }
+
+/* Add responsive styling for the journal interface elements */
+@media (min-width: 769px) {
+  /* Default sizes for desktop */
+  input, 
+  textarea,
+  select,
+  button {
+    font-size: 22px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Ensure input fields have adequate height */
+  input[type="text"],
+  input[type="date"],
+  textarea {
+    padding: 16px 18px !important;
+    min-height: 60px !important;
+  }
+  
+  /* Buttons */
+  button {
+    padding: 14px 22px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Increase touch target sizes for mobile */
+  input, 
+  textarea,
+  select,
+  button {
+    font-size: 24px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Ensure input fields have adequate height on mobile */
+  input[type="text"],
+  input[type="date"],
+  textarea {
+    padding: 16px 18px !important;
+    min-height: 60px !important;
+  }
+
+  /* Make layout containers take full width on mobile */
+  .journal-form-container .grid {
+    gap: 24px !important;
+  }
+
+  /* Increase button size for better touch targets */
+  button {
+    padding: 16px 24px !important;
+    min-height: 60px !important;
+  }
+  
+  /* Adjust labels and title text */
+  label span, h3 {
+    font-size: 24px !important;
+  }
+  
+  /* Make placeholder text larger */
+  ::placeholder {
+    font-size: 24px !important;
+  }
+  
+  /* Increase file upload area size */
+  .upload-area {
+    min-height: 180px !important;
+  }
+}
+
+/* Additional global styles for consistent larger UI */
+.file-upload {
+  min-height: 120px;
+}
+
+/* Help text under fields */
+.helper-text {
+  font-size: 18px !important;
+}
+
+/* Increase size of SVG icons */
+label svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+/* Make toggle switch larger */
+.toggle-switch {
+  transform: scale(1.2);
+}
+
+/* DatePicker Dark Theme Overrides */
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+.react-datepicker__day--outside-month {
+  color: #666 !important;
+}
+
+.react-datepicker__day--disabled,
+.react-datepicker__month-text--disabled,
+.react-datepicker__quarter-text--disabled,
+.react-datepicker__year-text--disabled {
+  color: #444 !important;
+}
+
+.react-datepicker__day--today {
+  font-weight: bold;
+  color: #3182ce !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.react-datepicker__close-icon::after {
+  background-color: #3182ce !important;
+}
+
+/* Ensure date inputs have consistent styling with the custom calendar */
+input[type="date"] {
+  color-scheme: dark;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
