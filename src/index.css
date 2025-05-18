@@ -47,6 +47,35 @@ p, span, div, button, a, input, textarea, label, li {
   letter-spacing: 0;
 }
 
+/* Logo animation container to prevent shifting */
+.logo-animation-container {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+/* Logo animation transitions */
+.logo-animation-container span {
+  position: absolute;
+  transition: opacity 0.1s ease-in-out;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+/* Override any transform for the logo letters */
+.logo-animation-container .letter-normal,
+.logo-animation-container .logo-m {
+  transform: none !important;
+}
+
 /* Normal letter style (ZainCustomFont for main text) */
 .letter-normal {
   color: white;

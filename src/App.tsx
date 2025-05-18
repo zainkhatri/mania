@@ -38,12 +38,59 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { isAuthenticated, logout } = useContext(AuthContext);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [logoHighlight, setLogoHighlight] = useState(false);
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
+  const [typedText, setTypedText] = useState("");
+  const fullText = "ania";
   
   // Exclude header/footer from both home and login pages
   const shouldHideNav = location.pathname === '/' || location.pathname === '/login';
   
+  // Typewriter effect for the logo
+  useEffect(() => {
+    // Only animate when hovered and on journal page
+    if (isLogoHovered && location.pathname === '/journal') {
+      let currentIndex = 0;
+      const typingInterval = setInterval(() => {
+        if (currentIndex < fullText.length) {
+          setTypedText(fullText.substring(0, currentIndex + 1));
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+        }
+      }, 100); // Speed of typing
+      
+      return () => {
+        clearInterval(typingInterval);
+      };
+    } else if (!isLogoHovered) {
+      setTypedText("");
+    }
+  }, [isLogoHovered, location.pathname]);
+  
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+  
+  // Render the logo with typewriter animation
+  const renderLogo = () => {
+    const isJournalPage = location.pathname === '/journal';
+    
+    if (isJournalPage) {
+      return (
+        <div 
+          className="flex items-center"
+          onMouseEnter={() => setIsLogoHovered(true)}
+          onMouseLeave={() => setIsLogoHovered(false)}
+          style={{ minWidth: "200px" }}
+        >
+          <span className="logo-m">m</span>
+          <span className="logo-m">{typedText}</span>
+        </div>
+      );
+    } else {
+      return <span className="logo-m">m</span>;
+    }
   };
   
   return (
@@ -58,7 +105,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <div className="flex">
                   <Link to="/" className="flex-shrink-0 flex items-center">
                     <div className="text-5xl md:text-6xl text-white">
-                      <span className="logo-m">m</span>
+                      {renderLogo()}
                     </div>
                   </Link>
                 </div>
@@ -158,7 +205,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <footer className="bg-black/50 backdrop-blur-sm py-4 border-t border-white/10 relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-xs sm:text-sm text-white/70">
-              © {new Date().getFullYear()} WebJournal
+              © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
             </p>
           </div>
         </footer>
