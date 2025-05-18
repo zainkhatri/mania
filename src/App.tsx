@@ -158,7 +158,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <footer className="bg-black/50 backdrop-blur-sm py-4 border-t border-white/10 relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-xs sm:text-sm text-white/70">
-              © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
+              © {new Date().getFullYear()} WebJournal
             </p>
           </div>
         </footer>

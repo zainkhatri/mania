@@ -190,7 +190,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [location, setLocation] = useState('');
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
-  const videoRef = useRef<HTMLVideoElement>(null);
   
   // Initialize date with noon time to avoid timezone issues
   const initialDate = new Date();
@@ -2310,18 +2309,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   return (
     <div className="relative journal-form-container">
-      {/* TV static background video */}
-      <video 
-        ref={videoRef}
-        className="absolute w-full h-full object-cover z-0 static-bg"
-        autoPlay 
-        loop 
-        muted
-        playsInline
-      >
-        <source src="/background/static.webm" type="video/webm" />
-        Your browser does not support the video tag.
-      </video>
+      {/* Black background instead of video */}
+      <div className="absolute w-full h-full bg-black z-0"></div>
       
       {/* Main content */}
       <div className="relative z-10">
@@ -2351,9 +2340,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   className="space-y-5"
                 >
                   <div className="space-y-4">
+                    {/* Date Picker */}
                     <div className="space-y-3">
-                      <label htmlFor="date" className="block text-sm font-medium text-white flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <label htmlFor="date" className="block text-3xl font-medium text-white flex items-center gap-2">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
                         <span>Date</span>
@@ -2368,18 +2358,19 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             setDate(adjustedDate);
                           }
                         }}
-                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-3 text-white transition-all duration-200 bg-black/30 backdrop-blur-sm"
+                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-3 text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-2xl"
                         calendarClassName="black-theme-calendar"
                         dateFormat="yyyy-MM-dd"
                         popperClassName="black-theme-popper"
                         popperPlacement="bottom-start"
                         required
                       />
+                      
                     </div>
                     
                     <div className="space-y-3">
-                      <label htmlFor="location" className="block text-sm font-medium text-white flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <label htmlFor="location" className="block text-3xl font-medium text-white flex items-center gap-2">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                         </svg>
@@ -2391,18 +2382,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
                         placeholder="e.g., MANIA, LA JOLLA, CA"
-                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-base"
+                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-2xl"
                         required
                       />
                     </div>
 
                     {/* Images upload - moved up after location */}
                     <div className="space-y-3">
-                      <label className="block text-sm font-medium text-white flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <label className="block text-3xl font-medium text-white flex items-center gap-2">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
-                        <span>Images {images.length > 0 && `(${images.length}/3)`}</span>
+                        <span>Images ({images.length}/3)</span>
                       </label>
                       
                       {images.length < 3 && (
@@ -2484,8 +2475,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
                     {/* Color Picker */}
                     <div className="space-y-3">
-                      <label className="block text-sm font-medium text-white flex items-center gap-2">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <label className="block text-3xl font-medium text-white flex items-center gap-2">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                         </svg>
                         <span>Colors</span>
@@ -2506,8 +2497,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     />
                   
                     <div className="space-y-3">
-                      <label htmlFor="journalText" className="block text-sm font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                         </svg>
                         <span>Journal Entry</span>
@@ -2518,7 +2509,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         value={journalText}
                         onChange={(e) => setJournalText(e.target.value)}
                         placeholder="Write your journal entry here..."
-                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-lg"
+                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-3xl"
                         required
                       />
                       

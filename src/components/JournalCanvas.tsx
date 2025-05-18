@@ -490,9 +490,9 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Row 4 - Left text, right image
           { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
           { type: 'image', x: textColumnWidth + 25, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
-          // Row 5 - Left image, right text
-          { type: 'image', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 },
-          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 }
+          // Row 5 - Third image with consistent margins
+          { type: 'image', x: 10, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight - 30 },
+          { type: 'text', x: imageColumnWidth - 20, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: fullWidth - imageColumnWidth, height: rowHeight + 100 }
         ];
       } else {
         // Mirrored layout: Text on left, images on right
@@ -775,6 +775,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           const img = imageObjects[i];
           const position = imagePositions[i];
           
+          // Use the regular drawing function for all images now that the grid is correctly positioned
           drawImagePreservingAspectRatio(
             img,
             position.x, 
