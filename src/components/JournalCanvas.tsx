@@ -488,11 +488,11 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           { type: 'image', x: 0, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           // Row 4 - Left text, right image
-          { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
+          { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 85, height: rowHeight },
           { type: 'image', x: textColumnWidth + 25, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
           // Row 5 - Third image with consistent margins
           { type: 'image', x: 10, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight - 30 },
-          { type: 'text', x: imageColumnWidth - 20, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: fullWidth - imageColumnWidth, height: rowHeight + 100 }
+          { type: 'text', x: imageColumnWidth - 40, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: fullWidth - imageColumnWidth + 90, height: rowHeight + 100 }
         ];
       } else {
         // Mirrored layout: Text on left, images on right
