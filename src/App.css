@@ -88,8 +88,8 @@ button, a {
 
 /* Selection styling */
 ::selection {
-  background-color: #1a1a1a;
-  color: #f5f2e9;
+  background-color: #AEBBED;
+  color: #1a1a1a;
 }
 
 /* Add responsive styling for the journal interface elements */
