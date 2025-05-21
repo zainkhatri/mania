@@ -40,6 +40,18 @@ export interface ClickableTextArea {
   index?: number; // For text sections or images
 }
 
+// 1. Sticker type and state additions
+interface StickerImage {
+  src: string | Blob;
+  x: number; // px
+  y: number; // px
+  width: number; // px
+  height: number; // px
+  rotation: number; // degrees
+  zIndex: number;
+  imageObj?: HTMLImageElement; // for caching loaded image
+}
+
 interface JournalCanvasProps {
   date: Date;
   location: string;
@@ -89,6 +101,34 @@ function adjustColor(hex: string, percent: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
+// Simple, bold SF Symbol paths for controls
+const SF_SYMBOLS_PATHS = {
+  // Simple X for delete
+  delete: {
+    path: "M8.5 8.5L15.5 15.5M15.5 8.5L8.5 15.5",
+    width: 24,
+    height: 24,
+    centerX: 12,
+    centerY: 12
+  },
+  // Simple rotate arrow
+  rotate: {
+    path: "M12 5.75V8.25M16.25 7.75L14.25 9.75M7.75 7.75L9.75 9.75M16 12.25C16 9.35 13.65 7 10.75 7C7.85 7 5.5 9.35 5.5 12.25C5.5 15.15 7.85 17.5 10.75 17.5C13.65 17.5 16 15.15 16 12.25Z",
+    width: 24,
+    height: 24,
+    centerX: 12,
+    centerY: 12
+  },
+  // Simple resize arrows
+  resize: {
+    path: "M9 15L15 9M15 15L9 9",
+    width: 24,
+    height: 24,
+    centerX: 12,
+    centerY: 12
+  }
+};
+
 const JournalCanvas: React.FC<JournalCanvasProps> = ({
   date,
   location,
@@ -133,6 +173,22 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   const [fontLoaded, setFontLoaded] = useState(false);
   const [forceRender, setForceRender] = useState(0); // Add state to force re-renders
   const [renderCount, setRenderCount] = useState(0);
+  const [stickers, setStickers] = useState<StickerImage[]>([]);
+  const [activeSticker, setActiveSticker] = useState<number | null>(null);
+  const [stickerDragOffset, setStickerDragOffset] = useState<{x: number, y: number} | null>(null);
+  const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
+  const [canvasCursor, setCanvasCursor] = useState<string>('default');
+  const [isDragging, setIsDragging] = useState(false);
+  const [buttonClickHandling, setButtonClickHandling] = useState(false);
+  const [stickerButtonsData, setStickerButtonsData] = useState<{
+    deleteBtn: {x: number, y: number} | null,
+    rotateBtn: {x: number, y: number} | null,
+    resizeBtn: {x: number, y: number} | null
+  }>({
+    deleteBtn: null,
+    rotateBtn: null,
+    resizeBtn: null
+  });
   
   // Function to trigger a re-render when needed
   const renderJournal = useCallback(() => {
@@ -502,13 +558,13 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
           // Row 2 - Location spans full width (moved closer to date)
           { type: 'location', x: 10, y: currentYPosition, width: fullWidth, height: 30 },
           // Row 3 - Left text, right image (mirroring Row 3 of Style 1)
-          { type: 'text', x: 0, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
+          { type: 'text', x: -10, y: topMargin + headerHeight, width: textColumnWidth + 90, height: rowHeight },
           { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
           // Row 4 - Left image, right text (mirroring Row 4 of Style 1)
           { type: 'image', x: 0, y: topMargin + -30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
-          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 75, height: rowHeight },
+          { type: 'text', x: imageColumnWidth - 55, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 105, height: rowHeight },
           // Row 5 - Left text, right image (mirroring Row 5 of Style 1)
-          { type: 'text', x: 0, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 100, height: rowHeight + 100 },
+          { type: 'text', x: -10, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 90, height: rowHeight + 100 },
           { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
         ];
       }
@@ -892,10 +948,78 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       
       // Store image positions for dragging
       imagePositionsRef.current = imagePositions;
+
+      // Draw stickers after main content
+      if (stickers.length > 0) {
+        stickers.forEach((sticker, i) => {
+          let img = sticker.imageObj;
+          if (!img && sticker.src) {
+            img = new window.Image();
+            if (typeof sticker.src === 'string') img.src = sticker.src;
+            else img.src = URL.createObjectURL(sticker.src);
+            sticker.imageObj = img;
+          }
+          if (img && img.complete) {
+            ctx.save();
+            ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
+            ctx.rotate((sticker.rotation * Math.PI) / 180);
+            ctx.drawImage(img, -sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+            // Draw border if selected
+            if (activeSticker === i) {
+              // Dashed blue border
+              ctx.save();
+              ctx.setLineDash([8, 6]);
+              ctx.strokeStyle = '#2563eb'; // blue-600
+              ctx.lineWidth = 3;
+              ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+              ctx.setLineDash([]);
+              ctx.restore();
+
+              const btnRadius = 22;
+              // Delete (red, white X) - top-left
+              drawSFSymbolButton(ctx, -sticker.width/2 - 16, -sticker.height/2 - 16, '#ef4444', 'delete', btnRadius);
+              // Rotate (blue, white arrow) - top-center
+              drawSFSymbolButton(ctx, 0, -sticker.height/2 - 38, '#2563eb', 'rotate', btnRadius);
+              // Resize (blue, white diagonal) - bottom-right
+              drawSFSymbolButton(ctx, sticker.width/2 + 16, sticker.height/2 + 16, '#2563eb', 'resize', btnRadius);
+            }
+            ctx.restore();
+          }
+        });
+      }
+
+      // After drawing stickers, store button positions for hit detection
+      if (activeSticker !== null && stickers[activeSticker]) {
+        const sticker = stickers[activeSticker];
+        const btnRadius = 22;
+        
+        // Store button positions in global state for click handling
+        setStickerButtonsData({
+          deleteBtn: {
+            x: sticker.x - sticker.width/2 - 16,
+            y: sticker.y - sticker.height/2 - 16
+          },
+          rotateBtn: {
+            x: sticker.x,
+            y: sticker.y - sticker.height/2 - 38
+          },
+          resizeBtn: {
+            x: sticker.x + sticker.width/2 + 16,
+            y: sticker.y + sticker.height/2 + 16
+          }
+        });
+      } else {
+        // Reset button positions if no active sticker
+        setStickerButtonsData({
+          deleteBtn: null,
+          rotateBtn: null,
+          resizeBtn: null
+        });
+      }
     } catch (error) {
       console.error("Error drawing canvas:", error);
     }
-  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode]);
+  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction]);
 
   // Replace both export functions with a single ultra-high-quality export
   const exportUltraHDPDF = () => {
@@ -1059,118 +1183,238 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     return Math.round(optimalSize * 100) / 100;
   };
 
-  // Update handleMouseDown to support image color picking
+  // Helper to get max zIndex
+  const getMaxStickerZ = () => stickers.length > 0 ? Math.max(...stickers.map(s => s.zIndex)) : 0;
+
+  // Add click handler for sticker selection
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+
+    // First check for button clicks if a sticker is active
+    if (activeSticker !== null) {
+      const sticker = stickers[activeSticker];
+      const btnRadius = 22;
+      
+      // Transform canvas coordinates to get actual button positions
+      // Delete button (top-left)
+      const deleteBtn = {
+        x: sticker.x + (-sticker.width/2 - 16) * Math.cos(sticker.rotation * Math.PI / 180) - 
+           (-sticker.height/2 - 16) * Math.sin(sticker.rotation * Math.PI / 180),
+        y: sticker.y + (-sticker.width/2 - 16) * Math.sin(sticker.rotation * Math.PI / 180) + 
+           (-sticker.height/2 - 16) * Math.cos(sticker.rotation * Math.PI / 180)
+      };
+      
+      // Check if delete button was clicked
+      if (Math.sqrt((mouseX - deleteBtn.x) ** 2 + (mouseY - deleteBtn.y) ** 2) <= btnRadius) {
+        // Delete this sticker
+        const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
+        setStickers(newStickers);
+        setActiveSticker(null);
+        renderJournal();
+        return;
+      }
+      
+      // Add similar checks for rotate and resize buttons if needed
+    }
+
+    // Check if clicked on a sticker
+    let clickedOnSticker = false;
+    for (let i = stickers.length - 1; i >= 0; i--) {
+      const sticker = stickers[i];
+      const dx = mouseX - sticker.x;
+      const dy = mouseY - sticker.y;
+      const angle = -sticker.rotation * Math.PI / 180;
+      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+      
+      // Check if click is inside sticker bounds
+      if (Math.abs(localX) < sticker.width/2 && Math.abs(localY) < sticker.height/2) {
+        setActiveSticker(i);
+        clickedOnSticker = true;
+        // Bring to front
+        const maxZ = getMaxStickerZ();
+        if (sticker.zIndex < maxZ) {
+          const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
+          setStickers(newStickers);
+        }
+        break;
+      }
+    }
+    
+    // If we didn't click on a sticker, deselect the active sticker
+    if (!clickedOnSticker) {
+      setActiveSticker(null);
+    }
+  };
+
+  // Update handleMouseDown to handle dragging
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !props.editMode) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
     const scaleY = canvasRef.current.height / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
-    
-    console.log('Mouse down at:', x, y);
-    console.log('Edit mode:', props.editMode);
-    
-    // Check if we're in edit mode
-    if (props.editMode) {
-      // Check if we clicked on a text area
-      const clickedTextArea = clickableAreas.find(area => 
-        (area.type === 'text' || area.type === 'location') &&
-        x >= area.x && x <= area.x + area.width && 
-        y >= area.y && y <= area.y + area.height
-      );
-      
-      if (clickedTextArea && props.onTextClick) {
-        console.log('Clicked on text area:', clickedTextArea);
-        props.onTextClick(clickedTextArea);
+
+    // Check if we clicked on a sticker's control handles
+    if (activeSticker !== null) {
+      const sticker = stickers[activeSticker];
+      const dx = x - (sticker.x + sticker.width/2);
+      const dy = y - (sticker.y + sticker.height/2);
+      const angle = -sticker.rotation * Math.PI / 180;
+      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+
+      // Check resize handle (bottom right)
+      if (Math.abs(localX - sticker.width/2) < 15 && Math.abs(localY - sticker.height/2) < 15) {
+        setStickerAction('resize');
+        setStickerDragOffset({x: localX, y: localY});
         return;
       }
       
-      // For eyedropper functionality, let's check if we're clicking on any image
-      // Check if we're within any of the image positions
-      const imagePositions = imagePositionsRef.current;
-      const clickedOnImage = imagePositions.some((imgPos, index) => 
-        x >= imgPos.x && 
-        x <= imgPos.x + imgPos.width && 
-        y >= imgPos.y && 
-        y <= imgPos.y + imgPos.height
-      );
-      
-      // If we're clicking on an image and have an image click handler, use it
-      if (clickedOnImage && props.onImageClick) {
-        console.log('Clicked on image at:', x, y);
-        props.onImageClick(x, y);
+      // Check rotate handle (top center)
+      if (Math.abs(localX) < 15 && Math.abs(localY + sticker.height/2 + 20) < 15) {
+        setStickerAction('rotate');
+        setStickerDragOffset({x: localX, y: localY});
         return;
       }
       
-      // If we have the image click handler, allow picking from any part of the canvas
-      if (props.onImageClick) {
-        console.log('Picking color from canvas at:', x, y);
-        props.onImageClick(x, y);
+      // If clicked inside sticker, start dragging
+      if (localX > -sticker.width/2 && localX < sticker.width/2 && 
+          localY > -sticker.height/2 && localY < sticker.height/2) {
+        setStickerAction('move');
+        setStickerDragOffset({x: localX, y: localY});
+        setIsDragging(true);
         return;
-      }
-      
-      // Only continue with image dragging if in edit mode
-      // Check if click is on an image
-      for (let i = imagePositions.length - 1; i >= 0; i--) {
-        const imgPos = imagePositions[i];
-        if (
-          x >= imgPos.x && 
-          x <= imgPos.x + imgPos.width && 
-          y >= imgPos.y && 
-          y <= imgPos.y + imgPos.height
-        ) {
-          setDraggingImage({
-            index: i,
-            isDragging: true,
-            offsetX: x - imgPos.x,
-            offsetY: y - imgPos.y
-          });
-          return;
-        }
       }
     }
+
+    // Handle other interactions (text areas, etc.)
+    // ... existing code for text areas and other interactions ...
   };
-  
-  // Handle mouse move for dragging images
+
+  // Update handleMouseMove to handle dragging
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!props.editMode || !draggingImage) return;
+    if (!canvasRef.current || !props.editMode) return;
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / canvas.width) * 100;
-    const y = ((e.clientY - rect.top) / canvas.height) * 100;
-    
-    const newX = Math.max(0, Math.min(100 - imagePositionsRef.current[draggingImage.index].width, 
-                                      x - draggingImage.offsetX));
-    const newY = Math.max(0, Math.min(100 - imagePositionsRef.current[draggingImage.index].height, 
-                                      y - draggingImage.offsetY));
-    
-    props.onImageDrag?.(draggingImage.index, newX, newY);
-    
-    // Update the image position locally for immediate visual feedback
-    const newImagePositions = [...imagePositionsRef.current];
-    newImagePositions[draggingImage.index] = {
-      ...newImagePositions[draggingImage.index],
-      x: newX,
-      y: newY
-    };
-    imagePositionsRef.current = newImagePositions;
-    renderJournal();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // Update cursor based on hover position
+    if (activeSticker !== null) {
+      const sticker = stickers[activeSticker];
+      const dx = x - (sticker.x + sticker.width/2);
+      const dy = y - (sticker.y + sticker.height/2);
+      const angle = -sticker.rotation * Math.PI / 180;
+      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+
+      // Set cursor based on position
+      if (Math.abs(localX - sticker.width/2) < 15 && Math.abs(localY - sticker.height/2) < 15) {
+        setCanvasCursor('nwse-resize');
+      } else if (Math.abs(localX) < 15 && Math.abs(localY + sticker.height/2 + 20) < 15) {
+        setCanvasCursor('grab');
+      } else if (localX > -sticker.width/2 && localX < sticker.width/2 && 
+                 localY > -sticker.height/2 && localY < sticker.height/2) {
+        setCanvasCursor(isDragging ? 'grabbing' : 'grab');
+      } else {
+        setCanvasCursor('default');
+      }
+    }
+
+    // Handle sticker actions
+    if (activeSticker !== null && stickerAction && stickerDragOffset) {
+      const sticker = stickers[activeSticker];
+      const dx = x - (sticker.x + sticker.width/2);
+      const dy = y - (sticker.y + sticker.height/2);
+      const angle = -sticker.rotation * Math.PI / 180;
+      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+      
+      let newStickers = [...stickers];
+      
+      if (stickerAction === 'move') {
+        newStickers[activeSticker] = {
+          ...sticker,
+          x: x - stickerDragOffset.x - sticker.width/2,
+          y: y - stickerDragOffset.y - sticker.height/2,
+        };
+      } else if (stickerAction === 'resize') {
+        let newWidth = localX - stickerDragOffset.x + sticker.width;
+        let newHeight = localY - stickerDragOffset.y + sticker.height;
+        // Maintain aspect ratio
+        const aspect = sticker.width / sticker.height;
+        if (Math.abs(newWidth / newHeight - aspect) > 0.01) {
+          if (Math.abs(localX) > Math.abs(localY)) {
+            newHeight = newWidth / aspect;
+          } else {
+            newWidth = newHeight * aspect;
+          }
+        }
+        newWidth = Math.max(30, newWidth);
+        newHeight = Math.max(30, newHeight);
+        newStickers[activeSticker] = {
+          ...sticker,
+          width: newWidth,
+          height: newHeight,
+        };
+      } else if (stickerAction === 'rotate') {
+        const centerX = sticker.x + sticker.width/2;
+        const centerY = sticker.y + sticker.height/2;
+        const angleRad = Math.atan2(y - centerY, x - centerX);
+        newStickers[activeSticker] = {
+          ...sticker,
+          rotation: angleRad * 180 / Math.PI + 90,
+        };
+      }
+      
+      setStickers(newStickers);
+      renderJournal();
+    }
+
+    // Handle other interactions
+    // ... existing code for other interactions ...
   };
-  
-  // Handle mouse up to stop dragging
+
+  // Update handleMouseUp to handle dragging
   const handleMouseUp = () => {
-    setDraggingImage(null);
+    setStickerAction(null);
+    setStickerDragOffset(null);
+    setIsDragging(false);
+    setCanvasCursor('default');
   };
-  
-  // Handle mouse leave to stop dragging
+
+  // Update handleMouseLeave to handle dragging
   const handleMouseLeave = () => {
-    setDraggingImage(null);
+    setStickerAction(null);
+    setStickerDragOffset(null);
+    setIsDragging(false);
+    setCanvasCursor('default');
   };
+
+  // Add click handler to canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      // Remove any existing listener first
+      canvas.removeEventListener('click', handleCanvasClick as any);
+      // Add the new one
+      canvas.addEventListener('click', handleCanvasClick as any);
+      return () => {
+        canvas.removeEventListener('click', handleCanvasClick as any);
+      };
+    }
+  }, [activeSticker, stickers, props.editMode]);
 
   // Function to force a redraw from outside
   const forceRedraw = useCallback(() => {
@@ -1188,6 +1432,190 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     };
   }, [forceRedraw]);
 
+  // 2. Sticker upload handler
+  const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const img = new window.Image();
+      img.onload = () => {
+        // Calculate initial size to fit max 120px on the longest side
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 120;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round(height * (maxDim / width));
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round(width * (maxDim / height));
+            height = maxDim;
+          }
+        }
+        setStickers(prev => [
+          ...prev,
+          {
+            src: file,
+            x: 200,
+            y: 100,
+            width,
+            height,
+            rotation: 0,
+            zIndex: prev.length + 10,
+            imageObj: img,
+          },
+        ]);
+      };
+      img.src = URL.createObjectURL(file);
+    }
+  };
+
+  // Helper to draw GoodNotes-style control button
+  function drawSFSymbolButton(
+    ctx: CanvasRenderingContext2D | null,
+    x: number,
+    y: number,
+    color: string, // fill color
+    icon: 'delete' | 'rotate' | 'resize',
+    btnRadius = 22
+  ) {
+    if (!ctx) return;
+    // Draw drop shadowed button
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    ctx.restore();
+
+    // Set icon size relative to button radius (70-80% of button)
+    const iconSize = btnRadius * 1.3;
+    
+    // Draw the icon directly using canvas primitives for perfect control
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#fff';
+    ctx.lineWidth = 4; // Much thicker lines
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    if (icon === 'delete') {
+      // Draw X (delete)
+      const offset = iconSize * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(-offset, -offset);
+      ctx.lineTo(offset, offset);
+      ctx.moveTo(offset, -offset);
+      ctx.lineTo(-offset, offset);
+      ctx.stroke();
+    } 
+    else if (icon === 'rotate') {
+      // Draw rotation arrow
+      const radius = iconSize * 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, -Math.PI/4, Math.PI * 1.2, false);
+      ctx.stroke();
+      
+      // Arrow head
+      const arrowSize = radius * 0.4;
+      const angle = Math.PI * 1.2;
+      const arrowX = Math.cos(angle) * radius;
+      const arrowY = Math.sin(angle) * radius;
+      
+      ctx.beginPath();
+      ctx.moveTo(arrowX, arrowY);
+      ctx.lineTo(arrowX - arrowSize, arrowY - arrowSize/2);
+      ctx.lineTo(arrowX - arrowSize/2, arrowY + arrowSize/2);
+      ctx.closePath();
+      ctx.fill();
+    } 
+    else if (icon === 'resize') {
+      // Draw corner-expand resize icon (clearer than just a diagonal line)
+      const offset = iconSize * 0.5;
+      
+      // Main diagonal line
+      ctx.beginPath();
+      ctx.moveTo(-offset, -offset);
+      ctx.lineTo(offset, offset);
+      ctx.stroke();
+      
+      // Horizontal and vertical edges on both ends
+      // Bottom-right corner
+      ctx.beginPath();
+      ctx.moveTo(offset, offset);
+      ctx.lineTo(offset, offset * 0.5);
+      ctx.moveTo(offset, offset);
+      ctx.lineTo(offset * 0.5, offset);
+      ctx.stroke();
+      
+      // Top-left corner
+      ctx.beginPath();
+      ctx.moveTo(-offset, -offset);
+      ctx.lineTo(-offset, -offset * 0.5);
+      ctx.moveTo(-offset, -offset);
+      ctx.lineTo(-offset * 0.5, -offset);
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  }
+
+  // Check if a point is inside a button
+  function isPointInButton(x: number, y: number, buttonX: number, buttonY: number, radius: number): boolean {
+    const dx = x - buttonX;
+    const dy = y - buttonY;
+    return dx * dx + dy * dy <= radius * radius;
+  }
+
+  // Implement a separate handler specifically for button clicks
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    // Check for button clicks if button data is available
+    if (stickerButtonsData.deleteBtn) {
+      const btnRadius = 22;
+      const deleteBtn = stickerButtonsData.deleteBtn;
+      
+      // Use a larger hit area for easier button clicking
+      const dist = Math.sqrt((x - deleteBtn.x) ** 2 + (y - deleteBtn.y) ** 2);
+      if (dist <= btnRadius * 1.2) { // 20% larger hit area
+        console.log("Delete button clicked!");
+        // Delete the active sticker
+        const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
+        setStickers(newStickers);
+        setActiveSticker(null);
+        setButtonClickHandling(true); // Prevent other handlers from firing
+        renderJournal();
+        return;
+      }
+    }
+    
+    // Handle other mousedown logic only if we're not handling button clicks
+    if (!buttonClickHandling) {
+      handleMouseDown(e);
+    }
+  };
+
+  // Reset button click handling on mouse up
+  const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setButtonClickHandling(false);
+    handleMouseUp();
+  };
+
   return (
     <div className="relative w-full overflow-hidden">
       {isLoading ? (
@@ -1204,18 +1632,27 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
               aspectRatio: '1240 / 1748',
               width: '100%',
               maxWidth: '100%',
-              margin: '0 auto'
+              margin: '0 auto',
+              cursor: canvasCursor
             }}
             whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
-            onMouseDown={handleMouseDown}
+            onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
+            onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleMouseLeave}
+            onClick={handleCanvasClick}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            onClick={props.editMode ? exportUltraHDPDF : undefined}
           />
+          {images.length >= 3 && props.editMode && (
+            <div className="absolute top-2 left-2 z-50">
+              <label className="bg-green-500 text-white px-3 py-1 rounded cursor-pointer shadow">
+                + Add Sticker
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleStickerUpload} />
+              </label>
+            </div>
+          )}
         </>
       )}
     </div>

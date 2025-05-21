@@ -2307,6 +2307,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
     });
   };
 
+  const [showPreview, setShowPreview] = useState(false); // Add after other useState hooks
+
   return (
     <div className="relative journal-form-container">
       {/* Black background instead of video */}
@@ -2399,9 +2401,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       {images.length < 3 && (
                         <div className="space-y-4">
                           <div 
-                            className="border-2 border-dashed border-white/20 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-white/40 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40"
+                            className="border-2 border-dashed border-white/20 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-white/40 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40 relative"
                             onClick={() => fileInputRef.current?.click()}
                           >
+                            {isLoadingImage && (
+                              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+                                <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+                              </div>
+                            )}
                             <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                             </svg>
@@ -2497,33 +2504,104 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     />
                   
                     <div className="space-y-3">
-                      <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        <span>Journal Entry</span>
-                      </label>
-                      
-                      <textarea
-                        id="journalText"
-                        value={journalText}
-                        onChange={(e) => setJournalText(e.target.value)}
-                        placeholder="Write your journal entry here..."
-                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-3xl"
-                        required
-                      />
-                      
-                      {/* Add Journal Enhancer Component */}
-                      {journalText.trim().length > 0 && (
-                        <JournalEnhancer
-                          journalText={journalText}
-                          location={location}
-                          minWordCount={20}
-                          showInitially={false}
+                      {/* Mobile Toggle Buttons */}
+                      <div className="flex md:hidden justify-center gap-2 mb-4">
+                        <button
+                          type="button"
+                          className={`px-4 py-2 rounded-lg text-lg font-semibold transition-colors duration-200 ${!showPreview ? 'bg-blue-600 text-white' : 'bg-white/10 text-white border border-white/20'}`}
+                          onClick={() => setShowPreview(false)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-4 py-2 rounded-lg text-lg font-semibold transition-colors duration-200 ${showPreview ? 'bg-blue-600 text-white' : 'bg-white/10 text-white border border-white/20'}`}
+                          onClick={() => setShowPreview(true)}
+                        >
+                          Preview
+                        </button>
+                      </div>
+                      {/* Journal Entry/Preview - Mobile: toggled, Desktop: always both */}
+                      <div className="block md:hidden">
+                        {!showPreview ? (
+                          <>
+                            <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
+                              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                              </svg>
+                              <span>Journal Entry</span>
+                            </label>
+                            <textarea
+                              id="journalText"
+                              value={journalText}
+                              onChange={(e) => setJournalText(e.target.value)}
+                              placeholder="Write your journal entry here..."
+                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-3xl"
+                              required
+                            />
+                            {journalText.trim().length > 0 && (
+                              <JournalEnhancer
+                                journalText={journalText}
+                                location={location}
+                                minWordCount={20}
+                                showInitially={false}
+                              />
+                            )}
+                            <p className="text-xs text-gray-300">Use double line breaks to create new paragraphs.</p>
+                          </>
+                        ) : (
+                          <div className="bg-black rounded-2xl shadow-xl border border-white/20 overflow-hidden h-fit mt-2">
+                            <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                              <h3 className="text-xl font-semibold text-white">Journal Preview</h3>
+                              <div className="text-sm text-gray-300">Updates as you type</div>
+                            </div>
+                            <div className="p-4">
+                              <div className="relative bg-[#1a1a1a]/70 rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
+                                <JournalCanvas
+                                  date={date}
+                                  location={location}
+                                  textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
+                                  images={images}
+                                  onNewEntry={handleReset}
+                                  templateUrl={templateUrl}
+                                  textColors={textColors}
+                                  layoutMode={layoutMode}
+                                  editMode={true}
+                                  onTextClick={() => {}}
+                                  onImageDrag={() => {}}
+                                  onImageClick={() => {}}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Desktop: keep original layout (handled elsewhere) */}
+                      <div className="hidden md:block">
+                        <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
+                          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                          </svg>
+                          <span>Journal Entry</span>
+                        </label>
+                        <textarea
+                          id="journalText"
+                          value={journalText}
+                          onChange={(e) => setJournalText(e.target.value)}
+                          placeholder="Write your journal entry here..."
+                          className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-3xl"
+                          required
                         />
-                      )}
-                      
-                      <p className="text-xs text-gray-300">Use double line breaks to create new paragraphs.</p>
+                        {journalText.trim().length > 0 && (
+                          <JournalEnhancer
+                            journalText={journalText}
+                            location={location}
+                            minWordCount={20}
+                            showInitially={false}
+                          />
+                        )}
+                        <p className="text-xs text-gray-300">Use double line breaks to create new paragraphs.</p>
+                      </div>
                     </div>
                   </div>
                   
@@ -2573,7 +2651,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   templateUrl={templateUrl}
                   textColors={textColors}
                   layoutMode={layoutMode}
-                  editMode={false}
+                  editMode={true}
                   onTextClick={() => {}}
                   onImageDrag={() => {}}
                   onImageClick={() => {}}
