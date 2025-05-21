@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import JournalCanvas, { ClickableTextArea } from './JournalCanvas';
+import JournalCanvas, { ClickableTextArea, JournalCanvasHandle } from './JournalCanvas';
 import SimpleColorPicker, { TextColors } from './TempColorPicker';
 import LayoutToggle from './LayoutToggle';
 // @ts-ignore
@@ -743,6 +743,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
   const textSectionRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  // Use proper type for canvasRef to ensure method exists
+  const canvasRef = useRef<JournalCanvasHandle>(null);
 
   // Focus the appropriate input when editing starts
   useEffect(() => {
@@ -2309,6 +2311,39 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   const [showPreview, setShowPreview] = useState(false); // Add after other useState hooks
 
+  // 2. Handle sticker upload
+  const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    // Process all selected files
+    const fileArray = Array.from(files);
+    console.log(`Processing ${fileArray.length} stickers...`);
+    
+    if (canvasRef.current) {
+      try {
+        // Pass all files to canvas component
+        console.log("Canvas ref exists, adding stickers...");
+        canvasRef.current.addMultipleStickers(fileArray);
+      } catch (error) {
+        console.error("Error adding stickers:", error);
+        // Try accessing method differently as fallback
+        // @ts-ignore - Force call for debugging
+        if (typeof canvasRef.current.addMultipleStickers === 'function') {
+          console.log("Method exists but failed, trying direct call");
+          canvasRef.current.addMultipleStickers(fileArray);
+        } else {
+          console.error("Method doesn't exist on ref:", canvasRef.current);
+        }
+      }
+    } else {
+      console.error("Canvas ref is null - can't add stickers");
+    }
+    
+    // Reset the input value so the same file can be selected again
+    e.target.value = '';
+  };
+
   return (
     <div className="relative journal-form-container">
       {/* Black background instead of video */}
@@ -2398,6 +2433,24 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         <span>Images ({images.length}/3)</span>
                       </label>
                       
+                      {/* Add Sticker button */}
+                      <div className="flex items-center space-x-4 mb-4">
+                        {/* Only show sticker button when we have images */}
+                        {images.length > 0 && (
+                          <label className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded cursor-pointer transition-colors shadow-lg">
+                            Add Stickers
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleStickerUpload}
+                              className="hidden"
+                              multiple
+                            />
+                          </label>
+                        )}
+                      </div>
+                      
+                      {/* Image upload area - only show when we have fewer than 3 images */}
                       {images.length < 3 && (
                         <div className="space-y-4">
                           <div 
@@ -2447,38 +2500,39 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           )}
                         </div>
                       )}
-                      
-                      {images.length > 0 && (
-                        <motion.div 
-                          className="grid grid-cols-3 gap-2 mt-2"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3 }}
-                        >
-                          {images.map((image, index) => (
-                            <div 
-                              key={index} 
-                              className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
-                            >
-                              <img 
-                                src={image} 
-                                alt={`Upload ${index + 1}`} 
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index)}
-                                className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                        </motion.div>
-                      )}
                     </div>
+
+                    {/* Image grid - show for ANY number of images */}
+                    {images.length > 0 && (
+                      <motion.div 
+                        className="grid grid-cols-3 gap-2 mt-2"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {images.map((image, index) => (
+                          <div 
+                            key={index} 
+                            className="relative group overflow-hidden rounded-lg shadow-md border border-[#d1cdc0] aspect-square bg-white"
+                          >
+                            <img 
+                              src={image} 
+                              alt={`Upload ${index + 1}`} 
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm text-[#1a1a1a] opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#1a1a1a] hover:text-white sm:opacity-80"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
 
                     {/* Color Picker */}
                     <div className="space-y-3">
@@ -2555,23 +2609,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               <h3 className="text-xl font-semibold text-white">Journal Preview</h3>
                               <div className="text-sm text-gray-300">Updates as you type</div>
                             </div>
-                            <div className="p-4">
-                              <div className="relative bg-[#1a1a1a]/70 rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
-                                <JournalCanvas
-                                  date={date}
-                                  location={location}
-                                  textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
-                                  images={images}
-                                  onNewEntry={handleReset}
-                                  templateUrl={templateUrl}
-                                  textColors={textColors}
-                                  layoutMode={layoutMode}
-                                  editMode={true}
-                                  onTextClick={() => {}}
-                                  onImageDrag={() => {}}
-                                  onImageClick={() => {}}
-                                />
-                              </div>
+                            <div className="p-4 flex justify-center items-center">
+                              <p className="text-white">View desktop version to see preview</p>
                             </div>
                           </div>
                         )}
@@ -2643,6 +2682,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
             <div className="p-4">
                 <div className="relative bg-[#1a1a1a]/70 rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
                 <JournalCanvas
+                  ref={canvasRef}
                   date={date}
                   location={location}
                   textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
@@ -2652,9 +2692,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   textColors={textColors}
                   layoutMode={layoutMode}
                   editMode={true}
-                  onTextClick={() => {}}
-                  onImageDrag={() => {}}
-                  onImageClick={() => {}}
+                  onTextClick={handleTextClick}
+                  onImageDrag={(index, x, y) => {
+                    // Handle image dragging
+                    console.log(`Image ${index} dragged to ${x},${y}`);
+                  }}
+                  onImageClick={handleCanvasImageClick}
                 />
               </div>
             </div>
@@ -2756,22 +2799,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
           <div className="p-4">
                 <div className="relative bg-[#1a1a1a]/70 rounded-xl overflow-hidden shadow-lg" ref={journalRef} id="journal-container">
               <JournalCanvas
-                date={submitted ? submittedData.date : date}
-                location={submitted ? submittedData.location : location}
-                textSections={submitted ? submittedData.text : journalText.split('\n\n').filter(section => section.trim().length > 0)}
-                images={submitted ? submittedData.images : images}
+                ref={canvasRef}
+                date={submittedData.date}
+                location={submittedData.location}
+                textSections={submittedData.text}
+                images={submittedData.images}
                 onNewEntry={handleReset}
-                templateUrl={templateUrl}
-                textColors={submitted ? submittedData.textColors : textColors}
-                layoutMode={submitted ? submittedData.layoutMode : layoutMode}
-                editMode={submitted}
-                onTextClick={handleTextClick}
-                onImageDrag={(index, x, y) => {
-                  // Handle image dragging
-                  console.log(`Image ${index} dragged to ${x},${y}`);
-                }}
-                onImageClick={handleCanvasImageClick}
-                forceUpdate={submitted ? submittedData.forceUpdate : undefined}
+                textColors={submittedData.textColors}
+                layoutMode={submittedData.layoutMode}
+                editMode={false}
+                forceUpdate={submittedData.forceUpdate}
               />
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { TextColors } from './ColorPicker';
 import html2canvas from 'html2canvas';
@@ -52,6 +52,17 @@ interface StickerImage {
   imageObj?: HTMLImageElement; // for caching loaded image
 }
 
+// Add this interface for drag and pinch operations
+interface StickerDragData {
+  x: number;
+  y: number;
+  initialPinchDistance?: number;
+  initialWidth?: number;
+  initialHeight?: number;
+  initialTouchAngle?: number;
+  initialRotation?: number;
+}
+
 interface JournalCanvasProps {
   date: Date;
   location: string;
@@ -66,6 +77,7 @@ interface JournalCanvasProps {
   onImageDrag?: (index: number, x: number, y: number) => void; // Callback when image is dragged
   onImageClick?: (x: number, y: number) => void; // Callback when image is clicked for eyedropper
   forceUpdate?: number; // Add timestamp to force updates
+  onAddSticker?: (e: React.ChangeEvent<HTMLInputElement>) => void; // Add callback for sticker button
   template?: {
     name: string;
     backgroundColor: string;
@@ -82,6 +94,12 @@ interface JournalCanvasProps {
     showLocation: boolean;
     dateFormat: string;
   };
+}
+
+// Export the imperative handle type
+export interface JournalCanvasHandle {
+  addSticker: (file: File, width?: number, height?: number) => void;
+  addMultipleStickers: (files: File[]) => void;
 }
 
 // Helper function to adjust color brightness 
@@ -129,7 +147,8 @@ const SF_SYMBOLS_PATHS = {
   }
 };
 
-const JournalCanvas: React.FC<JournalCanvasProps> = ({
+// Change to use forwardRef
+const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   date,
   location,
   textSections,
@@ -141,6 +160,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     locationShadowColor: '#AED6F1'
   },
   layoutMode = 'standard', // Default to standard layout
+  onAddSticker,
   template = {
     name: 'Default',
     backgroundColor: '#111111', // Dark background
@@ -158,7 +178,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     dateFormat: 'MMMM DD, YYYY'
   },
   ...props
-}) => {
+}, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -175,7 +195,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   const [renderCount, setRenderCount] = useState(0);
   const [stickers, setStickers] = useState<StickerImage[]>([]);
   const [activeSticker, setActiveSticker] = useState<number | null>(null);
-  const [stickerDragOffset, setStickerDragOffset] = useState<{x: number, y: number} | null>(null);
+  const [stickerDragOffset, setStickerDragOffset] = useState<StickerDragData | null>(null);
   const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
   const [canvasCursor, setCanvasCursor] = useState<string>('default');
   const [isDragging, setIsDragging] = useState(false);
@@ -189,6 +209,9 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     rotateBtn: null,
     resizeBtn: null
   });
+  const [hoveredButton, setHoveredButton] = useState<'delete' | 'rotate' | 'resize' | null>(null);
+  const [debounceRender, setDebounceRender] = useState(0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Function to trigger a re-render when needed
   const renderJournal = useCallback(() => {
@@ -459,11 +482,22 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     }
   };
 
-  // Draw the canvas with all elements
+  // Use debounce to limit renders
+  const debouncedRender = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setDebounceRender(prev => prev + 1);
+    }, 16); // ~60fps
+  }, []);
+
+  // Draw the canvas with all elements - optimized with useMemo for heavy calculation 
   useEffect(() => {
     if (!canvasRef.current) return;
     if (isLoading) return; // Don't draw while loading
     
+    const renderCanvas = () => {
     // Check for global flag to force redraw
     if (window.FORCE_CANVAS_REDRAW) {
       console.log('Forced redraw triggered with colors:', window.CURRENT_COLORS);
@@ -475,6 +509,8 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     console.log('Force update timestamp:', props.forceUpdate);
     
     const canvas = canvasRef.current;
+      if (!canvas) return;
+      
     const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
     if (!ctx) return;
     
@@ -951,75 +987,135 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
 
       // Draw stickers after main content
       if (stickers.length > 0) {
-        stickers.forEach((sticker, i) => {
+          console.log(`Rendering ${stickers.length} stickers`);
+          
+          // Sort stickers by z-index for proper layering
+          const sortedStickers = [...stickers].sort((a, b) => a.zIndex - b.zIndex);
+          
+          sortedStickers.forEach((sticker, i) => {
           let img = sticker.imageObj;
+            
+            // If image is not loaded yet, load it
           if (!img && sticker.src) {
             img = new window.Image();
             if (typeof sticker.src === 'string') img.src = sticker.src;
             else img.src = URL.createObjectURL(sticker.src);
-            sticker.imageObj = img;
-          }
+              
+              // Store image object for future renders
+              const updatedStickers = [...stickers];
+              updatedStickers[stickers.findIndex(s => s === sticker)].imageObj = img;
+              setStickers(updatedStickers);
+            }
+            
           if (img && img.complete) {
             ctx.save();
             ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
             ctx.rotate((sticker.rotation * Math.PI) / 180);
             ctx.drawImage(img, -sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+              
             // Draw border if selected
-            if (activeSticker === i) {
-              // Dashed blue border
-              ctx.save();
-              ctx.setLineDash([8, 6]);
-              ctx.strokeStyle = '#2563eb'; // blue-600
+              if (activeSticker !== null && stickers[activeSticker] === sticker) {
+                // Dashed blue border
+                ctx.save();
+                ctx.setLineDash([8, 6]);
+                ctx.strokeStyle = '#2563eb'; // blue-600
               ctx.lineWidth = 3;
               ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
-              ctx.setLineDash([]);
-              ctx.restore();
+                ctx.setLineDash([]);
+                ctx.restore();
 
-              const btnRadius = 22;
-              // Delete (red, white X) - top-left
-              drawSFSymbolButton(ctx, -sticker.width/2 - 16, -sticker.height/2 - 16, '#ef4444', 'delete', btnRadius);
-              // Rotate (blue, white arrow) - top-center
-              drawSFSymbolButton(ctx, 0, -sticker.height/2 - 38, '#2563eb', 'rotate', btnRadius);
-              // Resize (blue, white diagonal) - bottom-right
-              drawSFSymbolButton(ctx, sticker.width/2 + 16, sticker.height/2 + 16, '#2563eb', 'resize', btnRadius);
+                const btnRadius = 22;
+                // Delete (red, white X) - top-left
+                drawSFSymbolButton(
+                  ctx, 
+                  -sticker.width/2 - 16, 
+                  -sticker.height/2 - 16, 
+                  '#ef4444', 
+                  'delete', 
+                  btnRadius,
+                  hoveredButton === 'delete'
+                );
+                // Rotate (blue, white arrow) - top-center
+                drawSFSymbolButton(
+                  ctx, 
+                  0, 
+                  -sticker.height/2 - 38, 
+                  '#2563eb', 
+                  'rotate', 
+                  btnRadius,
+                  hoveredButton === 'rotate'
+                );
+                // Resize (blue, white diagonal) - bottom-right
+                drawSFSymbolButton(
+                  ctx, 
+                  sticker.width/2 + 16, 
+                  sticker.height/2 + 16, 
+                  '#2563eb', 
+                  'resize', 
+                  btnRadius,
+                  hoveredButton === 'resize'
+                );
             }
             ctx.restore();
           }
         });
       }
 
-      // After drawing stickers, store button positions for hit detection
-      if (activeSticker !== null && stickers[activeSticker]) {
-        const sticker = stickers[activeSticker];
-        const btnRadius = 22;
-        
-        // Store button positions in global state for click handling
-        setStickerButtonsData({
-          deleteBtn: {
-            x: sticker.x - sticker.width/2 - 16,
-            y: sticker.y - sticker.height/2 - 16
-          },
-          rotateBtn: {
-            x: sticker.x,
-            y: sticker.y - sticker.height/2 - 38
-          },
-          resizeBtn: {
-            x: sticker.x + sticker.width/2 + 16,
-            y: sticker.y + sticker.height/2 + 16
-          }
-        });
-      } else {
-        // Reset button positions if no active sticker
-        setStickerButtonsData({
-          deleteBtn: null,
-          rotateBtn: null,
-          resizeBtn: null
-        });
-      }
+        // After drawing stickers, store button positions for hit detection
+        if (activeSticker !== null && stickers[activeSticker]) {
+          const sticker = stickers[activeSticker];
+          const centerX = sticker.x + sticker.width/2;
+          const centerY = sticker.y + sticker.height/2;
+          const angle = sticker.rotation * Math.PI / 180;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          
+          // Calculate rotation-adjusted button positions
+          const deleteOffsetX = -sticker.width/2 - 16;
+          const deleteOffsetY = -sticker.height/2 - 16;
+          const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
+          const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
+          
+          const rotateOffsetX = 0;
+          const rotateOffsetY = -sticker.height/2 - 38;
+          const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
+          const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
+          
+          const resizeOffsetX = sticker.width/2 + 16;
+          const resizeOffsetY = sticker.height/2 + 16;
+          const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
+          const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
+          
+          // Store button positions in global state for click handling
+          setStickerButtonsData({
+            deleteBtn: {
+              x: deleteBtnX,
+              y: deleteBtnY
+            },
+            rotateBtn: {
+              x: rotateBtnX,
+              y: rotateBtnY
+            },
+            resizeBtn: {
+              x: resizeBtnX,
+              y: resizeBtnY
+            }
+          });
+        } else {
+          // Reset button positions if no active sticker
+          setStickerButtonsData({
+            deleteBtn: null,
+            rotateBtn: null,
+            resizeBtn: null
+          });
+        }
     } catch (error) {
       console.error("Error drawing canvas:", error);
     }
-  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction]);
+    };
+    
+    renderCanvas();
+  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender]);
 
   // Replace both export functions with a single ultra-high-quality export
   const exportUltraHDPDF = () => {
@@ -1196,22 +1292,16 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
+    console.log("Canvas clicked at:", mouseX, mouseY);
+
     // First check for button clicks if a sticker is active
-    if (activeSticker !== null) {
-      const sticker = stickers[activeSticker];
+    if (activeSticker !== null && stickerButtonsData.deleteBtn) {
+      const deleteBtn = stickerButtonsData.deleteBtn;
       const btnRadius = 22;
       
-      // Transform canvas coordinates to get actual button positions
-      // Delete button (top-left)
-      const deleteBtn = {
-        x: sticker.x + (-sticker.width/2 - 16) * Math.cos(sticker.rotation * Math.PI / 180) - 
-           (-sticker.height/2 - 16) * Math.sin(sticker.rotation * Math.PI / 180),
-        y: sticker.y + (-sticker.width/2 - 16) * Math.sin(sticker.rotation * Math.PI / 180) + 
-           (-sticker.height/2 - 16) * Math.cos(sticker.rotation * Math.PI / 180)
-      };
-      
-      // Check if delete button was clicked
-      if (Math.sqrt((mouseX - deleteBtn.x) ** 2 + (mouseY - deleteBtn.y) ** 2) <= btnRadius) {
+      // Check if delete button was clicked (with larger hit area)
+      if (Math.sqrt((mouseX - deleteBtn.x) ** 2 + (mouseY - deleteBtn.y) ** 2) <= btnRadius * 1.5) {
+        console.log("Deleting sticker:", activeSticker);
         // Delete this sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         setStickers(newStickers);
@@ -1219,30 +1309,41 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         renderJournal();
         return;
       }
-      
-      // Add similar checks for rotate and resize buttons if needed
     }
 
-    // Check if clicked on a sticker
+    // Check if clicked on a sticker - using generous hit area
+    // Process stickers from top to bottom (highest z-index first)
+    const sortedStickerIndices = stickers
+      .map((sticker, index) => ({ index, zIndex: sticker.zIndex }))
+      .sort((a, b) => b.zIndex - a.zIndex)
+      .map(item => item.index);
+
     let clickedOnSticker = false;
-    for (let i = stickers.length - 1; i >= 0; i--) {
-      const sticker = stickers[i];
-      const dx = mouseX - sticker.x;
-      const dy = mouseY - sticker.y;
-      const angle = -sticker.rotation * Math.PI / 180;
-      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
-      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+    for (const i of sortedStickerIndices) {
+        const sticker = stickers[i];
+      const centerX = sticker.x + sticker.width/2;
+      const centerY = sticker.y + sticker.height/2;
+      const dx = mouseX - centerX;
+      const dy = mouseY - centerY;
+        const angle = -sticker.rotation * Math.PI / 180;
+        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
       
-      // Check if click is inside sticker bounds
-      if (Math.abs(localX) < sticker.width/2 && Math.abs(localY) < sticker.height/2) {
-        setActiveSticker(i);
+      // Use a slightly larger hit area (10% buffer) for easier selection
+      const hitWidthHalf = sticker.width/2 * 1.1;
+      const hitHeightHalf = sticker.height/2 * 1.1;
+      
+      // Check if click is inside sticker bounds with buffer
+      if (Math.abs(localX) < hitWidthHalf && Math.abs(localY) < hitHeightHalf) {
+          setActiveSticker(i);
         clickedOnSticker = true;
-        // Bring to front
-        const maxZ = getMaxStickerZ();
-        if (sticker.zIndex < maxZ) {
-          const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
-          setStickers(newStickers);
-        }
+          // Bring to front
+          const maxZ = getMaxStickerZ();
+          if (sticker.zIndex < maxZ) {
+            const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
+            setStickers(newStickers);
+          }
+        console.log("Selected sticker:", i, "Total stickers:", stickers.length);
         break;
       }
     }
@@ -1263,36 +1364,26 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    // Check if we clicked on a sticker's control handles
+    // Check if we clicked on a sticker
     if (activeSticker !== null) {
       const sticker = stickers[activeSticker];
-      const dx = x - (sticker.x + sticker.width/2);
-      const dy = y - (sticker.y + sticker.height/2);
+      const centerX = sticker.x + sticker.width/2;
+      const centerY = sticker.y + sticker.height/2;
+      const dx = x - centerX;
+      const dy = y - centerY;
       const angle = -sticker.rotation * Math.PI / 180;
       const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
       const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
 
-      // Check resize handle (bottom right)
-      if (Math.abs(localX - sticker.width/2) < 15 && Math.abs(localY - sticker.height/2) < 15) {
-        setStickerAction('resize');
-        setStickerDragOffset({x: localX, y: localY});
-        return;
-      }
+      // If clicked inside sticker (with buffer), start dragging
+      const hitWidthHalf = sticker.width/2 * 1.1;
+      const hitHeightHalf = sticker.height/2 * 1.1;
       
-      // Check rotate handle (top center)
-      if (Math.abs(localX) < 15 && Math.abs(localY + sticker.height/2 + 20) < 15) {
-        setStickerAction('rotate');
-        setStickerDragOffset({x: localX, y: localY});
-        return;
-      }
-      
-      // If clicked inside sticker, start dragging
-      if (localX > -sticker.width/2 && localX < sticker.width/2 && 
-          localY > -sticker.height/2 && localY < sticker.height/2) {
-        setStickerAction('move');
-        setStickerDragOffset({x: localX, y: localY});
+      if (Math.abs(localX) < hitWidthHalf && Math.abs(localY) < hitHeightHalf) {
+          setStickerAction('move');
+          setStickerDragOffset({x: localX, y: localY});
         setIsDragging(true);
-        return;
+          return;
       }
     }
 
@@ -1300,44 +1391,98 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     // ... existing code for text areas and other interactions ...
   };
 
-  // Update handleMouseMove to handle dragging
+  // Update handleMouseMove to handle dragging and hover effects
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasRef.current.width / rect.width;
-    const scaleY = canvasRef.current.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    // Update cursor based on hover position
-    if (activeSticker !== null) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scaleX = canvasRef.current.width / rect.width;
+      const scaleY = canvasRef.current.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+    
+    // Check for button hover if we have an active sticker
+    if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const dx = x - (sticker.x + sticker.width/2);
-      const dy = y - (sticker.y + sticker.height/2);
-      const angle = -sticker.rotation * Math.PI / 180;
-      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
-      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-
-      // Set cursor based on position
-      if (Math.abs(localX - sticker.width/2) < 15 && Math.abs(localY - sticker.height/2) < 15) {
-        setCanvasCursor('nwse-resize');
-      } else if (Math.abs(localX) < 15 && Math.abs(localY + sticker.height/2 + 20) < 15) {
-        setCanvasCursor('grab');
-      } else if (localX > -sticker.width/2 && localX < sticker.width/2 && 
-                 localY > -sticker.height/2 && localY < sticker.height/2) {
-        setCanvasCursor(isDragging ? 'grabbing' : 'grab');
-      } else {
-        setCanvasCursor('default');
+      const btnRadius = 22;
+      const centerX = sticker.x + sticker.width/2;
+      const centerY = sticker.y + sticker.height/2;
+      
+      // Calculate rotation-adjusted button positions
+      const angle = sticker.rotation * Math.PI / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      
+      // Delete button position (top-left)
+      const deleteOffsetX = -sticker.width/2 - 16;
+      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
+      const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
+      
+      // Rotate button position (top-center)
+      const rotateOffsetX = 0;
+      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
+      const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
+      
+      // Resize button position (bottom-right)
+      const resizeOffsetX = sticker.width/2 + 16;
+      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
+      const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
+      
+      // Check if hovering over any button
+      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.5) {
+        if (hoveredButton !== 'delete') {
+          setHoveredButton('delete');
+          setCanvasCursor('pointer');
+          debouncedRender();
+        }
+      } else if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.5) {
+        if (hoveredButton !== 'rotate') {
+          setHoveredButton('rotate');
+          setCanvasCursor('pointer');
+          debouncedRender();
+        }
+      } else if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * 1.5) {
+        if (hoveredButton !== 'resize') {
+          setHoveredButton('resize');
+          setCanvasCursor('pointer');
+          debouncedRender();
+        }
+      } else if (hoveredButton !== null) {
+        setHoveredButton(null);
+        
+        // Set cursor based on position within sticker instead
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const localX = dx * Math.cos(-angle) - dy * Math.sin(-angle);
+        const localY = dx * Math.sin(-angle) + dy * Math.cos(-angle);
+        
+        // Set cursor based on position
+        if (Math.abs(localX - sticker.width/2) < 15 && Math.abs(localY - sticker.height/2) < 15) {
+          setCanvasCursor('nwse-resize');
+        } else if (Math.abs(localX) < 15 && Math.abs(localY + sticker.height/2 + 20) < 15) {
+          setCanvasCursor('grab');
+        } else if (localX > -sticker.width/2 && localX < sticker.width/2 && 
+                   localY > -sticker.height/2 && localY < sticker.height/2) {
+          setCanvasCursor(isDragging ? 'grabbing' : 'grab');
+        } else {
+          setCanvasCursor('default');
+        }
+        
+        debouncedRender();
       }
     }
-
+    
     // Handle sticker actions
     if (activeSticker !== null && stickerAction && stickerDragOffset) {
-      const sticker = stickers[activeSticker];
-      const dx = x - (sticker.x + sticker.width/2);
-      const dy = y - (sticker.y + sticker.height/2);
-      const angle = -sticker.rotation * Math.PI / 180;
+      const activeStickObj = stickers[activeSticker];
+      const centerX = activeStickObj.x + activeStickObj.width/2;
+      const centerY = activeStickObj.y + activeStickObj.height/2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const angle = -activeStickObj.rotation * Math.PI / 180;
       const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
       const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
       
@@ -1345,15 +1490,15 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       
       if (stickerAction === 'move') {
         newStickers[activeSticker] = {
-          ...sticker,
-          x: x - stickerDragOffset.x - sticker.width/2,
-          y: y - stickerDragOffset.y - sticker.height/2,
+          ...activeStickObj,
+          x: x - stickerDragOffset.x - activeStickObj.width/2,
+          y: y - stickerDragOffset.y - activeStickObj.height/2,
         };
       } else if (stickerAction === 'resize') {
-        let newWidth = localX - stickerDragOffset.x + sticker.width;
-        let newHeight = localY - stickerDragOffset.y + sticker.height;
+        let newWidth = localX - stickerDragOffset.x + activeStickObj.width;
+        let newHeight = localY - stickerDragOffset.y + activeStickObj.height;
         // Maintain aspect ratio
-        const aspect = sticker.width / sticker.height;
+        const aspect = activeStickObj.width / activeStickObj.height;
         if (Math.abs(newWidth / newHeight - aspect) > 0.01) {
           if (Math.abs(localX) > Math.abs(localY)) {
             newHeight = newWidth / aspect;
@@ -1364,16 +1509,16 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         newWidth = Math.max(30, newWidth);
         newHeight = Math.max(30, newHeight);
         newStickers[activeSticker] = {
-          ...sticker,
+          ...activeStickObj,
           width: newWidth,
           height: newHeight,
         };
       } else if (stickerAction === 'rotate') {
-        const centerX = sticker.x + sticker.width/2;
-        const centerY = sticker.y + sticker.height/2;
+        const centerX = activeStickObj.x + activeStickObj.width/2;
+        const centerY = activeStickObj.y + activeStickObj.height/2;
         const angleRad = Math.atan2(y - centerY, x - centerX);
         newStickers[activeSticker] = {
-          ...sticker,
+          ...activeStickObj,
           rotation: angleRad * 180 / Math.PI + 90,
         };
       }
@@ -1381,9 +1526,6 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
       setStickers(newStickers);
       renderJournal();
     }
-
-    // Handle other interactions
-    // ... existing code for other interactions ...
   };
 
   // Update handleMouseUp to handle dragging
@@ -1393,7 +1535,7 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     setIsDragging(false);
     setCanvasCursor('default');
   };
-
+  
   // Update handleMouseLeave to handle dragging
   const handleMouseLeave = () => {
     setStickerAction(null);
@@ -1432,16 +1574,14 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     };
   }, [forceRedraw]);
 
-  // 2. Sticker upload handler
-  const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // 2. Sticker upload handler - moved to external UI
+  const handleStickerFile = (file: File) => {
       const img = new window.Image();
       img.onload = () => {
-        // Calculate initial size to fit max 120px on the longest side
+      // Double the size - increase from 120px to 240px for the longest side
         let width = img.width;
         let height = img.height;
-        const maxDim = 120;
+      const maxDim = 240; // Doubled from 120px
         if (width > height) {
           if (width > maxDim) {
             height = Math.round(height * (maxDim / width));
@@ -1453,23 +1593,50 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             height = maxDim;
           }
         }
-        setStickers(prev => [
-          ...prev,
+      
+      // Ensure we're creating a new stickers array
+      setStickers(prevStickers => [
+        ...prevStickers,
           {
             src: file,
-            x: 200,
-            y: 100,
+          x: Math.random() * 400 + 200, // Random position
+          y: Math.random() * 400 + 200,
             width,
             height,
             rotation: 0,
-            zIndex: prev.length + 10,
+          zIndex: prevStickers.length + 10,
             imageObj: img,
           },
         ]);
+      
+      // Force a re-render
+      renderJournal();
       };
       img.src = URL.createObjectURL(file);
-    }
   };
+
+  // Expose the addSticker method via the forwarded ref
+  useImperativeHandle(ref, () => ({
+    addSticker: (file: File, width?: number, height?: number) => {
+      console.log("Adding sticker:", file.name);
+      try {
+        handleStickerFile(file);
+        return true;
+      } catch (err) {
+        console.error("Error adding sticker:", err);
+        return false;
+      }
+    },
+    addMultipleStickers: (files: File[]) => {
+      try {
+        addMultipleStickers(files);
+        return true;
+      } catch (err) {
+        console.error("Error adding multiple stickers:", err);
+        return false;
+      }
+    }
+  }));
 
   // Helper to draw GoodNotes-style control button
   function drawSFSymbolButton(
@@ -1478,32 +1645,39 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     y: number,
     color: string, // fill color
     icon: 'delete' | 'rotate' | 'resize',
-    btnRadius = 22
+    btnRadius = 22,
+    isHovered = false
   ) {
     if (!ctx) return;
     // Draw drop shadowed button
     ctx.save();
     ctx.beginPath();
     ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
-    ctx.shadowColor = 'rgba(0,0,0,0.18)';
-    ctx.shadowBlur = 6;
-    ctx.fillStyle = color;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    // Make button brighter if hovered
+    const btnColor = isHovered ? adjustColor(color, 20) : color;
+    ctx.fillStyle = btnColor;
     ctx.fill();
-    ctx.shadowBlur = 0;
+    
+    // Add white border
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#fff';
     ctx.stroke();
     ctx.restore();
 
     // Set icon size relative to button radius (70-80% of button)
-    const iconSize = btnRadius * 1.3;
+    const iconSize = btnRadius * (isHovered ? 1.4 : 1.3); // Slightly bigger when hovered
     
     // Draw the icon directly using canvas primitives for perfect control
     ctx.save();
     ctx.translate(x, y);
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = 4; // Much thicker lines
+    ctx.lineWidth = isHovered ? 5 : 4; // Thicker lines when hovered
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -1585,14 +1759,38 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
-    // Check for button clicks if button data is available
-    if (stickerButtonsData.deleteBtn) {
+    // Check for button clicks if we have an active sticker
+    if (activeSticker !== null && stickers[activeSticker]) {
+      const sticker = stickers[activeSticker];
       const btnRadius = 22;
-      const deleteBtn = stickerButtonsData.deleteBtn;
+      const centerX = sticker.x + sticker.width/2;
+      const centerY = sticker.y + sticker.height/2;
       
-      // Use a larger hit area for easier button clicking
-      const dist = Math.sqrt((x - deleteBtn.x) ** 2 + (y - deleteBtn.y) ** 2);
-      if (dist <= btnRadius * 1.2) { // 20% larger hit area
+      // Calculate rotation-adjusted button positions
+      const angle = sticker.rotation * Math.PI / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      
+      // Delete button position (top-left)
+      const deleteOffsetX = -sticker.width/2 - 16;
+      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
+      const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
+      
+      // Rotate button position (top-center)
+      const rotateOffsetX = 0;
+      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
+      const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
+      
+      // Resize button position (bottom-right)
+      const resizeOffsetX = sticker.width/2 + 16;
+      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
+      const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
+      
+      // Use a larger hit area for easier button clicking (1.5x radius)
+      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.5) {
         console.log("Delete button clicked!");
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
@@ -1600,6 +1798,22 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
         setActiveSticker(null);
         setButtonClickHandling(true); // Prevent other handlers from firing
         renderJournal();
+        return;
+      }
+      
+      // Handle rotate button click
+      if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.5) {
+        setStickerAction('rotate');
+        setStickerDragOffset({x: 0, y: 0});
+        setButtonClickHandling(true);
+        return;
+      }
+      
+      // Handle resize button click
+      if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * 1.5) {
+        setStickerAction('resize');
+        setStickerDragOffset({x: 0, y: 0});
+        setButtonClickHandling(true);
         return;
       }
     }
@@ -1614,6 +1828,412 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
   const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setButtonClickHandling(false);
     handleMouseUp();
+  };
+
+  // Touch event handlers for mobile devices
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    // Prevent scrolling when interacting with canvas
+    e.preventDefault();
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    // Store multi-touch initial state for rotation detection
+    if (e.touches.length === 2 && activeSticker !== null) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const touch1X = (touch1.clientX - rect.left) * scaleX;
+      const touch1Y = (touch1.clientY - rect.top) * scaleY;
+      const touch2X = (touch2.clientX - rect.left) * scaleX;
+      const touch2Y = (touch2.clientY - rect.top) * scaleY;
+      
+      // Calculate initial angle between two fingers
+      const initialAngle = Math.atan2(touch2Y - touch1Y, touch2X - touch1X);
+      
+      // Store active sticker initial rotation
+      const activeStickObj = stickers[activeSticker];
+      
+      // Set rotation mode
+      setStickerAction('rotate');
+      setStickerDragOffset({
+        x: 0,
+        y: 0,
+        initialTouchAngle: initialAngle,
+        initialRotation: activeStickObj.rotation
+      });
+      return;
+    }
+    
+    // Check for button touches if we have an active sticker
+    if (activeSticker !== null && stickers[activeSticker]) {
+      const sticker = stickers[activeSticker];
+      const btnRadius = 22;
+      const centerX = sticker.x + sticker.width/2;
+      const centerY = sticker.y + sticker.height/2;
+      
+      // Calculate rotation-adjusted button positions
+      const angle = sticker.rotation * Math.PI / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      
+      // Delete button position (top-left)
+      const deleteOffsetX = -sticker.width/2 - 16;
+      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
+      const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
+      
+      // Rotate button position (top-center)
+      const rotateOffsetX = 0;
+      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
+      const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
+      
+      // Resize button position (bottom-right)
+      const resizeOffsetX = sticker.width/2 + 16;
+      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
+      const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
+      
+      // Use a larger hit area for easier button clicking (1.8x radius for touch)
+      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.8) {
+        // Delete the active sticker
+        const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
+        setStickers(newStickers);
+        setActiveSticker(null);
+        setButtonClickHandling(true);
+        renderJournal();
+        return;
+      }
+      
+      // Handle rotate button touch
+      if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.8) {
+        setStickerAction('rotate');
+        setStickerDragOffset({x: 0, y: 0});
+        setButtonClickHandling(true);
+        return;
+      }
+      
+      // Handle resize button touch
+      if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * 1.8) {
+        setStickerAction('resize');
+        setStickerDragOffset({x: 0, y: 0});
+        setButtonClickHandling(true);
+        return;
+      }
+    }
+    
+    // If we're not handling button clicks, check if touch is on a sticker
+    if (!buttonClickHandling) {
+      // Check if touch is on any sticker - starting with highest z-index
+      const sortedStickerIndices = stickers
+        .map((sticker, index) => ({ index, zIndex: sticker.zIndex }))
+        .sort((a, b) => b.zIndex - a.zIndex)
+        .map(item => item.index);
+
+      let touchedOnSticker = false;
+      for (const i of sortedStickerIndices) {
+        const sticker = stickers[i];
+        const centerX = sticker.x + sticker.width/2;
+        const centerY = sticker.y + sticker.height/2;
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const angle = -sticker.rotation * Math.PI / 180;
+        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+        
+        // Use a slightly larger hit area (20% buffer) for touch
+        const hitWidthHalf = sticker.width/2 * 1.2;
+        const hitHeightHalf = sticker.height/2 * 1.2;
+        
+        if (Math.abs(localX) < hitWidthHalf && Math.abs(localY) < hitHeightHalf) {
+          setActiveSticker(i);
+          touchedOnSticker = true;
+          
+          // Bring to front
+          const maxZ = getMaxStickerZ();
+          if (sticker.zIndex < maxZ) {
+            const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
+            setStickers(newStickers);
+          }
+          
+          // Set up dragging
+          setStickerAction('move');
+          setStickerDragOffset({x: localX, y: localY});
+          setIsDragging(true);
+          break;
+        }
+      }
+      
+      if (!touchedOnSticker) {
+        setActiveSticker(null);
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    // Prevent scrolling when interacting with canvas
+    e.preventDefault();
+    
+    // Handle two-finger rotation
+    if (e.touches.length === 2 && 
+        activeSticker !== null && 
+        stickerAction === 'rotate' && 
+        stickerDragOffset?.initialTouchAngle !== undefined) {
+      
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scaleX = canvasRef.current.width / rect.width;
+      const scaleY = canvasRef.current.height / rect.height;
+      
+      // Convert touch positions to canvas coordinates
+      const touch1X = (touch1.clientX - rect.left) * scaleX;
+      const touch1Y = (touch1.clientY - rect.top) * scaleY;
+      const touch2X = (touch2.clientX - rect.left) * scaleX;
+      const touch2Y = (touch2.clientY - rect.top) * scaleY;
+      
+      // Calculate current angle between fingers
+      const currentAngle = Math.atan2(touch2Y - touch1Y, touch2X - touch1X);
+      
+      // Determine the angle change in radians
+      const angleDelta = currentAngle - stickerDragOffset.initialTouchAngle;
+      
+      // Convert to degrees and add to initial rotation
+      const newRotation = stickerDragOffset.initialRotation! + (angleDelta * 180 / Math.PI);
+      
+      // Update sticker rotation
+      const activeStickObj = stickers[activeSticker];
+      const newStickers = [...stickers];
+      newStickers[activeSticker] = {
+        ...activeStickObj,
+        rotation: newRotation
+      };
+      
+      setStickers(newStickers);
+      renderJournal();
+      return;
+    }
+    
+    // Handle pinch-to-zoom gesture for resizing stickers
+    if (e.touches.length === 2 && activeSticker !== null) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scaleX = canvasRef.current.width / rect.width;
+      const scaleY = canvasRef.current.height / rect.height;
+      
+      // Convert touch positions to canvas coordinates
+      const touch1X = (touch1.clientX - rect.left) * scaleX;
+      const touch1Y = (touch1.clientY - rect.top) * scaleY;
+      const touch2X = (touch2.clientX - rect.left) * scaleX;
+      const touch2Y = (touch2.clientY - rect.top) * scaleY;
+      
+      // Calculate the distance between the two touches
+      const currentDistance = Math.sqrt(
+        Math.pow(touch2X - touch1X, 2) + Math.pow(touch2Y - touch1Y, 2)
+      );
+      
+      // If this is the first move of a pinch gesture, store the initial distance
+      if (!stickerDragOffset || !stickerDragOffset.initialPinchDistance) {
+        const activeStickObj = stickers[activeSticker];
+        setStickerAction('resize');
+        setStickerDragOffset({
+          x: 0,
+          y: 0,
+          initialPinchDistance: currentDistance,
+          initialWidth: activeStickObj.width,
+          initialHeight: activeStickObj.height
+        });
+        return;
+      }
+      
+      // Get active sticker object
+      const activeStickObj = stickers[activeSticker];
+      
+      // Calculate scale factor based on the change in distance between touches
+      const pinchRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
+      const newWidth = (stickerDragOffset.initialWidth || activeStickObj.width) * pinchRatio;
+      const newHeight = (stickerDragOffset.initialHeight || activeStickObj.height) * pinchRatio;
+      const newStickers = [...stickers];
+      newStickers[activeSticker] = {
+        ...activeStickObj,
+        width: Math.max(30, newWidth),  // Minimum size
+        height: Math.max(30, newHeight)
+      };
+      
+      setStickers(newStickers);
+      renderJournal();
+      return;
+    }
+    
+    // Handle single touch for moving, rotating, etc.
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    // Handle sticker actions
+    if (activeSticker !== null && stickerAction && stickerDragOffset) {
+      const activeStickObj = stickers[activeSticker];
+      const centerX = activeStickObj.x + activeStickObj.width/2;
+      const centerY = activeStickObj.y + activeStickObj.height/2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const angle = -activeStickObj.rotation * Math.PI / 180;
+      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+      
+      let newStickers = [...stickers];
+      
+      if (stickerAction === 'move') {
+        newStickers[activeSticker] = {
+          ...activeStickObj,
+          x: x - stickerDragOffset.x - activeStickObj.width/2,
+          y: y - stickerDragOffset.y - activeStickObj.height/2,
+        };
+      } else if (stickerAction === 'resize') {
+        let newWidth = localX - stickerDragOffset.x + activeStickObj.width;
+        let newHeight = localY - stickerDragOffset.y + activeStickObj.height;
+        // Maintain aspect ratio
+        const aspect = activeStickObj.width / activeStickObj.height;
+        if (Math.abs(newWidth / newHeight - aspect) > 0.01) {
+          if (Math.abs(localX) > Math.abs(localY)) {
+            newHeight = newWidth / aspect;
+          } else {
+            newWidth = newHeight * aspect;
+          }
+        }
+        newWidth = Math.max(30, newWidth);
+        newHeight = Math.max(30, newHeight);
+        newStickers[activeSticker] = {
+          ...activeStickObj,
+          width: newWidth,
+          height: newHeight,
+        };
+      } else if (stickerAction === 'rotate') {
+        const centerX = activeStickObj.x + activeStickObj.width/2;
+        const centerY = activeStickObj.y + activeStickObj.height/2;
+        const angleRad = Math.atan2(y - centerY, x - centerX);
+        newStickers[activeSticker] = {
+          ...activeStickObj,
+          rotation: angleRad * 180 / Math.PI + 90,
+        };
+      }
+      
+      setStickers(newStickers);
+      renderJournal();
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setButtonClickHandling(false);
+    setStickerAction(null);
+    setStickerDragOffset(null);
+    setIsDragging(false);
+  };
+
+  // Clean up any timers
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Add a new function to handle multiple stickers
+  const addMultipleStickers = (files: File[]) => {
+    console.log(`Adding ${files.length} stickers at once`);
+    
+    // Calculate canvas dimensions for positioning
+    const canvasWidth = canvasRef.current?.width || 1240;
+    const canvasHeight = canvasRef.current?.height || 1748;
+    
+    // Process each file to add as a sticker
+    const promises = files.map((file, index) => {
+      return new Promise<StickerImage | null>((resolve) => {
+        const img = new window.Image();
+        
+        img.onload = () => {
+          // Double the size - increase from 120px to 240px for the longest side
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 240; // Doubled from 120px
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round(height * (maxDim / width));
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round(width * (maxDim / height));
+              height = maxDim;
+            }
+          }
+          
+          // Create a grid-like distribution with some randomness
+          // Use modulo to create rows and columns
+          const cols = Math.ceil(Math.sqrt(files.length));
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          
+          // Calculate base position in a grid
+          const baseX = (canvasWidth * 0.6) * (col / cols) + canvasWidth * 0.2;
+          const baseY = (canvasHeight * 0.6) * (row / cols) + canvasHeight * 0.2;
+          
+          // Add randomness to prevent perfect alignment
+          const jitterX = Math.random() * 100 - 50;
+          const jitterY = Math.random() * 100 - 50;
+          
+          resolve({
+            src: file,
+            x: baseX + jitterX,
+            y: baseY + jitterY,
+            width,
+            height,
+            rotation: 0, // No rotation when scattering stickers
+            zIndex: 100 + index, // Ensure proper stacking
+            imageObj: img,
+          });
+        };
+        
+        img.onerror = () => {
+          console.error("Failed to load sticker image:", file.name);
+          resolve(null);
+        };
+        
+        img.src = URL.createObjectURL(file);
+      });
+    });
+    
+    // Wait for all image loading to complete
+    Promise.all(promises).then((newStickers) => {
+      // Filter out any that failed to load
+      const validStickers = newStickers.filter((s): s is StickerImage => s !== null);
+      
+      if (validStickers.length > 0) {
+        // Add all new stickers to the canvas
+        setStickers(prev => [...prev, ...validStickers]);
+        
+        // Select the last added sticker
+        setTimeout(() => {
+          setActiveSticker(stickers.length + validStickers.length - 1);
+          renderJournal();
+        }, 100);
+      }
+    });
   };
 
   return (
@@ -1641,22 +2261,20 @@ const JournalCanvas: React.FC<JournalCanvasProps> = ({
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleMouseLeave}
             onClick={handleCanvasClick}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           />
-          {images.length >= 3 && props.editMode && (
-            <div className="absolute top-2 left-2 z-50">
-              <label className="bg-green-500 text-white px-3 py-1 rounded cursor-pointer shadow">
-                + Add Sticker
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleStickerUpload} />
-              </label>
-            </div>
-          )}
+          
+          {/* Add sticker button is now moved to parent component */}
         </>
       )}
     </div>
   );
-};
+});
 
 export default JournalCanvas; 
