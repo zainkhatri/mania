@@ -50,6 +50,8 @@ interface StickerImage {
   rotation: number; // degrees
   zIndex: number;
   imageObj?: HTMLImageElement; // for caching loaded image
+  originalWidth?: number; // store original width for high quality rendering
+  originalHeight?: number; // store original height for high quality rendering
 }
 
 // Add this interface for drag and pinch operations
@@ -433,7 +435,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     loadTemplateAndImages();
   }, [images, templateUrl, fontLoaded]);
 
-  // Helper to draw images preserving aspect ratio, border, rotation, and flipping
+  // Helper to draw images preserving aspect ratio, border, rotation, flipping, and quality
   const drawImagePreservingAspectRatio = (
     img: HTMLImageElement,
     x: number,
@@ -443,7 +445,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     addBorder = false,
     rotation = 0,
     flipH = false,
-    flipV = false
+    flipV = false,
+    enhancedQuality = false
   ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -451,9 +454,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     if (!ctx) return;
     
     try {
+      // Ensure high quality image rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Calculate aspect ratios to maintain proportions
       const imgAspect = img.width / img.height;
       const targetAspect = width / height;
       let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
+      
+      // Determine dimensions that preserve aspect ratio
       if (imgAspect > targetAspect) {
         drawWidth = width;
         drawHeight = width / imgAspect;
@@ -465,17 +475,54 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         drawX = x + (width - drawWidth) / 2;
         drawY = y;
       }
+      
       ctx.save();
+      
+      // Apply transformations (translate, rotate, scale)
       ctx.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
       if (rotation) ctx.rotate((rotation * Math.PI) / 180);
       ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      
       if (addBorder) {
         // Draw a subtle dark outline instead of white border
         ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
         ctx.strokeRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       }
-      ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      
+      // Use a two-step drawing process for better quality:
+      // 1. Draw to an intermediate canvas at full resolution
+      // 2. Draw the intermediate canvas to the final canvas
+      
+      // Create temporary canvas for higher quality rendering
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d', { 
+        alpha: true,
+        colorSpace: 'srgb',
+        desynchronized: false
+      });
+      
+      if (tempCtx) {
+        // High quality mode for main images
+      // Use larger canvas for better scaling
+      const scaleFactor = 1.5;
+      tempCanvas.width = Math.max(img.width * scaleFactor, drawWidth * 1.5);
+      tempCanvas.height = Math.max(img.height * scaleFactor, drawHeight * 1.5);
+      
+      // Apply maximum quality settings
+      tempCtx.imageSmoothingEnabled = true;
+      tempCtx.imageSmoothingQuality = 'high';
+      
+      // First draw image to temp canvas at larger size for better quality
+      tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+      
+      // Now draw from the temp canvas to the main canvas
+      ctx.drawImage(tempCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      } else {
+        // Fallback to direct drawing if tempCtx fails
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      }
+      
       ctx.restore();
     } catch (err) {
       console.error('Error drawing image:', err);
@@ -511,13 +558,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const canvas = canvasRef.current;
       if (!canvas) return;
       
-    const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
+          // Create an optimized rendering context
+    const ctx = canvas.getContext('2d', { 
+      alpha: true, 
+      willReadFrequently: false, // Disable for better performance
+      desynchronized: true, // Enable for better performance
+    });
     if (!ctx) return;
     
     try {
-      // Original canvas dimensions
-      canvas.width = 1240;
-      canvas.height = 1748;
+      // Use higher resolution for image quality
+      canvas.width = 3100; // 2.5x from 1240
+      canvas.height = 4370; // 2.5x from 1748
+      
+      // Enable quality rendering but without excessive filtering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Remove filters for better performance
       
       // Clear canvas and fill with template background color
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -530,33 +588,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
       }
       
-      // DEBUG: Draw red guide lines to show notebook lines (21 lines total)
-      const showGuideLines = false; // Set to false to hide the red guide lines
-      if (showGuideLines) {
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-        ctx.lineWidth = 5;
-        
-        // Configure the exact coordinates for the notebook lines
-        const notebookLines = [
-          283.2, 356.4, 428.6, 500.8, 575.0, 645.2, 719.4, 792, 865,
-          937.0, 1010, 1083.0, 1157.0, 1230.0, 1305.0, 1375.0, 1447.0, 1522.0, 1595.0, 1667.0, 1739.0
-        ];
-        
-        // Draw each line at its exact position
-        notebookLines.forEach(lineY => {
-          ctx.beginPath();
-          ctx.moveTo(20, lineY);
-          ctx.lineTo(canvas.width - 20, lineY);
-          ctx.stroke();
-        });
-      }
-      
       // Calculate dimensions to use full page height
-      const topMargin = 20;
-      const minSpacingBetweenElements = 10; // Keep better spacing
-      let currentYPosition = topMargin + 40; // Starting Y position for the date
-      const headerHeight = 180; // Slightly taller header area
-      const contentHeight = canvas.height - topMargin - headerHeight - 20; // Subtract top margin, headers, and bottom margin
+      const topMargin = 80; // Doubled from 20
+      const minSpacingBetweenElements = -40; // Doubled from 10
+      let currentYPosition = topMargin + 100; // Moved down to be closer to location
+      const headerHeight = 360; // Doubled from 180
+      const contentHeight = canvas.height - topMargin - headerHeight - 40; // Doubled bottom margin
       const rowHeight = contentHeight / 3; // Divide remaining space into 3 equal rows
       
       // Ensure the grid layout allows content to fill full width
@@ -573,35 +610,35 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Standard layout (original): Images on left, text on right
         gridLayout = [
           // Row 1 - Date spans full width (moved up further)
-          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 30 },
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 0 },
           // Row 2 - Location spans full width (moved closer to date)
-          { type: 'location', x: 10, y: currentYPosition + 10, width: fullWidth, height: 20 },
+          { type: 'location', x: -10, y: currentYPosition + 10, width: fullWidth, height: 0 },
           // Row 3 - Left image, right text
-          { type: 'image', x: 0, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          { type: 'image', x: 30, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           // Row 4 - Left text, right image
           { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 85, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 25, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
+          { type: 'image', x: textColumnWidth + 50, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
           // Row 5 - Third image with consistent margins
-          { type: 'image', x: 10, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight - 30 },
+          { type: 'image', x: 30, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 },
           { type: 'text', x: imageColumnWidth - 40, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: fullWidth - imageColumnWidth + 90, height: rowHeight + 100 }
         ];
       } else {
         // Mirrored layout: Text on left, images on right
         gridLayout = [
-          // Row 1 - Date spans full width (moved up further)
-          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 50 },
-          // Row 2 - Location spans full width (moved closer to date)
-          { type: 'location', x: 10, y: currentYPosition, width: fullWidth, height: 30 },
+          // Row 1 - Date spans full width
+          { type: 'date', x: 0, y: currentYPosition + 10, width: fullWidth, height: 0 },
+          // Row 2 - Location spans full width
+          { type: 'location', x: -10, y: currentYPosition + 10, width: fullWidth, height: 0 },
           // Row 3 - Left text, right image (mirroring Row 3 of Style 1)
           { type: 'text', x: -10, y: topMargin + headerHeight, width: textColumnWidth + 90, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + 25, width: imageColumnWidth - 20, height: rowHeight - 30 },
+          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
           // Row 4 - Left image, right text (mirroring Row 4 of Style 1)
-          { type: 'image', x: 0, y: topMargin + -30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 20, height: rowHeight - 40 },
-          { type: 'text', x: imageColumnWidth - 55, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 105, height: rowHeight },
+          { type: 'image', x: 30, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
+          { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 100, height: rowHeight },
           // Row 5 - Left text, right image (mirroring Row 5 of Style 1)
           { type: 'text', x: -10, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 90, height: rowHeight + 100 },
-          { type: 'image', x: textColumnWidth + 15, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 20, height: rowHeight - 30 }
+          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 }
         ];
       }
       
@@ -632,37 +669,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const maxDateFontSize = calculateOptimalFontSize(
             ctx, 
             dateText, 
-            dateCell.width - 20, // Reduced padding
-            "'TitleFont', sans-serif", // Use title font for date - reverting to original
-            60, // min
-            150 // max
+            dateCell.width - 40,
+            "'TitleFont', sans-serif",
+            120,
+            300
           );
           
           // Set font and color - always black for date text
           ctx.fontKerning = 'normal';
-          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`; // Reverting to original font
-          ctx.fillStyle = '#000000'; // Always black for the date
-          ctx.textAlign = 'left'; // Ensure text is left-aligned
+          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'left';
           
-          // Calculate metrics for the date text to determine its actual height
+          // Apply text enhancement techniques
+          if (ctx.shadowBlur !== undefined) {
+            ctx.shadowColor = 'rgba(0,0,0,0.01)';
+            ctx.shadowBlur = 0.5;
+            ctx.shadowOffsetX = 0.2;
+            ctx.shadowOffsetY = 0.2;
+          }
+          
+          // Calculate metrics for the date text
           const dateMetrics = ctx.measureText(dateText);
-          // For minimal spacing, we'll use just the descent part of the font 
-          // since we want the letters to be very close without overlapping
           let dateTextBaselineOffset;
           if (dateMetrics.fontBoundingBoxDescent) {
             dateTextBaselineOffset = dateMetrics.fontBoundingBoxDescent;
           } else {
-            // Fallback: estimate descent as 0.2x the font size
             dateTextBaselineOffset = maxDateFontSize * 0.2;
           }
           
-          // Draw the date text (moved up further)
-          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`; // Reverting to original font
+          // Draw the date text (moved down)
           ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 25);
           
           // Calculate the Y position for the location with minimal spacing
-          // Use the date baseline position + reduced spacing (moved higher)
-          currentYPosition = dateCell.y + dateTextBaselineOffset + minSpacingBetweenElements - 5; // Reduced by 5px
+          currentYPosition = dateCell.y + dateTextBaselineOffset + minSpacingBetweenElements + 15; // Increased spacing
           
           // Update the location cell's Y position
           const locationCell = gridLayout.find(cell => cell.type === 'location');
@@ -672,7 +712,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         } catch (err) {
           console.error('Error drawing date:', err);
           // Fallback position if date rendering fails
-          currentYPosition = topMargin + 100;
+          currentYPosition = topMargin + 280; // Keep consistent with new position
           
           // Update the location cell's Y position with fallback value
           const locationCell = gridLayout.find(cell => cell.type === 'location');
@@ -688,13 +728,19 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Get combined text from all sections
       const journalText = getCombinedText();
       
+      // Remove the red guide lines section and use these exact coordinates for text placement
+      const journalLineYCoords = [
+        700, 890, 1070, 1250, 1430, 1610, 1800, 1980, 2160, 2340, 
+        2520, 2700, 2880, 3060, 3240, 3440, 3620, 3800, 3990, 4160, 4330
+      ];
+
       // Draw continuous text that flows through all text boxes
       if (journalText) {
         try {
           // Calculate the optimal font size for text sections
-          const minFontSize = 14; // Slightly increased minimum font size
-          const maxFontSize = 70; // Increased from 60 to 70
-          const totalLines = 21; // Total available lines across all text areas
+          const minFontSize = 28; // Doubled from 14
+          const maxFontSize = 140; // Doubled from 70
+          const totalLines = 21; // Updated to match new line count
           const words = journalText.split(' ');
           
           // Use binary search to find the largest font size that fits
@@ -713,9 +759,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               ctx.font = testFontString;
               
               const smallestAreaWidth = Math.min(
-                textAreas[0].width - 80, // Increase padding
-                textAreas[1].width - 80, // Increase padding
-                textAreas[2].width - 80  // Increase padding
+                textAreas[0].width - 160,
+                textAreas[1].width - 160,
+                textAreas[2].width - 160
               );
               
               let lines = 0;
@@ -744,8 +790,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             }
           };
           
-          // First, calculate the optimal font size for our reference text (98 words)
-          // This will be our maximum allowable font size even for shorter texts
+          // Calculate optimal font size
           while (low <= high) {
             const mid = Math.floor((low + high) / 2);
             const lineCount = countReferenceLines(mid);
@@ -763,23 +808,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize += 1;
           }
           
-          // Adjust final font size for better readability (was 0.75, now 0.85 for larger text)
+          // Adjust final font size for better readability
           fontSize = Math.max(minFontSize, fontSize * 0.85);
-          
-          // Use the real text to do layout, but with the font size constrained by our reference calculation
-          // The font size is now fixed based on 98 words and reduced by 25%
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
-          const fontString = `${fontSize}px ZainCustomFont, Arial, sans-serif`; // Reverting to original font
+          const fontString = `${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           
-          // Use the same notebook line positions defined earlier
-          const notebookLines = [
-            283.2, 356.4, 428.6, 500.8, 575.0, 645.2, 719.4, 792, 865,
-            937.0, 1010, 1083.0, 1157.0, 1230.0, 1305.0, 1375.0, 1447.0, 1522.0, 1595.0, 1667.0, 1739.0
-          ];
+          // Reset any shadow settings before journal text
+          ctx.shadowColor = 'rgba(0,0,0,0)';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
           
           // Split text into words for layout
           let currentWord = 0;
@@ -787,14 +829,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Define line ranges for each text area to create the snake pattern
           const textAreaLineRanges = [
-            { startLine: 0, endLine: 6 },      // First 7 lines (0-6) in the first text area (right)
-            { startLine: 7, endLine: 13 },     // Next 7 lines (7-13) in the second text area (left)
-            { startLine: 14, endLine: 20 }     // Last 7 lines (14-20) in the third text area (right)
+            { startLine: 0, endLine: 6 },      // First 7 lines in the first text area
+            { startLine: 7, endLine: 13 },     // Next 7 lines in the second text area
+            { startLine: 14, endLine: 20 }     // Last 7 lines in the third text area
           ];
           
-          // Reorder text areas to match the snake pattern
-          // The original order is: top-right, middle-left, bottom-right
-          // Our desired snaking order is the same, so we keep the order
+          // Order text areas to match the snake pattern
           const orderedTextAreas = [
             textAreas[0], // First text area (right)
             textAreas[1], // Second text area (left)
@@ -804,8 +844,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Process each text area in the specific snake order
           for (let areaIndex = 0; areaIndex < orderedTextAreas.length && currentWord < words.length; areaIndex++) {
             const area = orderedTextAreas[areaIndex];
-            const areaX = area.x + 30; // Increase left padding for text
-            const areaWidth = area.width - 80; // Account for more padding to reduce squishing
+            const areaX = area.x + 60;
+            const areaWidth = area.width - 160;
             const lineRange = textAreaLineRanges[areaIndex];
             
             // Add this text area to clickable areas
@@ -824,9 +864,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             // Process only the specific range of lines for this text area
             for (let lineIndex = lineRange.startLine; lineIndex <= lineRange.endLine && currentWord < words.length; lineIndex++) {
-              // Adjust baseline offset based on font size
-              const baselineOffset = Math.max(5, fontSize / 6);
-              const currentY = notebookLines[lineIndex] - baselineOffset; // Adjust for text baseline
+              // Use the exact y-coordinate from our array
+              const currentY = journalLineYCoords[lineIndex];
               
               // Build the line by adding words until we reach the max width
               while (currentWord < words.length) {
@@ -838,7 +877,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   // Line is full, draw it and move to the next line
                   ctx.fillText(currentLine, areaX, currentY);
                   currentLine = '';
-                  break; // Move to next line
+                  break;
                 } else {
                   // Add word to current line and continue
                   currentLine = testLine;
@@ -867,7 +906,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const img = imageObjects[i];
           const position = imagePositions[i];
           
-          // Use the regular drawing function for all images now that the grid is correctly positioned
+          // Use the high-quality drawing function for all images with enhanced quality
           drawImagePreservingAspectRatio(
             img,
             position.x, 
@@ -898,14 +937,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Draw location LAST (after all other elements) to ensure it's on top of everything
       if (locationCell && location) {
         try {
-          // Find optimal font size for location
+          // Calculate the maximum font size that fits the location text across the full width
           const maxLocationFontSize = calculateOptimalFontSize(
             ctx, 
-            location, 
-            locationCell.width - 20, // Reduced padding
-            "'TitleFont', sans-serif", // Use title font for location
+            location.toUpperCase(), 
+            canvas.width - 80, // minimal padding (40px on each side)
+            "'TitleFont', sans-serif",
             60, // min
-            150 // max
+            600 // max, allow very large font
           );
           
           // Determine colors - use direct selection if provided, otherwise use default  
@@ -915,6 +954,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const locationShadowColor = window.FORCE_CANVAS_REDRAW 
             ? window.CURRENT_COLORS.locationShadowColor 
             : (textColors.locationShadowColor || '#AED6F1');
+              
+          // Reset any existing filters or shadow settings
+          ctx.filter = 'none';
+          ctx.shadowColor = 'rgba(0,0,0,0)';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
           
           // Log the color values for debugging
           console.log("Applying location colors:", {
@@ -925,8 +971,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
           ctx.textAlign = 'left'; // Ensure text is left-aligned
           
-          // For the location, we'll ensure it's drawn last (on top of everything)
-          // Draw title text on top of all other elements
+          // For the location, we'll ensure it's drawn last (on top of all other elements)
           ctx.save();
           
           // Calculate the text metrics for proper positioning
@@ -949,17 +994,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
           ctx.restore();
           
-          // Simplified shadow effect - just one shadow layer and main text (two colors total)
           // Shadow layer with customizable offsets
-          const shadowOffsetX = window.shadowOffsetX !== undefined ? window.shadowOffsetX : 5;
-          const shadowOffsetY = window.shadowOffsetY !== undefined ? window.shadowOffsetY : 8;
+          const shadowOffsetX = 25;
+          const shadowOffsetY = 25;
           
           ctx.fillStyle = locationShadowColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x + shadowOffsetX, yPosition + shadowOffsetY);
+          ctx.fillText(location.toUpperCase(), 40 + shadowOffsetX, yPosition + shadowOffsetY);
 
           // Main text
           ctx.fillStyle = locationColor;
-          ctx.fillText(location.toUpperCase(), locationCell.x, yPosition);
+          ctx.fillText(location.toUpperCase(), 40, yPosition);
           
           ctx.restore();
         } catch (err) {
@@ -993,13 +1037,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const sortedStickers = [...stickers].sort((a, b) => a.zIndex - b.zIndex);
           
           sortedStickers.forEach((sticker, i) => {
-          let img = sticker.imageObj;
+            let img = sticker.imageObj;
             
             // If image is not loaded yet, load it
-          if (!img && sticker.src) {
-            img = new window.Image();
-            if (typeof sticker.src === 'string') img.src = sticker.src;
-            else img.src = URL.createObjectURL(sticker.src);
+            if (!img && sticker.src) {
+              img = new window.Image();
+              img.crossOrigin = "anonymous";
+              img.decoding = 'sync'; // Synchronous decoding for best quality
+              
+              // Prevent browser from applying any quality reduction
+              if (typeof sticker.src === 'string') {
+                img.src = sticker.src;
+              } else {
+                // Create a high-quality object URL
+                const url = URL.createObjectURL(sticker.src);
+                img.src = url;
+              }
               
               // Store image object for future renders
               const updatedStickers = [...stickers];
@@ -1007,58 +1060,76 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               setStickers(updatedStickers);
             }
             
-          if (img && img.complete) {
-            ctx.save();
-            ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
-            ctx.rotate((sticker.rotation * Math.PI) / 180);
-            ctx.drawImage(img, -sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+            if (img && img.complete) {
+              ctx.save();
               
-            // Draw border if selected
+              // Move to sticker center and apply rotation
+              ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
+              ctx.rotate((sticker.rotation * Math.PI) / 180);
+              
+              // Force absolute highest quality rendering settings
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              
+              // Use original image dimensions for source rectangle
+              const sourceWidth = img.naturalWidth || img.width;
+              const sourceHeight = img.naturalHeight || img.height;
+              
+              // Draw the image at full resolution
+              ctx.drawImage(
+                img,
+                0, 0, sourceWidth, sourceHeight, // Source: Use full original dimensions
+                -sticker.width/2, -sticker.height/2, sticker.width, sticker.height // Destination
+              );
+              
+              // Draw border and controls if sticker is active
               if (activeSticker !== null && stickers[activeSticker] === sticker) {
                 // Dashed blue border
-                ctx.save();
-                ctx.setLineDash([8, 6]);
+                ctx.setLineDash([16, 12]); // Doubled from [8, 6]
                 ctx.strokeStyle = '#2563eb'; // blue-600
-              ctx.lineWidth = 3;
-              ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+                ctx.lineWidth = 6; // Doubled from 3
+                ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
                 ctx.setLineDash([]);
-                ctx.restore();
-
-                const btnRadius = 22;
+                
+                const btnRadius = 44; // Doubled from 22
+                
                 // Delete (red, white X) - top-left
                 drawSFSymbolButton(
                   ctx, 
-                  -sticker.width/2 - 16, 
-                  -sticker.height/2 - 16, 
+                  -sticker.width/2 - 32, // Doubled from 16
+                  -sticker.height/2 - 32, // Doubled from 16
                   '#ef4444', 
                   'delete', 
                   btnRadius,
                   hoveredButton === 'delete'
                 );
+                
                 // Rotate (blue, white arrow) - top-center
                 drawSFSymbolButton(
                   ctx, 
                   0, 
-                  -sticker.height/2 - 38, 
+                  -sticker.height/2 - 76, // Doubled from 38
                   '#2563eb', 
                   'rotate', 
                   btnRadius,
                   hoveredButton === 'rotate'
                 );
+                
                 // Resize (blue, white diagonal) - bottom-right
                 drawSFSymbolButton(
                   ctx, 
-                  sticker.width/2 + 16, 
-                  sticker.height/2 + 16, 
+                  sticker.width/2 + 32, // Doubled from 16
+                  sticker.height/2 + 32, // Doubled from 16
                   '#2563eb', 
                   'resize', 
                   btnRadius,
                   hoveredButton === 'resize'
                 );
+              }
+              
+              ctx.restore();
             }
-            ctx.restore();
-          }
-        });
+          });
       }
 
         // After drawing stickers, store button positions for hit detection
@@ -1136,9 +1207,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const journalCanvas = canvasRef.current;
     
     try {
-      // First create a high-resolution PNG snapshot
+      // Create a high quality PNG snapshot
       html2canvas(journalCanvas, {
-        scale: 20, // Extreme high-resolution (20x)
+        scale: 8, // Higher resolution for better image quality
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#f5f2e9',
@@ -1152,8 +1223,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         y: 0,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: journalCanvas.width * 4,
-        windowHeight: journalCanvas.height * 4
+        windowWidth: journalCanvas.width * 1.5,  // Higher scaling for better quality
+        windowHeight: journalCanvas.height * 1.5, // Higher scaling for better quality
+        onclone: (documentClone: Document) => {
+          const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
+          if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+            }
+          }
+        }
       }).then((canvas: HTMLCanvasElement) => {
         // Get PNG data at maximum quality
         const pngData = canvas.toDataURL('image/png', 1.0);
@@ -1404,7 +1485,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button hover if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 22;
+      const btnRadius = 44;
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -1414,20 +1495,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 16;
-      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
+      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 16;
-      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
+      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
@@ -1495,27 +1576,78 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           y: y - stickerDragOffset.y - activeStickObj.height/2,
         };
       } else if (stickerAction === 'resize') {
-        let newWidth = localX - stickerDragOffset.x + activeStickObj.width;
-        let newHeight = localY - stickerDragOffset.y + activeStickObj.height;
-        // Maintain aspect ratio
-        const aspect = activeStickObj.width / activeStickObj.height;
-        if (Math.abs(newWidth / newHeight - aspect) > 0.01) {
-          if (Math.abs(localX) > Math.abs(localY)) {
-            newHeight = newWidth / aspect;
+        // Get the current distance from cursor to sticker center
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Get the initial distance (or calculate it if first resize move)
+        if (!stickerDragOffset.initialWidth) {
+          // This is the first resize move, store initial values
+          setStickerDragOffset({
+            ...stickerDragOffset,
+            initialWidth: activeStickObj.width,
+            initialHeight: activeStickObj.height,
+            initialPinchDistance: currentDistance
+          });
+          return;
+        }
+        
+        // Calculate scale factor with gradual change to make it much smoother
+        const distanceRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
+        
+        // Apply very gentle scaling - use a more conservative approach
+        // Blend between current size and target size for smoother transitions
+        const blendFactor = 0.1; // Only move 10% toward the target size per frame
+        const targetScaleFactor = Math.sqrt(distanceRatio); // Sqrt for more linear feel
+        
+        // Gradually approach the target scale (prevents jumps and disappearing)
+        const currentScale = activeStickObj.width / stickerDragOffset.initialWidth!;
+        const newScale = currentScale * (1 - blendFactor) + targetScaleFactor * blendFactor;
+        
+        // Calculate new dimensions while preserving aspect ratio
+        let newWidth = stickerDragOffset.initialWidth! * newScale;
+        let newHeight = stickerDragOffset.initialHeight! * newScale;
+        
+        // Enforce minimum size (larger minimum to prevent disappearing)
+        const minSize = 100;
+        if (newWidth < minSize || newHeight < minSize) {
+          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+          if (aspectRatio > 1) {
+            newWidth = minSize;
+            newHeight = minSize / aspectRatio;
           } else {
-            newWidth = newHeight * aspect;
+            newHeight = minSize;
+            newWidth = minSize * aspectRatio;
           }
         }
-        newWidth = Math.max(30, newWidth);
-        newHeight = Math.max(30, newHeight);
+        
+        // Enforce maximum size to prevent stickers from becoming too large
+        const maxSize = Math.min(canvasRef.current.width, canvasRef.current.height) * 0.5;
+        if (newWidth > maxSize || newHeight > maxSize) {
+          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+          if (aspectRatio > 1) {
+            newWidth = maxSize;
+            newHeight = maxSize / aspectRatio;
+          } else {
+            newHeight = maxSize;
+            newWidth = maxSize * aspectRatio;
+          }
+        }
+        
+        // Calculate new position that keeps the sticker centered at the same point
+        // This is critical to prevent the sticker from moving during resize
+        const oldCenterX = activeStickObj.x + activeStickObj.width/2;
+        const oldCenterY = activeStickObj.y + activeStickObj.height/2;
+        const newX = oldCenterX - newWidth/2;
+        const newY = oldCenterY - newHeight/2;
+        
         newStickers[activeSticker] = {
           ...activeStickObj,
+          x: newX,
+          y: newY,
           width: newWidth,
           height: newHeight,
         };
       } else if (stickerAction === 'rotate') {
-        const centerX = activeStickObj.x + activeStickObj.width/2;
-        const centerY = activeStickObj.y + activeStickObj.height/2;
         const angleRad = Math.atan2(y - centerY, x - centerX);
         newStickers[activeSticker] = {
           ...activeStickObj,
@@ -1576,43 +1708,59 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
-      const img = new window.Image();
-      img.onload = () => {
-      // Double the size - increase from 120px to 240px for the longest side
-        let width = img.width;
-        let height = img.height;
-      const maxDim = 240; // Doubled from 120px
-        if (width > height) {
-          if (width > maxDim) {
-            height = Math.round(height * (maxDim / width));
-            width = maxDim;
-          }
-        } else {
-          if (height > maxDim) {
-            width = Math.round(width * (maxDim / height));
-            height = maxDim;
-          }
-        }
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    
+    img.onload = () => {
+      // Always use original dimensions at full resolution
+      const originalWidth = img.naturalWidth || img.width;
+      const originalHeight = img.naturalHeight || img.height;
       
-      // Ensure we're creating a new stickers array
+      // Store original dimensions but scale display size if needed
+      let displayWidth = originalWidth;
+      let displayHeight = originalHeight;
+      
+      // Only scale down the display size if the image is extremely large
+      const maxDisplayDimension = 2000;
+      if (displayWidth > maxDisplayDimension || displayHeight > maxDisplayDimension) {
+        const scale = maxDisplayDimension / Math.max(displayWidth, displayHeight);
+        displayWidth *= scale;
+        displayHeight *= scale;
+      }
+      
+      // Create a new sticker with both original and display dimensions
       setStickers(prevStickers => [
         ...prevStickers,
-          {
-            src: file,
-          x: Math.random() * 400 + 200, // Random position
+        {
+          src: file,
+          x: Math.random() * 400 + 200,
           y: Math.random() * 400 + 200,
-            width,
-            height,
-            rotation: 0,
+          width: displayWidth,
+          height: displayHeight,
+          rotation: 0,
           zIndex: prevStickers.length + 10,
-            imageObj: img,
-          },
-        ]);
+          imageObj: img,
+          originalWidth: originalWidth,  // Store original dimensions
+          originalHeight: originalHeight // Store original dimensions
+        },
+      ]);
       
-      // Force a re-render
+      // Force a re-render to show the high-quality sticker
       renderJournal();
-      };
-      img.src = URL.createObjectURL(file);
+    };
+    
+    // Use synchronous decoding for best quality
+    img.decoding = 'sync';
+    
+    // Create a revocable URL for the file
+    const url = URL.createObjectURL(file);
+    img.src = url;
+    
+    // Clean up the URL after loading
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      img.onload = null;
+    };
   };
 
   // Expose the addSticker method via the forwarded ref
@@ -1645,7 +1793,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     y: number,
     color: string, // fill color
     icon: 'delete' | 'rotate' | 'resize',
-    btnRadius = 22,
+    btnRadius = 44, // Doubled from 22
     isHovered = false
   ) {
     if (!ctx) return;
@@ -1654,9 +1802,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.beginPath();
     ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
+    ctx.shadowBlur = 16; // Doubled from 8
+    ctx.shadowOffsetX = 4; // Doubled from 2
+    ctx.shadowOffsetY = 4; // Doubled from 2
     
     // Make button brighter if hovered
     const btnColor = isHovered ? adjustColor(color, 20) : color;
@@ -1664,7 +1812,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.fill();
     
     // Add white border
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 6; // Doubled from 3
     ctx.strokeStyle = '#fff';
     ctx.stroke();
     ctx.restore();
@@ -1677,7 +1825,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.translate(x, y);
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = isHovered ? 5 : 4; // Thicker lines when hovered
+    ctx.lineWidth = isHovered ? 10 : 8; // Doubled from 5/4
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -1762,7 +1910,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button clicks if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 22;
+      const btnRadius = 44; // Doubled from 22
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -1772,20 +1920,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 16;
-      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
+      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 16;
-      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
+      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
@@ -1873,7 +2021,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button touches if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 22;
+      const btnRadius = 44; // Doubled from 22
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -1883,20 +2031,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 16;
-      const deleteOffsetY = -sticker.height/2 - 16;
+      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
+      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 38;
+      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 16;
-      const resizeOffsetY = sticker.height/2 + 16;
+      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
+      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
@@ -2043,13 +2191,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         Math.pow(touch2X - touch1X, 2) + Math.pow(touch2Y - touch1Y, 2)
       );
       
+      // Also calculate the midpoint between touches to maintain position during resize
+      const midpointX = (touch1X + touch2X) / 2;
+      const midpointY = (touch1Y + touch2Y) / 2;
+      
       // If this is the first move of a pinch gesture, store the initial distance
       if (!stickerDragOffset || !stickerDragOffset.initialPinchDistance) {
         const activeStickObj = stickers[activeSticker];
+        
+        // Get sticker center position to maintain during resize
+        const centerX = activeStickObj.x + activeStickObj.width / 2;
+        const centerY = activeStickObj.y + activeStickObj.height / 2;
+        
         setStickerAction('resize');
         setStickerDragOffset({
-          x: 0,
-          y: 0,
+          x: centerX - midpointX, // Store offset between sticker center and touch midpoint
+          y: centerY - midpointY,
           initialPinchDistance: currentDistance,
           initialWidth: activeStickObj.width,
           initialHeight: activeStickObj.height
@@ -2060,15 +2217,61 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Get active sticker object
       const activeStickObj = stickers[activeSticker];
       
-      // Calculate scale factor based on the change in distance between touches
-      const pinchRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
-      const newWidth = (stickerDragOffset.initialWidth || activeStickObj.width) * pinchRatio;
-      const newHeight = (stickerDragOffset.initialHeight || activeStickObj.height) * pinchRatio;
+      // Calculate scale factor with gradual change to make it much smoother
+      const distanceRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
+      
+      // Apply very gentle scaling - use a more conservative approach
+      // Blend between current size and target size for smoother transitions
+      const blendFactor = 0.1; // Only move 10% toward the target size per frame
+      const targetScaleFactor = Math.sqrt(distanceRatio); // Sqrt for more linear feel
+      
+      // Gradually approach the target scale (prevents jumps and disappearing)
+      const currentScale = activeStickObj.width / stickerDragOffset.initialWidth!;
+      const newScale = currentScale * (1 - blendFactor) + targetScaleFactor * blendFactor;
+      
+      // Calculate new dimensions while preserving aspect ratio
+      let newWidth = stickerDragOffset.initialWidth! * newScale;
+      let newHeight = stickerDragOffset.initialHeight! * newScale;
+      
+      // Enforce minimum size (larger minimum to prevent disappearing)
+      const minSize = 100;
+      if (newWidth < minSize || newHeight < minSize) {
+        const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+        if (aspectRatio > 1) {
+          newWidth = minSize;
+          newHeight = minSize / aspectRatio;
+        } else {
+          newHeight = minSize;
+          newWidth = minSize * aspectRatio;
+        }
+      }
+      
+      // Enforce maximum size to prevent stickers from becoming too large
+      const maxSize = Math.min(canvasRef.current.width, canvasRef.current.height) * 0.5;
+      if (newWidth > maxSize || newHeight > maxSize) {
+        const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+        if (aspectRatio > 1) {
+          newWidth = maxSize;
+          newHeight = maxSize / aspectRatio;
+        } else {
+          newHeight = maxSize;
+          newWidth = maxSize * aspectRatio;
+        }
+      }
+      
+      // Calculate new position based on midpoint and stored offset to maintain position
+      // This is key to prevent stickers from "jumping" when resizing
+      const newX = midpointX + stickerDragOffset.x - newWidth/2;
+      const newY = midpointY + stickerDragOffset.y - newHeight/2;
+      
+      // Update sticker dimensions and position
       const newStickers = [...stickers];
       newStickers[activeSticker] = {
         ...activeStickObj,
-        width: Math.max(30, newWidth),  // Minimum size
-        height: Math.max(30, newHeight)
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
       };
       
       setStickers(newStickers);
@@ -2104,27 +2307,78 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           y: y - stickerDragOffset.y - activeStickObj.height/2,
         };
       } else if (stickerAction === 'resize') {
-        let newWidth = localX - stickerDragOffset.x + activeStickObj.width;
-        let newHeight = localY - stickerDragOffset.y + activeStickObj.height;
-        // Maintain aspect ratio
-        const aspect = activeStickObj.width / activeStickObj.height;
-        if (Math.abs(newWidth / newHeight - aspect) > 0.01) {
-          if (Math.abs(localX) > Math.abs(localY)) {
-            newHeight = newWidth / aspect;
+        // Get the current distance from cursor to sticker center
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Get the initial distance (or calculate it if first resize move)
+        if (!stickerDragOffset.initialWidth) {
+          // This is the first resize move, store initial values
+          setStickerDragOffset({
+            ...stickerDragOffset,
+            initialWidth: activeStickObj.width,
+            initialHeight: activeStickObj.height,
+            initialPinchDistance: currentDistance
+          });
+          return;
+        }
+        
+        // Calculate scale factor with gradual change to make it much smoother
+        const distanceRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
+        
+        // Apply very gentle scaling - use a more conservative approach
+        // Blend between current size and target size for smoother transitions
+        const blendFactor = 0.1; // Only move 10% toward the target size per frame
+        const targetScaleFactor = Math.sqrt(distanceRatio); // Sqrt for more linear feel
+        
+        // Gradually approach the target scale (prevents jumps and disappearing)
+        const currentScale = activeStickObj.width / stickerDragOffset.initialWidth!;
+        const newScale = currentScale * (1 - blendFactor) + targetScaleFactor * blendFactor;
+        
+        // Calculate new dimensions while preserving aspect ratio
+        let newWidth = stickerDragOffset.initialWidth! * newScale;
+        let newHeight = stickerDragOffset.initialHeight! * newScale;
+        
+        // Enforce minimum size (larger minimum to prevent disappearing)
+        const minSize = 100;
+        if (newWidth < minSize || newHeight < minSize) {
+          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+          if (aspectRatio > 1) {
+            newWidth = minSize;
+            newHeight = minSize / aspectRatio;
           } else {
-            newWidth = newHeight * aspect;
+            newHeight = minSize;
+            newWidth = minSize * aspectRatio;
           }
         }
-        newWidth = Math.max(30, newWidth);
-        newHeight = Math.max(30, newHeight);
+        
+        // Enforce maximum size to prevent stickers from becoming too large
+        const maxSize = Math.min(canvasRef.current.width, canvasRef.current.height) * 0.5;
+        if (newWidth > maxSize || newHeight > maxSize) {
+          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
+          if (aspectRatio > 1) {
+            newWidth = maxSize;
+            newHeight = maxSize / aspectRatio;
+          } else {
+            newHeight = maxSize;
+            newWidth = maxSize * aspectRatio;
+          }
+        }
+        
+        // Calculate new position that keeps the sticker centered at the same point
+        // This is critical to prevent the sticker from moving during resize
+        const oldCenterX = activeStickObj.x + activeStickObj.width/2;
+        const oldCenterY = activeStickObj.y + activeStickObj.height/2;
+        const newX = oldCenterX - newWidth/2;
+        const newY = oldCenterY - newHeight/2;
+        
         newStickers[activeSticker] = {
           ...activeStickObj,
+          x: newX,
+          y: newY,
           width: newWidth,
           height: newHeight,
         };
       } else if (stickerAction === 'rotate') {
-        const centerX = activeStickObj.x + activeStickObj.width/2;
-        const centerY = activeStickObj.y + activeStickObj.height/2;
         const angleRad = Math.atan2(y - centerY, x - centerX);
         newStickers[activeSticker] = {
           ...activeStickObj,
@@ -2165,22 +2419,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const promises = files.map((file, index) => {
       return new Promise<StickerImage | null>((resolve) => {
         const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.decoding = 'sync'; // Synchronous decoding for best quality
         
         img.onload = () => {
-          // Double the size - increase from 120px to 240px for the longest side
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 240; // Doubled from 120px
-          if (width > height) {
-            if (width > maxDim) {
-              height = Math.round(height * (maxDim / width));
-              width = maxDim;
-            }
-          } else {
-            if (height > maxDim) {
-              width = Math.round(width * (maxDim / height));
-              height = maxDim;
-            }
+          // Preserve original dimensions completely - absolutely no quality reduction
+          const originalWidth = img.naturalWidth || img.width;
+          const originalHeight = img.naturalHeight || img.height;
+          
+          // Scale large images down for display, but preserve original dimensions
+          let width = originalWidth;
+          let height = originalHeight;
+          
+          // For extremely large images, apply reasonable scaling for display
+          const maxDimension = 2000; // High-resolution cap
+          if (width > maxDimension || height > maxDimension) {
+            const scaleFactor = maxDimension / Math.max(width, height);
+            width = width * scaleFactor;
+            height = height * scaleFactor;
           }
           
           // Create a grid-like distribution with some randomness
@@ -2201,11 +2457,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             src: file,
             x: baseX + jitterX,
             y: baseY + jitterY,
-            width,
-            height,
+            width: width,
+            height: height,
             rotation: 0, // No rotation when scattering stickers
             zIndex: 100 + index, // Ensure proper stacking
             imageObj: img,
+            originalWidth: originalWidth, // Store original dimensions
+            originalHeight: originalHeight // Store original dimensions
           });
         };
         

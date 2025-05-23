@@ -2309,7 +2309,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     });
   };
 
-  const [showPreview, setShowPreview] = useState(false); // Add after other useState hooks
+  // Removed showPreview state - no longer needed
 
   // 2. Handle sticker upload
   const handleStickerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2558,65 +2558,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     />
                   
                     <div className="space-y-3">
-                      {/* Mobile Toggle Buttons */}
-                      <div className="flex md:hidden justify-center gap-2 mb-4">
-                        <button
-                          type="button"
-                          className={`px-4 py-2 rounded-lg text-lg font-semibold transition-colors duration-200 ${!showPreview ? 'bg-blue-600 text-white' : 'bg-white/10 text-white border border-white/20'}`}
-                          onClick={() => setShowPreview(false)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-4 py-2 rounded-lg text-lg font-semibold transition-colors duration-200 ${showPreview ? 'bg-blue-600 text-white' : 'bg-white/10 text-white border border-white/20'}`}
-                          onClick={() => setShowPreview(true)}
-                        >
-                          Preview
-                        </button>
-                      </div>
-                      {/* Journal Entry/Preview - Mobile: toggled, Desktop: always both */}
-                      <div className="block md:hidden">
-                        {!showPreview ? (
-                          <>
-                            <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
-                              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                              </svg>
-                              <span>Journal Entry</span>
-                            </label>
-                            <textarea
-                              id="journalText"
-                              value={journalText}
-                              onChange={(e) => setJournalText(e.target.value)}
-                              placeholder="Write your journal entry here..."
-                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-white/30 px-4 py-4 min-h-[180px] text-white transition-all duration-200 bg-black/30 backdrop-blur-sm text-3xl"
-                              required
-                            />
-                            {journalText.trim().length > 0 && (
-                              <JournalEnhancer
-                                journalText={journalText}
-                                location={location}
-                                minWordCount={20}
-                                showInitially={false}
-                              />
-                            )}
-                            <p className="text-xs text-gray-300">Use double line breaks to create new paragraphs.</p>
-                          </>
-                        ) : (
-                          <div className="bg-black rounded-2xl shadow-xl border border-white/20 overflow-hidden h-fit mt-2">
-                            <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                              <h3 className="text-xl font-semibold text-white">Journal Preview</h3>
-                              <div className="text-sm text-gray-300">Updates as you type</div>
-                            </div>
-                            <div className="p-4 flex justify-center items-center">
-                              <p className="text-white">View desktop version to see preview</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {/* Desktop: keep original layout (handled elsewhere) */}
-                      <div className="hidden md:block">
+                      {/* Journal Entry - Mobile and Desktop */}
+                      <div className="block">
                         <label htmlFor="journalText" className="block text-3xl font-medium text-white flex items-center gap-2 mt-[-8px] mb-[4px]">
                           <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
