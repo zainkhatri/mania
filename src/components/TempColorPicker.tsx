@@ -8,7 +8,7 @@ export interface TextColors {
 interface ColorPickerProps {
   colors: TextColors;
   onChange: (colors: TextColors) => void;
-  images?: string[]; // Add images prop to extract colors from
+  images?: (string | Blob)[]; // Update type to accept both strings and Blobs
 }
 
 export default function SimpleColorPicker({ colors, onChange, images = [] }: ColorPickerProps) {
@@ -71,7 +71,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   };
   
   // Function to extract dominant colors from images
-  const extractColorsFromImages = async (imageUrls: string[]) => {
+  const extractColorsFromImages = async (imageUrls: (string | Blob)[]) => {
     console.log('Starting color extraction from', imageUrls.length, 'images');
     setIsExtracting(true);
     const allColorCandidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
@@ -171,7 +171,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
             resolve();
           };
           
-          img.src = imageUrl;
+          img.src = imageUrl instanceof Blob ? URL.createObjectURL(imageUrl) : imageUrl;
         });
       }
       

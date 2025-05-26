@@ -6,6 +6,9 @@ import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import JournalCanvas from './components/JournalCanvas';
+import MobileJournalEditor from './components/MobileJournalEditor';
+import { isMobile } from './utils/isMobile';
 
 import JournalForm from './components/JournalForm';
 import Login from './components/auth/Login';
@@ -219,6 +222,11 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [date, setDate] = useState(new Date());
+  const [location, setLocation] = useState('');
+  const [images, setImages] = useState<(string | Blob)[]>([]);
+  const [textSections, setTextSections] = useState<string[]>(['']);
+  const [isMobileView, setIsMobileView] = useState(false);
 
   // Effect to check if user is logged in using Firebase Auth
   useEffect(() => {
@@ -238,6 +246,16 @@ function App() {
     });
     
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileView(isMobile());
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Handle login
@@ -262,6 +280,18 @@ function App() {
     user,
     login,
     logout
+  };
+
+  const handleMobileUpdate = (data: {
+    date: Date;
+    location: string;
+    images: (string | Blob)[];
+    textSections: string[];
+  }) => {
+    setDate(data.date);
+    setLocation(data.location);
+    setImages(data.images);
+    setTextSections(data.textSections);
   };
 
   if (loading) {
@@ -297,7 +327,21 @@ function App() {
                 path="/journal" 
                 element={
                   isAuthenticated ? (
+                    <>
+                      {isMobileView ? (
+                        <MobileJournalEditor
+                          onUpdate={handleMobileUpdate}
+                          initialData={{
+                            date,
+                            location,
+                            images,
+                            textSections,
+                          }}
+                        />
+                      ) : (
                     <JournalForm isAuthenticated={isAuthenticated} />
+                      )}
+                    </>
                   ) : (
                     <Navigate to="/login" replace />
                   )

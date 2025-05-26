@@ -813,7 +813,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
-          const fontString = `${fontSize}px ZainCustomFont, Arial, sans-serif`;
+          const fontString = `990 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           
