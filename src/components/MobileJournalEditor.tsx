@@ -93,15 +93,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         type: 'image',
         x: isStandard ? 2 : 54,     // Swap sides based on layout
         y: 13,     // Below location
-        width: 43, // Consistent width
+        width: 50, // Consistent width
         height: 27 // Same height
       },
       { 
         id: 'text-1', 
         type: 'text',
-        x: isStandard ? 47 : 2,     // Swap sides based on layout
+        x: isStandard ? 55 : 2,     // Swap sides based on layout
         y: 13,     // Same as image-1
-        width: 50, // Consistent width
+        width: 44, // Consistent width
         height: 27 // Same height
       },
       { 
@@ -109,7 +109,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         type: 'text',
         x: isStandard ? 2 : 54,     // Swap sides based on layout
         y: 42,     // Below first row
-        width: 43, // Consistent width
+        width: 44, // Consistent width
         height: 27 // Same height
       },
       { 
@@ -125,15 +125,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         type: 'image',
         x: isStandard ? 2 : 54,     // Swap sides based on layout
         y: 72,     // Below second row
-        width: 43, // Consistent width
+        width: 50, // Consistent width
         height: 27 // Same height
       },
       { 
         id: 'text-3', 
         type: 'text',
-        x: isStandard ? 47 : 2,     // Swap sides based on layout
+        x: isStandard ? 55 : 2,     // Swap sides based on layout
         y: 72,     // Same vertical position
-        width: 50, // Consistent width
+        width: 44, // Consistent width
         height: 27 // Same height
       }
     ];
@@ -183,12 +183,16 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
   // Function to handle image upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = event.target.files;
     const imageIndex = parseInt(event.target.getAttribute('data-index') || '0');
     
-    if (file) {
+    if (files && files.length > 0) {
+      // Get up to 3 files starting from the current image index
       const newImages = [...images];
-      newImages[imageIndex] = file;
+      for (let i = 0; i < Math.min(files.length, 3); i++) {
+        const targetIndex = (imageIndex + i) % 3;  // Wrap around if needed
+        newImages[targetIndex] = files[i];
+      }
       setImages(newImages);
       onUpdate({ date, location, images: newImages, textSections });
     }
@@ -217,6 +221,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
     const containerStyle = (type: string) => {
       const isEmpty = !hasContent();
+      const regionIndex = Number(regionId.split('-')[1]) - 1;
+      const isFirstRegion = regionIndex === 0;
       
       return {
         background: isEmpty ? (type === 'image' ? MANIA_COLORS.white : MANIA_COLORS.black) : 'transparent',
@@ -236,11 +242,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         alignItems: 'center',
         height: '100%',
         padding: type === 'location' ? '0.25rem' : '0.5rem',
-        position: 'relative' as const
+        position: 'relative' as const,
+        zIndex: isEmpty ? 1 : 0  // Ensure empty containers are above content
       } as const;
     };
 
-    const getContent = (type: string) => {
+    const getContent = (type: string, regionId: string) => {
+      const regionIndex = Number(regionId.split('-')[1]) - 1;
+      const isFirstRegion = regionIndex === 0;
+
       switch (type) {
         case 'location':
           return {
@@ -251,19 +261,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         case 'image':
           return {
             icon: faCamera,
-            title: "CAPTURE THE MOMENT",
-            description: "Tap to add photos or take pictures"
+            title: isFirstRegion ? "CAPTURE THE MOMENT" : "",
+            description: isFirstRegion ? "Tap to add up to 3 photos" : ""
           };
         case 'text':
           return {
             icon: faPencil,
-            title: "WRITE YOUR STORY",
-            description: "Tap to write your story"
+            title: isFirstRegion ? "WRITE YOUR STORY" : "",
+            description: isFirstRegion ? "Tap to write your story" : ""
           };
       }
     };
 
-    const content = getContent(type);
+    const content = getContent(type, regionId);
     if (!content) return null;
 
     const handleClick = () => {
@@ -296,8 +306,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         }}
         whileTap={{ scale: 0.98 }}
         onClick={handleClick}
-        onMouseEnter={() => startTitleShuffle(regionId, content.title)}
-        onTouchStart={() => startTitleShuffle(regionId, content.title)}
+        onMouseEnter={() => content.title && startTitleShuffle(regionId, content.title)}
+        onTouchStart={() => content.title && startTitleShuffle(regionId, content.title)}
       >
         <motion.div
           className="flex flex-col items-center justify-center text-center w-full"
@@ -313,31 +323,33 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                 fontSize: '1.75rem',
                 filter: type === 'image' ? 'drop-shadow(2px 2px 0px rgba(0,0,0,0.1))' : 'drop-shadow(2px 2px 0px rgba(0,0,0,0.2))',
                 transform: 'rotate(-5deg)',
-                marginBottom: '0.5rem',
+                marginBottom: content.title ? '0.5rem' : '0',
                 color: type === 'image' ? '#333' : '#fff'
               }}
             />
           )}
-          <div className={`flex ${type === 'location' ? 'flex-row items-center gap-2' : 'flex-col gap-0.5'} transform -rotate-1`}>
-            <span className="font-bold tracking-wide" style={{ 
-              textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
-              fontFamily: "'Comic Sans MS', cursive",
-              fontSize: type === 'location' ? '1.25rem' : '1rem',
-              color: type === 'image' ? '#333' : '#fff'
-            }}>
-              {shuffledTitles[regionId] || content.title}
-            </span>
-            {content.description && (
-              <span className="opacity-80 italic" style={{
+          {content.title && (
+            <div className={`flex ${type === 'location' ? 'flex-row items-center gap-2' : 'flex-col gap-0.5'} transform -rotate-1`}>
+              <span className="font-bold tracking-wide" style={{ 
                 textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
-                fontSize: type === 'location' ? '0.75rem' : '0.75rem',
-                color: type === 'image' ? '#666' : '#fff',
-                marginTop: type === 'location' ? '0' : '0'
+                fontFamily: "'Comic Sans MS', cursive",
+                fontSize: type === 'location' ? '1.25rem' : '1rem',
+                color: type === 'image' ? '#333' : '#fff'
               }}>
-                {content.description}
+                {shuffledTitles[regionId] || content.title}
               </span>
-            )}
-          </div>
+              {content.description && (
+                <span className="opacity-80 italic" style={{
+                  textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
+                  fontSize: type === 'location' ? '0.75rem' : '0.75rem',
+                  color: type === 'image' ? '#666' : '#fff',
+                  marginTop: type === 'location' ? '0' : '0'
+                }}>
+                  {content.description}
+                </span>
+              )}
+            </div>
+          )}
         </motion.div>
 
         {/* Hidden inputs for direct interaction */}
@@ -440,6 +452,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         accept="image/*"
         className="hidden"
         onChange={handleImageUpload}
+        multiple
       />
     </div>
   );
