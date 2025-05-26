@@ -7,8 +7,7 @@ import {
   faLocationDot, 
   faCamera, 
   faPencil,
-  faPalette,
-  faXmark
+  faImage
 } from '@fortawesome/free-solid-svg-icons';
 import SimpleColorPicker from './TempColorPicker';
 import LayoutToggle from './LayoutToggle';
@@ -54,18 +53,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [location, setLocation] = useState(initialData?.location || '');
   const [images, setImages] = useState<(string | Blob)[]>(initialData?.images || []);
   const [textSections, setTextSections] = useState<string[]>(initialData?.textSections || ['', '', '']);
-  const [showKeyboard, setShowKeyboard] = useState(false);
   const [activeTextArea, setActiveTextArea] = useState<number | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [textColors, setTextColors] = useState({
     locationColor: '#3498DB',
     locationShadowColor: '#AED6F1'
   });
+  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   
   const journalCanvasRef = useRef(null);
-  const locationInputRef = useRef<HTMLInputElement>(null);
-  const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Hardcoded regions based on screenshot
   const regions = [
@@ -127,11 +123,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   ];
 
-  // Update parent component whenever data changes
-  useEffect(() => {
-    onUpdate({ date, location, images, textSections });
-  }, [date, location, images, textSections, onUpdate]);
-
   useEffect(() => {
     // Ensure the body can scroll
     document.body.style.overflow = 'auto';
@@ -144,6 +135,40 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       document.getElementById('root')!.style.overflow = '';
     };
   }, []);
+
+  // Function to handle image selection
+  const handleImageSelect = async (imageIndex: number) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('data-index', imageIndex.toString());
+      fileInputRef.current.click();
+    }
+  };
+
+  // Function to handle image upload
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const imageIndex = parseInt(event.target.getAttribute('data-index') || '0');
+    
+    if (file) {
+      // Create a copy of the images array
+      const newImages = [...images];
+      // Update the image at the specified index
+      newImages[imageIndex] = file;
+      setImages(newImages);
+      
+      // Update parent component
+      onUpdate({ date, location, images: newImages, textSections });
+    }
+  };
+
+  // Function to handle taking a photo
+  const handleTakePhoto = async (imageIndex: number) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('data-index', imageIndex.toString());
+      fileInputRef.current.setAttribute('capture', 'environment');
+      fileInputRef.current.click();
+    }
+  };
 
   const renderRegionContent = (type: string, regionId: string) => {
     const iconStyle = {
@@ -158,27 +183,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       if (type === 'location') {
         return location.length > 0;
       } else if (type === 'text') {
-        // Get index of current text area
         const currentIndex = Number(regionId.split('-')[1]) - 1;
-        
-        // Check if any text area has content
-        const hasAnyContent = textSections.some((text, index) => {
-          // Only check sections up to current index
-          return index <= currentIndex && text.length > 0;
-        });
-        
-        return hasAnyContent;
+        return textSections[currentIndex]?.length > 0;
       } else if (type === 'image') {
-        // Get index of current image area
         const currentIndex = Number(regionId.split('-')[1]) - 1;
-        
-        // Check if any image slot has content
-        const hasAnyContent = images.some((img, index) => {
-          // Only check sections up to current index
-          return index <= currentIndex && img !== undefined;
-        });
-        
-        return hasAnyContent;
+        return images[currentIndex] !== undefined;
       }
       return false;
     };
@@ -210,11 +219,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       } as const;
     };
 
-    // Only render content if the region should be visible
-    if (hasContent()) {
-      return null;
-    }
-
     const getContent = (type: string) => {
       switch (type) {
         case 'location':
@@ -241,6 +245,80 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     const content = getContent(type);
     if (!content) return null;
 
+    const handleClick = () => {
+      if (type === 'location') {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = location;
+        input.className = 'fixed top-0 left-0 w-full p-4 bg-black/90 text-white text-lg';
+        input.placeholder = 'Enter location...';
+        
+        input.addEventListener('input', (e) => {
+          const target = e.target as HTMLInputElement;
+          setLocation(target.value.toUpperCase());
+        });
+        
+        input.addEventListener('blur', () => {
+          document.body.removeChild(input);
+        });
+        
+        document.body.appendChild(input);
+        input.focus();
+      } else if (type === 'text') {
+        const textIndex = Number(regionId.split('-')[1]) - 1;
+        const input = document.createElement('textarea');
+        input.value = textSections[textIndex] || '';
+        input.className = 'fixed inset-0 w-full h-full p-4 bg-black/90 text-white text-lg';
+        input.placeholder = 'Write your thoughts...';
+        
+        input.addEventListener('input', (e) => {
+          const target = e.target as HTMLTextAreaElement;
+          const newSections = [...textSections];
+          newSections[textIndex] = target.value;
+          setTextSections(newSections);
+        });
+        
+        input.addEventListener('blur', () => {
+          document.body.removeChild(input);
+        });
+        
+        document.body.appendChild(input);
+        input.focus();
+      } else if (type === 'image') {
+        const imageIndex = Number(regionId.split('-')[1]) - 1;
+        // Show image options modal
+        const modal = document.createElement('div');
+        modal.className = 'fixed bottom-0 left-0 right-0 bg-black/90 p-4 rounded-t-2xl';
+        modal.innerHTML = `
+          <div class="flex flex-col gap-4">
+            <button id="takePhoto" class="w-full py-3 bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2">
+              <i class="fas fa-camera"></i>Take Photo
+            </button>
+            <button id="choosePhoto" class="w-full py-3 bg-purple-500 text-white rounded-lg flex items-center justify-center gap-2">
+              <i class="fas fa-image"></i>Choose from Library
+            </button>
+            <button id="cancelPhoto" class="w-full py-3 bg-gray-500 text-white rounded-lg">Cancel</button>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('takePhoto')?.addEventListener('click', () => {
+          handleTakePhoto(imageIndex);
+          document.body.removeChild(modal);
+        });
+        
+        document.getElementById('choosePhoto')?.addEventListener('click', () => {
+          handleImageSelect(imageIndex);
+          document.body.removeChild(modal);
+        });
+        
+        document.getElementById('cancelPhoto')?.addEventListener('click', () => {
+          document.body.removeChild(modal);
+        });
+      }
+    };
+
     return (
       <motion.div 
         className="h-full w-full cursor-pointer"
@@ -251,18 +329,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   type === 'image' ? 2 : -2
         }}
         whileTap={{ scale: 0.98 }}
-        onClick={() => {
-          if (type === 'location' && locationInputRef.current) {
-            locationInputRef.current.focus();
-          } else if (type === 'text') {
-            const textIndex = Number(regionId.split('-')[1]) - 1;
-            setActiveTextArea(textIndex);
-            setShowKeyboard(true);
-          } else if (type === 'image') {
-            // TODO: Add image upload functionality
-            console.log('Image upload clicked');
-          }
-        }}
+        onClick={handleClick}
       >
         <motion.div
           className="flex flex-col items-center justify-center text-center w-full"
@@ -356,45 +423,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         </div>
       </div>
 
-      {/* Text Input Modal */}
-      {showKeyboard && activeTextArea !== null && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white p-4 rounded-t-2xl shadow-lg z-50">
-          <textarea
-            ref={textInputRef}
-            value={textSections[activeTextArea]}
-            onChange={(e) => {
-              const newSections = [...textSections];
-              newSections[activeTextArea] = e.target.value;
-              setTextSections(newSections);
-            }}
-            className="w-full h-40 p-4 border rounded-lg font-handwriting text-lg"
-            placeholder="Write your thoughts..."
-            autoFocus
-          />
-          <button
-            onClick={() => {
-              setShowKeyboard(false);
-              setActiveTextArea(null);
-            }}
-            className="mt-2 w-full bg-blue-500 text-white py-2 rounded-lg"
-          >
-            Done
-          </button>
-        </div>
-      )}
-
-      {/* Hidden location input */}
+      {/* Hidden file input for image upload */}
       <input
-        ref={locationInputRef}
-        type="text"
-        className="opacity-0 absolute top-0 left-0 w-1 h-1"
-        onFocus={() => {
-          const newLocation = prompt('Enter location:', location);
-          if (newLocation !== null) {
-            setLocation(newLocation.toUpperCase());
-          }
-          locationInputRef.current?.blur();
-        }}
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageUpload}
       />
     </div>
   );
