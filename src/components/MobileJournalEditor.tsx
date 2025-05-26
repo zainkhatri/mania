@@ -75,65 +75,69 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const locationInputRef = useRef<HTMLInputElement>(null);
   const textInputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
-  // Hardcoded regions based on screenshot
-  const regions = [
-    { 
-      id: 'location', 
-      type: 'location', 
-      x: 0,      // Full width at top
-      y: 5,      // Just below date
-      width: 100,// Full width
-      height: 6  // Reduced height for location
-    },
-    { 
-      id: 'image-1', 
-      type: 'image',
-      x: 2,      // Left side with small margin
-      y: 13,     // Below location
-      width: 50, // Slightly less than half width
-      height: 27 // Same height
-    },
-    { 
-      id: 'text-1', 
-      type: 'text',
-      x: 54,     // Right side
-      y: 13,     // Same as image-1
-      width: 43, // Same width
-      height: 27 // Same height
-    },
-    { 
-      id: 'text-2', 
-      type: 'text',
-      x: 2,      // Left side
-      y: 42,     // Below first row
-      width: 43, // Same width
-      height: 27 // Same height
-    },
-    { 
-      id: 'image-2', 
-      type: 'image',
-      x: 47,     // Right side
-      y: 42,     // Moved down to avoid text overlap
-      width: 50, // Same width
-      height: 27 // Same height
-    },
-    { 
-      id: 'image-3', 
-      type: 'image',
-      x: 2,      // Left side
-      y: 72,     // Moved down to avoid text overlap
-      width: 50, // Same width
-      height: 27 // Same height
-    },
-    { 
-      id: 'text-3', 
-      type: 'text',
-      x: 54,     // Right side
-      y: 72,     // Adjusted to align with image-3
-      width: 43, // Same width
-      height: 27 // Same height
-    }
-  ];
+  // Updated regions based on layout mode
+  const getRegions = (layoutMode: 'standard' | 'mirrored') => {
+    const isStandard = layoutMode === 'standard';
+    
+    return [
+      { 
+        id: 'location', 
+        type: 'location', 
+        x: 0,      // Full width at top
+        y: 5,      // Just below date
+        width: 100,// Full width
+        height: 6  // Reduced height for location
+      },
+      { 
+        id: 'image-1', 
+        type: 'image',
+        x: isStandard ? 2 : 54,     // Swap sides based on layout
+        y: 13,     // Below location
+        width: 43, // Consistent width
+        height: 27 // Same height
+      },
+      { 
+        id: 'text-1', 
+        type: 'text',
+        x: isStandard ? 47 : 2,     // Swap sides based on layout
+        y: 13,     // Same as image-1
+        width: 50, // Consistent width
+        height: 27 // Same height
+      },
+      { 
+        id: 'text-2', 
+        type: 'text',
+        x: isStandard ? 2 : 54,     // Swap sides based on layout
+        y: 42,     // Below first row
+        width: 43, // Consistent width
+        height: 27 // Same height
+      },
+      { 
+        id: 'image-2', 
+        type: 'image',
+        x: isStandard ? 47 : 2,     // Swap sides based on layout
+        y: 42,     // Same vertical position
+        width: 50, // Consistent width
+        height: 27 // Same height
+      },
+      { 
+        id: 'image-3', 
+        type: 'image',
+        x: isStandard ? 2 : 54,     // Swap sides based on layout
+        y: 72,     // Below second row
+        width: 43, // Consistent width
+        height: 27 // Same height
+      },
+      { 
+        id: 'text-3', 
+        type: 'text',
+        x: isStandard ? 47 : 2,     // Swap sides based on layout
+        y: 72,     // Same vertical position
+        width: 50, // Consistent width
+        height: 27 // Same height
+      }
+    ];
+  };
 
   useEffect(() => {
     // Ensure the body can scroll
@@ -224,6 +228,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         boxShadow: isEmpty ? '2px 2px 0px rgba(0,0,0,0.1)' : 'none',
         border: isEmpty ? `2px solid ${type === 'image' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.3)'}` : 'none',
         opacity: isEmpty ? 1 : 0,
+        pointerEvents: isEmpty ? 'auto' : 'none',
         transition: 'all 0.3s ease',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -241,19 +246,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           return {
             icon: null,
             title: "LOCATION",
-            description: "(e.g., MANIA, LA JOLLA, CA)"
+            description: "Tap to add location"
           };
         case 'image':
           return {
             icon: faCamera,
             title: "CAPTURE THE MOMENT",
-            description: "Insert images that reflect your day"
+            description: "Tap to add photos or take pictures"
           };
         case 'text':
           return {
             icon: faPencil,
             title: "WRITE YOUR STORY",
-            description: "Write about your day!"
+            description: "Tap to write your story"
           };
       }
     };
@@ -392,7 +397,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
             {/* Fixed Position Regions */}
             <div className="absolute inset-0">
-              {regions.map(region => (
+              {getRegions(layoutMode).map(region => (
                 <div
                   key={region.id}
                   style={{
@@ -433,7 +438,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handleImageUpload}
       />
