@@ -7,10 +7,14 @@ import {
   faLocationDot, 
   faCamera, 
   faPencil,
-  faImage
+  faImage,
+  faDownload
 } from '@fortawesome/free-solid-svg-icons';
 import SimpleColorPicker from './TempColorPicker';
 import LayoutToggle from './LayoutToggle';
+import { toast } from 'react-toastify';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 interface Region {
   id: string;
@@ -195,6 +199,65 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       }
       setImages(newImages);
       onUpdate({ date, location, images: newImages, textSections });
+    }
+  };
+
+  // Add new function for handling download
+  const handleDownload = async () => {
+    const journalElement = document.getElementById('journal-canvas');
+    if (!journalElement) {
+      toast.error('Could not find journal element');
+      return;
+    }
+
+    // Show loading toast
+    const toastId = toast.loading('Creating high-quality PDF...', {
+      position: 'bottom-center',
+      autoClose: false
+    });
+
+    try {
+      // Create high quality canvas
+      const canvas = await html2canvas(journalElement, {
+        scale: 4,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 0,
+        removeContainer: true,
+        foreignObjectRendering: false,
+      });
+
+      // Get canvas dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (pageHeight * canvas.width) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+
+      // Save the PDF
+      const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(filename);
+
+      // Show success message
+      toast.dismiss(toastId);
+      toast.success('Journal downloaded successfully!', {
+        position: 'bottom-center',
+        autoClose: 3000
+      });
+    } catch (error) {
+      console.error('Error creating PDF:', error);
+      toast.dismiss(toastId);
+      toast.error('Could not create PDF. Please try again.', {
+        position: 'bottom-center',
+        autoClose: 3000
+      });
     }
   };
 
@@ -467,6 +530,17 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               layoutMode={layoutMode}
               setLayoutMode={setLayoutMode}
             />
+
+            {/* Download Button */}
+            <motion.button
+              onClick={handleDownload}
+              className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none flex items-center justify-center gap-2 text-lg font-medium"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <FontAwesomeIcon icon={faDownload} />
+              Download Journal
+            </motion.button>
           </div>
         </div>
       </div>

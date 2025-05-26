@@ -362,14 +362,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const template = new Image();
         template.crossOrigin = 'anonymous'; // In case the template is hosted elsewhere
         
+        console.log('Attempting to load template from:', templateUrl);
+        
         const templatePromise = new Promise<HTMLImageElement | null>((resolve) => {
           template.onload = () => {
-            console.log('Template loaded successfully');
+            console.log('Template loaded successfully:', template.width, 'x', template.height);
             resolve(template);
           };
           template.onerror = (err) => {
-            console.error('Failed to load template image:', err);
-            resolve(null); // Continue even if template fails
+            console.error('Failed to load template image with cache buster:', err);
+            // Try loading without cache buster
+            console.log('Attempting to load template without cache buster:', templateUrl);
+            template.src = templateUrl;
+            template.onload = () => {
+              console.log('Template loaded successfully without cache buster:', template.width, 'x', template.height);
+              resolve(template);
+            };
+            template.onerror = () => {
+              console.error('Failed to load template image even without cache buster');
+              // Try one more time with a different path
+              const altPath = templateUrl.startsWith('/') ? templateUrl.slice(1) : '/' + templateUrl;
+              console.log('Attempting to load template with alternate path:', altPath);
+              template.src = altPath;
+              template.onload = () => {
+                console.log('Template loaded successfully with alternate path:', template.width, 'x', template.height);
+                resolve(template);
+              };
+              template.onerror = () => {
+                console.error('All template loading attempts failed');
+                resolve(null);
+              };
+            };
           };
           // Add timestamp to prevent caching issues
           const cacheBuster = `?v=${new Date().getTime()}`;
@@ -377,6 +400,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         });
         
         const loadedTemplate = await templatePromise;
+        if (!loadedTemplate) {
+          console.error('Could not load template, falling back to default background');
+        } else {
+          console.log('Template loaded and ready to use:', loadedTemplate.width, 'x', loadedTemplate.height);
+        }
         setTemplateImage(loadedTemplate);
         
         console.log('Debug: Images to load:', images.length);
@@ -584,8 +612,33 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Draw template
       if (templateImage) {
+        console.log('Drawing template:', templateImage.width, 'x', templateImage.height);
+        // Save current context state
+        ctx.save();
+        
+        // Ensure high quality rendering for template
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
         // Draw template to fill the entire canvas exactly
-        ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+        try {
+          ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
+          console.log('Template drawn successfully');
+        } catch (err) {
+          console.error('Error drawing template:', err);
+          // If drawing fails, try to draw at original size
+          try {
+            ctx.drawImage(templateImage, 0, 0, templateImage.width, templateImage.height);
+            console.log('Template drawn at original size');
+          } catch (err) {
+            console.error('Failed to draw template even at original size:', err);
+          }
+        }
+        
+        // Restore context state
+        ctx.restore();
+      } else {
+        console.log('No template image available, using default background');
       }
       
       // Calculate dimensions to use full page height
