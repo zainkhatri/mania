@@ -321,7 +321,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               icon={content.icon}
               style={{
                 fontSize: '1.75rem',
-                filter: type === 'image' ? 'drop-shadow(2px 2px 0px rgba(0,0,0,0.1))' : 'drop-shadow(2px 2px 0px rgba(0,0,0,0.2))',
                 transform: 'rotate(-5deg)',
                 marginBottom: content.title ? '0.5rem' : '0',
                 color: type === 'image' ? '#333' : '#fff'
@@ -331,7 +330,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           {content.title && (
             <div className={`flex ${type === 'location' ? 'flex-row items-center gap-2' : 'flex-col gap-0.5'} transform -rotate-1`}>
               <span className="font-bold tracking-wide" style={{ 
-                textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
                 fontFamily: "'Comic Sans MS', cursive",
                 fontSize: type === 'location' ? '1.25rem' : '1rem',
                 color: type === 'image' ? '#333' : '#fff'
@@ -340,7 +338,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               </span>
               {content.description && (
                 <span className="opacity-80 italic" style={{
-                  textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
                   fontSize: type === 'location' ? '0.75rem' : '0.75rem',
                   color: type === 'image' ? '#666' : '#fff',
                   marginTop: type === 'location' ? '0' : '0'
@@ -359,14 +356,18 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value.toUpperCase())}
-            className="absolute inset-0 w-full h-full"
+            className="absolute inset-0 w-full h-full px-4"
             placeholder="Enter location..."
             style={{
-              opacity: 0,
-              caretColor: 'auto',
+              opacity: hasContent() ? 1 : 0,
+              caretColor: '#000',
               WebkitAppearance: 'none',
               background: 'transparent',
-              cursor: 'text'
+              cursor: 'text',
+              border: 'none',
+              outline: 'none',
+              fontSize: '1rem',
+              fontFamily: "'Comic Sans MS', cursive"
             }}
           />
         )}
@@ -389,15 +390,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               }, 300);
               return () => clearTimeout(timeoutId);
             }}
-            className="absolute inset-0 w-full h-full resize-none"
+            className="absolute inset-0 w-full h-full p-4"
             placeholder="Write your thoughts..."
             style={{
-              opacity: 0,
-              caretColor: 'auto',
+              opacity: hasContent() ? 1 : 0,
+              caretColor: '#000',
               WebkitAppearance: 'none',
               background: 'transparent',
               WebkitTextFillColor: '#000',
-              WebkitBackgroundClip: 'text',
+              border: 'none',
+              outline: 'none',
+              fontSize: '1rem',
+              fontFamily: "'Comic Sans MS', cursive",
+              lineHeight: '1.5',
               cursor: 'text'
             }}
           />
