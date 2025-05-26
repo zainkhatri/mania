@@ -40,12 +40,20 @@ interface MobileJournalEditorProps {
 
 const GRID_SIZE = 1; // 1% grid
 
-// Color palette based on MANIA's bold aesthetic
+// Add shuffle text utility function
+const shuffleText = (text: string): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return text
+    .split('')
+    .map(char => char === ' ' ? ' ' : chars[Math.floor(Math.random() * chars.length)])
+    .join('');
+};
+
+// Color constants
 const MANIA_COLORS = {
-  orange: 'rgba(255, 87, 34, 0.85)',  // Vibrant orange
-  purple: 'rgba(156, 39, 176, 0.85)', // Bold purple
-  teal: 'rgba(0, 150, 136, 0.85)',    // Deep teal
-  background: '#f5f3e8',              // Warm vintage paper color
+  black: 'rgba(0, 0, 0, 0.85)',
+  white: 'rgba(255, 255, 255, 0.85)',
+  background: '#f5f3e8',
 };
 
 const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, initialData }) => {
@@ -59,9 +67,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     locationShadowColor: '#AED6F1'
   });
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
+  const [shuffledTitles, setShuffledTitles] = useState<{ [key: string]: string }>({});
+  const shuffleIntervalsRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
   
   const journalCanvasRef = useRef(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+  const textInputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   // Hardcoded regions based on screenshot
   const regions = [
@@ -136,13 +148,34 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     };
   }, []);
 
-  // Function to handle image selection
-  const handleImageSelect = async (imageIndex: number) => {
-    if (fileInputRef.current) {
-      fileInputRef.current.setAttribute('data-index', imageIndex.toString());
-      fileInputRef.current.click();
+  // Function to start title shuffle animation
+  const startTitleShuffle = (regionId: string, originalTitle: string) => {
+    let iterations = 0;
+    const maxIterations = 10;
+    const interval = 50;
+
+    if (shuffleIntervalsRef.current[regionId]) {
+      clearInterval(shuffleIntervalsRef.current[regionId]);
     }
+
+    shuffleIntervalsRef.current[regionId] = setInterval(() => {
+      if (iterations >= maxIterations) {
+        clearInterval(shuffleIntervalsRef.current[regionId]);
+        setShuffledTitles(prev => ({ ...prev, [regionId]: originalTitle }));
+        return;
+      }
+
+      setShuffledTitles(prev => ({ ...prev, [regionId]: shuffleText(originalTitle) }));
+      iterations++;
+    }, interval);
   };
+
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(shuffleIntervalsRef.current).forEach(interval => clearInterval(interval));
+    };
+  }, []);
 
   // Function to handle image upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,23 +183,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     const imageIndex = parseInt(event.target.getAttribute('data-index') || '0');
     
     if (file) {
-      // Create a copy of the images array
       const newImages = [...images];
-      // Update the image at the specified index
       newImages[imageIndex] = file;
       setImages(newImages);
-      
-      // Update parent component
       onUpdate({ date, location, images: newImages, textSections });
-    }
-  };
-
-  // Function to handle taking a photo
-  const handleTakePhoto = async (imageIndex: number) => {
-    if (fileInputRef.current) {
-      fileInputRef.current.setAttribute('data-index', imageIndex.toString());
-      fileInputRef.current.setAttribute('capture', 'environment');
-      fileInputRef.current.click();
     }
   };
 
@@ -178,7 +198,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       marginBottom: type === 'location' ? '0.25rem' : '0.5rem'
     };
 
-    // Check if any content exists in the corresponding section
     const hasContent = () => {
       if (type === 'location') {
         return location.length > 0;
@@ -196,18 +215,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       const isEmpty = !hasContent();
       
       return {
-        background: isEmpty ? (
-          type === 'location' ? MANIA_COLORS.orange :
-          type === 'image' ? MANIA_COLORS.teal :
-          MANIA_COLORS.purple
-        ) : 'transparent',
+        background: isEmpty ? (type === 'image' ? MANIA_COLORS.white : MANIA_COLORS.black) : 'transparent',
         backgroundImage: isEmpty ? `
-          linear-gradient(0deg, rgba(255,255,255,0.1) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+          linear-gradient(0deg, rgba(0,0,0,0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)
         ` : 'none',
         backgroundSize: '20px 20px',
-        boxShadow: isEmpty ? '2px 2px 0px rgba(0,0,0,0.2)' : 'none',
-        border: isEmpty ? '2px solid rgba(255,255,255,0.3)' : 'none',
+        boxShadow: isEmpty ? '2px 2px 0px rgba(0,0,0,0.1)' : 'none',
+        border: isEmpty ? `2px solid ${type === 'image' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.3)'}` : 'none',
         opacity: isEmpty ? 1 : 0,
         transition: 'all 0.3s ease',
         display: 'flex',
@@ -215,7 +230,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         justifyContent: 'center',
         alignItems: 'center',
         height: '100%',
-        padding: type === 'location' ? '0.25rem' : '0.5rem'
+        padding: type === 'location' ? '0.25rem' : '0.5rem',
+        position: 'relative' as const
       } as const;
     };
 
@@ -223,8 +239,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       switch (type) {
         case 'location':
           return {
-            icon: faLocationDot,
-            title: "WHERE ARE YOU?",
+            icon: null,
+            title: "LOCATION",
             description: "(e.g., MANIA, LA JOLLA, CA)"
           };
         case 'image':
@@ -247,75 +263,20 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
     const handleClick = () => {
       if (type === 'location') {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = location;
-        input.className = 'fixed top-0 left-0 w-full p-4 bg-black/90 text-white text-lg';
-        input.placeholder = 'Enter location...';
-        
-        input.addEventListener('input', (e) => {
-          const target = e.target as HTMLInputElement;
-          setLocation(target.value.toUpperCase());
-        });
-        
-        input.addEventListener('blur', () => {
-          document.body.removeChild(input);
-        });
-        
-        document.body.appendChild(input);
-        input.focus();
+        if (locationInputRef.current) {
+          locationInputRef.current.focus();
+        }
       } else if (type === 'text') {
         const textIndex = Number(regionId.split('-')[1]) - 1;
-        const input = document.createElement('textarea');
-        input.value = textSections[textIndex] || '';
-        input.className = 'fixed inset-0 w-full h-full p-4 bg-black/90 text-white text-lg';
-        input.placeholder = 'Write your thoughts...';
-        
-        input.addEventListener('input', (e) => {
-          const target = e.target as HTMLTextAreaElement;
-          const newSections = [...textSections];
-          newSections[textIndex] = target.value;
-          setTextSections(newSections);
-        });
-        
-        input.addEventListener('blur', () => {
-          document.body.removeChild(input);
-        });
-        
-        document.body.appendChild(input);
-        input.focus();
+        if (textInputRefs.current[textIndex]) {
+          textInputRefs.current[textIndex]?.focus();
+        }
       } else if (type === 'image') {
         const imageIndex = Number(regionId.split('-')[1]) - 1;
-        // Show image options modal
-        const modal = document.createElement('div');
-        modal.className = 'fixed bottom-0 left-0 right-0 bg-black/90 p-4 rounded-t-2xl';
-        modal.innerHTML = `
-          <div class="flex flex-col gap-4">
-            <button id="takePhoto" class="w-full py-3 bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2">
-              <i class="fas fa-camera"></i>Take Photo
-            </button>
-            <button id="choosePhoto" class="w-full py-3 bg-purple-500 text-white rounded-lg flex items-center justify-center gap-2">
-              <i class="fas fa-image"></i>Choose from Library
-            </button>
-            <button id="cancelPhoto" class="w-full py-3 bg-gray-500 text-white rounded-lg">Cancel</button>
-          </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        document.getElementById('takePhoto')?.addEventListener('click', () => {
-          handleTakePhoto(imageIndex);
-          document.body.removeChild(modal);
-        });
-        
-        document.getElementById('choosePhoto')?.addEventListener('click', () => {
-          handleImageSelect(imageIndex);
-          document.body.removeChild(modal);
-        });
-        
-        document.getElementById('cancelPhoto')?.addEventListener('click', () => {
-          document.body.removeChild(modal);
-        });
+        if (fileInputRef.current) {
+          fileInputRef.current.setAttribute('data-index', imageIndex.toString());
+          fileInputRef.current.click();
+        }
       }
     };
 
@@ -325,11 +286,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         style={containerStyle(type)}
         whileHover={{ 
           scale: 1.02,
-          rotate: type === 'location' ? -1 :
+          rotate: type === 'location' ? 0 :
                   type === 'image' ? 2 : -2
         }}
         whileTap={{ scale: 0.98 }}
         onClick={handleClick}
+        onMouseEnter={() => startTitleShuffle(regionId, content.title)}
+        onTouchStart={() => startTitleShuffle(regionId, content.title)}
       >
         <motion.div
           className="flex flex-col items-center justify-center text-center w-full"
@@ -338,27 +301,69 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                      { y: [-2, 2, -2, 2, 0] }}
           transition={{ duration: 0.5 }}
         >
-          <FontAwesomeIcon 
-            icon={content.icon}
-            style={iconStyle}
-            className="text-white" 
-          />
-          <div className="flex flex-col gap-0.5 transform -rotate-1">
-            <span className="text-white font-bold tracking-wide" style={{ 
-              textShadow: '1px 1px 0px rgba(0,0,0,0.2)',
+          {content.icon && (
+            <FontAwesomeIcon 
+              icon={content.icon}
+              style={{
+                fontSize: '1.75rem',
+                filter: type === 'image' ? 'drop-shadow(2px 2px 0px rgba(0,0,0,0.1))' : 'drop-shadow(2px 2px 0px rgba(0,0,0,0.2))',
+                transform: 'rotate(-5deg)',
+                marginBottom: '0.5rem',
+                color: type === 'image' ? '#333' : '#fff'
+              }}
+            />
+          )}
+          <div className={`flex ${type === 'location' ? 'flex-row items-center gap-2' : 'flex-col gap-0.5'} transform -rotate-1`}>
+            <span className="font-bold tracking-wide" style={{ 
+              textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
               fontFamily: "'Comic Sans MS', cursive",
-              fontSize: type === 'location' ? '0.875rem' : '1rem'
+              fontSize: type === 'location' ? '1.25rem' : '1rem',
+              color: type === 'image' ? '#333' : '#fff'
             }}>
-              {type === 'location' ? "LOCATION" : content.title}
+              {shuffledTitles[regionId] || content.title}
             </span>
-            <span className="text-white opacity-80 italic" style={{
-              textShadow: '1px 1px 0px rgba(0,0,0,0.2)',
-              fontSize: type === 'location' ? '0.625rem' : '0.75rem'
-            }}>
-              {content.description}
-            </span>
+            {content.description && (
+              <span className="opacity-80 italic" style={{
+                textShadow: type === 'image' ? '1px 1px 0px rgba(0,0,0,0.1)' : '1px 1px 0px rgba(0,0,0,0.2)',
+                fontSize: type === 'location' ? '0.75rem' : '0.75rem',
+                color: type === 'image' ? '#666' : '#fff',
+                marginTop: type === 'location' ? '0' : '0'
+              }}>
+                {content.description}
+              </span>
+            )}
           </div>
         </motion.div>
+
+        {/* Hidden inputs for direct interaction */}
+        {type === 'location' && (
+          <input
+            ref={locationInputRef}
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value.toUpperCase())}
+            className="opacity-0 absolute inset-0 w-full h-full"
+            placeholder="Enter location..."
+          />
+        )}
+        {type === 'text' && (
+          <textarea
+            ref={(el) => {
+              const index = Number(regionId.split('-')[1]) - 1;
+              textInputRefs.current[index] = el;
+            }}
+            value={textSections[Number(regionId.split('-')[1]) - 1] || ''}
+            onChange={(e) => {
+              const index = Number(regionId.split('-')[1]) - 1;
+              const newSections = [...textSections];
+              newSections[index] = e.target.value;
+              setTextSections(newSections);
+              onUpdate({ date, location, images, textSections: newSections });
+            }}
+            className="opacity-0 absolute inset-0 w-full h-full resize-none"
+            placeholder="Write your thoughts..."
+          />
+        )}
       </motion.div>
     );
   };
@@ -428,6 +433,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={handleImageUpload}
       />
