@@ -234,7 +234,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         boxShadow: isEmpty ? '2px 2px 0px rgba(0,0,0,0.1)' : 'none',
         border: isEmpty ? `2px solid ${type === 'image' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.3)'}` : 'none',
         opacity: isEmpty ? 1 : 0,
-        pointerEvents: isEmpty ? 'auto' : 'none',
+        pointerEvents: 'auto',
         display: 'flex',
         flexDirection: 'column' as const,
         justifyContent: 'center',
@@ -242,7 +242,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         height: '100%',
         padding: type === 'location' ? '0.25rem' : '0.5rem',
         position: 'relative' as const,
-        zIndex: isEmpty ? 1 : 0  // Ensure empty containers are above content
+        zIndex: isEmpty ? 1 : 0,
+        cursor: 'pointer'
       } as const;
     };
 
@@ -358,12 +359,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value.toUpperCase())}
-            className="opacity-0 absolute inset-0 w-full h-full"
+            className="absolute inset-0 w-full h-full"
             placeholder="Enter location..."
             style={{
+              opacity: 0,
               caretColor: 'auto',
               WebkitAppearance: 'none',
-              background: 'transparent'
+              background: 'transparent',
+              cursor: 'text'
             }}
           />
         )}
@@ -386,14 +389,16 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               }, 300);
               return () => clearTimeout(timeoutId);
             }}
-            className="opacity-0 absolute inset-0 w-full h-full resize-none"
+            className="absolute inset-0 w-full h-full resize-none"
             placeholder="Write your thoughts..."
             style={{
+              opacity: 0,
               caretColor: 'auto',
               WebkitAppearance: 'none',
               background: 'transparent',
               WebkitTextFillColor: '#000',
-              WebkitBackgroundClip: 'text'
+              WebkitBackgroundClip: 'text',
+              cursor: 'text'
             }}
           />
         )}
