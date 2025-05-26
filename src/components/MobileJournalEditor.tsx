@@ -235,7 +235,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         border: isEmpty ? `2px solid ${type === 'image' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.3)'}` : 'none',
         opacity: isEmpty ? 1 : 0,
         pointerEvents: isEmpty ? 'auto' : 'none',
-        transition: 'all 0.3s ease',
         display: 'flex',
         flexDirection: 'column' as const,
         justifyContent: 'center',
@@ -361,6 +360,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             onChange={(e) => setLocation(e.target.value.toUpperCase())}
             className="opacity-0 absolute inset-0 w-full h-full"
             placeholder="Enter location..."
+            style={{
+              caretColor: 'auto',
+              WebkitAppearance: 'none',
+              background: 'transparent'
+            }}
           />
         )}
         {type === 'text' && (
@@ -375,10 +379,22 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               const newSections = [...textSections];
               newSections[index] = e.target.value;
               setTextSections(newSections);
-              onUpdate({ date, location, images, textSections: newSections });
+              
+              // Debounce the update callback to reduce unnecessary renders
+              const timeoutId = setTimeout(() => {
+                onUpdate({ date, location, images, textSections: newSections });
+              }, 300);
+              return () => clearTimeout(timeoutId);
             }}
             className="opacity-0 absolute inset-0 w-full h-full resize-none"
             placeholder="Write your thoughts..."
+            style={{
+              caretColor: 'auto',
+              WebkitAppearance: 'none',
+              background: 'transparent',
+              WebkitTextFillColor: '#000',
+              WebkitBackgroundClip: 'text'
+            }}
           />
         )}
       </motion.div>
