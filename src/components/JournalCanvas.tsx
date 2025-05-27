@@ -567,6 +567,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }, 16); // ~60fps
   }, []);
 
+  // Add this function before renderCanvas
+  const getDefaultLocationFontSize = (ctx: CanvasRenderingContext2D, canvasWidth: number): number => {
+    // Create a 12-character test string
+    const testLocation = 'ABCDEFGHIJKL';
+    
+    // Calculate font size for 12 characters
+    return calculateOptimalFontSize(
+      ctx,
+      testLocation,
+      canvasWidth - 80, // Same padding as used in location drawing
+      "'TitleFont', sans-serif",
+      60,
+      600
+    );
+  };
+
   // Draw the canvas with all elements - optimized with useMemo for heavy calculation 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -990,14 +1006,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Draw location LAST (after all other elements) to ensure it's on top of everything
       if (locationCell && location) {
         try {
-          // Calculate the maximum font size that fits the location text across the full width
-          const maxLocationFontSize = calculateOptimalFontSize(
-            ctx, 
-            location.toUpperCase(), 
-            canvas.width - 80, // minimal padding (40px on each side)
-            "'TitleFont', sans-serif",
-            60, // min
-            600 // max, allow very large font
+          // Get the default font size for 12 characters
+          const defaultFontSize = getDefaultLocationFontSize(ctx, canvas.width);
+          
+          // Use this as the maximum font size
+          const maxLocationFontSize = Math.min(
+            defaultFontSize,
+            calculateOptimalFontSize(
+              ctx, 
+              location.toUpperCase(), 
+              canvas.width - 80,
+              "'TitleFont', sans-serif",
+              60,
+              defaultFontSize // Use the 12-char size as the maximum
+            )
           );
           
           // Determine colors - use direct selection if provided, otherwise use default  

@@ -79,6 +79,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const locationInputRef = useRef<HTMLInputElement>(null);
   const textInputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
+  // Add new state for global fade
+  const [isAnyInputActive, setIsAnyInputActive] = useState(false);
+
   // Updated regions based on layout mode
   const getRegions = (layoutMode: 'standard' | 'mirrored') => {
     const isStandard = layoutMode === 'standard';
@@ -111,7 +114,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       { 
         id: 'text-2', 
         type: 'text',
-        x: isStandard ? 2 : 54,     // Swap sides based on layout
+        x: isStandard ? 1 : 54,     // Swap sides based on layout
         y: 42,     // Below first row
         width: 44, // Consistent width
         height: 27 // Same height
@@ -296,8 +299,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         backgroundSize: '20px 20px',
         boxShadow: isEmpty ? '2px 2px 0px rgba(0,0,0,0.1)' : 'none',
         border: isEmpty ? `2px solid ${type === 'image' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.3)'}` : 'none',
-        opacity: isEmpty ? 1 : 0,
-        pointerEvents: 'auto',
+        pointerEvents: isAnyInputActive && type === 'text' ? 'none' : 'auto',
         display: 'flex',
         flexDirection: 'column' as const,
         justifyContent: 'center',
@@ -306,8 +308,28 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         padding: type === 'location' ? '0.25rem' : '0.5rem',
         position: 'relative' as const,
         zIndex: isEmpty ? 1 : 0,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        transition: 'all 0.3s ease-out'
       } as const;
+    };
+
+    // Add animation variants for the container
+    const containerVariants = {
+      empty: {
+        opacity: 1,
+        scale: 1,
+        transition: { duration: 0.3, ease: "easeOut" }
+      },
+      filled: {
+        opacity: 0,
+        scale: 0.98,
+        transition: { duration: 0.3, ease: "easeOut" }
+      },
+      hidden: {
+        opacity: 0,
+        scale: 0.95,
+        transition: { duration: 0.2, ease: "easeOut" }
+      }
     };
 
     const getContent = (type: string, regionId: string) => {
@@ -341,10 +363,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
     const handleClick = () => {
       if (type === 'location') {
+        setIsAnyInputActive(true);
         if (locationInputRef.current) {
           locationInputRef.current.focus();
         }
       } else if (type === 'text') {
+        setIsAnyInputActive(true);
         const textIndex = Number(regionId.split('-')[1]) - 1;
         if (textInputRefs.current[textIndex]) {
           textInputRefs.current[textIndex]?.focus();
@@ -358,26 +382,39 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       }
     };
 
+    // Add blur handlers for inputs
+    const handleInputBlur = () => {
+      // Only remove the fade if there's no content
+      if (!hasContent()) {
+        setIsAnyInputActive(false);
+      }
+    };
+
     return (
       <motion.div 
         className="h-full w-full cursor-pointer"
         style={containerStyle(type)}
+        variants={containerVariants}
+        initial="empty"
+        animate={
+          isAnyInputActive && type === 'text' ? "hidden" :
+          hasContent() ? "filled" : "empty"
+        }
         whileHover={{ 
-          scale: 1.02,
+          scale: hasContent() || (isAnyInputActive && type === 'text') ? 1 : 1.02,
           rotate: type === 'location' ? 0 :
-                  type === 'image' ? 2 : -2
+                  type === 'image' ? 2 : -2,
+          opacity: hasContent() || (isAnyInputActive && type === 'text') ? 0 : 1
         }}
-        whileTap={{ scale: 0.98 }}
+        whileTap={{ scale: hasContent() || (isAnyInputActive && type === 'text') ? 1 : 0.98 }}
         onClick={handleClick}
-        onMouseEnter={() => content.title && startTitleShuffle(regionId, content.title)}
-        onTouchStart={() => content.title && startTitleShuffle(regionId, content.title)}
+        onMouseEnter={() => content.title && !hasContent() && !(isAnyInputActive && type === 'text') && startTitleShuffle(regionId, content.title)}
+        onTouchStart={() => content.title && !hasContent() && !(isAnyInputActive && type === 'text') && startTitleShuffle(regionId, content.title)}
       >
         <motion.div
           className="flex flex-col items-center justify-center text-center w-full"
-          whileHover={type === 'image' ? { rotate: [0, -10, 10, -10, 0] } : 
-                     type === 'text' ? { x: [-2, 2, -2, 2, 0] } :
-                     { y: [-2, 2, -2, 2, 0] }}
-          transition={{ duration: 0.5 }}
+          animate={hasContent() ? { opacity: 0 } : { opacity: 1 }}
+          transition={{ duration: 0.2 }}
         >
           {content.icon && (
             <FontAwesomeIcon 
@@ -418,11 +455,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             ref={locationInputRef}
             type="text"
             value={location}
-            onChange={(e) => setLocation(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              setLocation(e.target.value.toUpperCase());
+              setIsAnyInputActive(true);
+            }}
+            onBlur={handleInputBlur}
             className="absolute inset-0 w-full h-full px-4"
-            placeholder="Enter location..."
+            placeholder=""
             style={{
-              opacity: hasContent() ? 1 : 0,
+              opacity: hasContent() || isAnyInputActive ? 1 : 0,
               caretColor: '#000',
               WebkitAppearance: 'none',
               background: 'transparent',
@@ -430,7 +471,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               border: 'none',
               outline: 'none',
               fontSize: '1rem',
-              fontFamily: "'Comic Sans MS', cursive"
+              fontFamily: "'Comic Sans MS', cursive",
+              color: '#000',
+              WebkitTextFillColor: '#000'
             }}
           />
         )}
@@ -446,27 +489,31 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               const newSections = [...textSections];
               newSections[index] = e.target.value;
               setTextSections(newSections);
+              setIsAnyInputActive(true);
               
-              // Debounce the update callback to reduce unnecessary renders
+              // Debounce the update callback
               const timeoutId = setTimeout(() => {
                 onUpdate({ date, location, images, textSections: newSections });
               }, 300);
               return () => clearTimeout(timeoutId);
             }}
+            onBlur={handleInputBlur}
             className="absolute inset-0 w-full h-full p-4"
             placeholder="Write your thoughts..."
             style={{
-              opacity: hasContent() ? 1 : 0,
+              opacity: hasContent() || (isAnyInputActive && type === 'text') ? 1 : 0,
               caretColor: '#000',
               WebkitAppearance: 'none',
               background: 'transparent',
               WebkitTextFillColor: '#000',
               border: 'none',
               outline: 'none',
-              fontSize: '1rem',
+              fontSize: '0.875rem',
               fontFamily: "'Comic Sans MS', cursive",
               lineHeight: '1.5',
-              cursor: 'text'
+              cursor: 'text',
+              resize: 'none',
+              transition: 'opacity 0.3s ease-out'
             }}
           />
         )}

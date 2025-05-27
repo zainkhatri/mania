@@ -68,7 +68,7 @@ const Home: React.FC = () => {
       {/* Content overlay */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8 home-overlay">
         <h1 
-          className="font-bold text-7xl md:text-9xl mb-4 md:mb-6 text-center mania-title text-white text-flicker"
+          className="font-bold text-8xl md:text-[12rem] mb-4 md:mb-6 text-center mania-title text-white text-flicker"
           style={{ 
             filter: showGlitch ? 'hue-rotate(90deg) brightness(1.5)' : 'none',
             transition: 'filter 0.1s'
