@@ -565,23 +565,25 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
     }
 
     return (
-      <div className="w-full flex justify-center items-center py-2">
-        <div className="grid grid-cols-12 gap-0.5 w-full max-w-xs items-center justify-center">
+      <div className="w-full flex justify-center items-center py-2 overflow-x-auto whitespace-nowrap pl-2 pr-2">
+        <div className="inline-flex flex-row items-center">
           {palette.map((color, i) => (
-            <button
-              key={`color-${i}`}
-              className={`w-2 h-2 rounded flex items-center justify-center shadow-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white/0
-                ${colors.locationColor === color ? 'ring-1 ring-blue-500' : ''}`}
-              style={{ backgroundColor: color }}
-              onClick={() => selectColor(color)}
-              title={color}
-            >
-              {colors.locationColor === color && (
-                <svg className="w-1 h-1 text-white drop-shadow" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
+            <div key={`color-wrap-${i}`} className="bg-white p-[2.5px] rounded">
+              <button
+                key={`color-${i}`}
+                className={`w-2 h-2 rounded flex items-center justify-center shadow-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white/0
+                  ${colors.locationColor === color ? 'ring-1 ring-blue-500' : ''}`}
+                style={{ backgroundColor: color }}
+                onClick={() => selectColor(color)}
+                title={color}
+              >
+                {colors.locationColor === color && (
+                  <svg className="w-1 h-1 text-white drop-shadow" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            </div>
           ))}
         </div>
       </div>
