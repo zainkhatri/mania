@@ -9,6 +9,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import JournalCanvas from './components/JournalCanvas';
 import MobileJournalEditor from './components/MobileJournalEditor';
 import { isMobile } from './utils/isMobile';
+import { useMediaQuery } from 'react-responsive';
 
 import JournalForm from './components/JournalForm';
 import Login from './components/auth/Login';
@@ -102,7 +103,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {!shouldHideNav && (
         <>
           {/* Navigation */}
-          <nav className="relative z-50 pt-4 pb-4 border-b border-white/20">
+          <nav className="relative z-50 pt-4 pb-4 border-b border-white/20 bg-black">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between h-16">
                 <div className="flex">
@@ -226,7 +227,7 @@ function App() {
   const [location, setLocation] = useState('');
   const [images, setImages] = useState<(string | Blob)[]>([]);
   const [textSections, setTextSections] = useState<string[]>(['']);
-  const [isMobileView, setIsMobileView] = useState(false);
+  const isMobileView = useMediaQuery({ maxWidth: 767 });
 
   // Effect to check if user is logged in using Firebase Auth
   useEffect(() => {
@@ -246,16 +247,6 @@ function App() {
     });
     
     return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobileView(isMobile());
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Handle login
@@ -305,30 +296,15 @@ function App() {
   return (
     <AuthContext.Provider value={authContextValue}>
       <Router>
-        <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-          {/* TV static background video */}
-          <video 
-            ref={videoRef}
-            className="absolute w-full h-full object-cover z-0 static-bg"
-            autoPlay 
-            loop 
-            muted
-            playsInline
-          >
-            <source src="/background/static.webm" type="video/webm" />
-            Your browser does not support the video tag.
-          </video>
-
-          {/* Use Layout component with conditional rendering */}
-          <Layout>
+        <div className="min-h-screen flex flex-col bg-gray-50">
+          {/* Only wrap in Layout if not on mobile journal */}
             <Routes>
               <Route path="/" element={<Home />} />
               <Route 
                 path="/journal" 
                 element={
                   isAuthenticated ? (
-                    <>
-                      {isMobileView ? (
+                  isMobileView ? (
                         <MobileJournalEditor
                           onUpdate={handleMobileUpdate}
                           initialData={{
@@ -339,9 +315,10 @@ function App() {
                           }}
                         />
                       ) : (
+                    <Layout>
                     <JournalForm isAuthenticated={isAuthenticated} />
-                      )}
-                    </>
+                    </Layout>
+                  )
                   ) : (
                     <Navigate to="/login" replace />
                   )
@@ -358,9 +335,7 @@ function App() {
                 } 
               />
             </Routes>
-          </Layout>
         </div>
-        
         {/* Toast notifications container */}
         <ToastContainer 
           position="bottom-center"

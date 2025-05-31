@@ -8,10 +8,11 @@ export interface TextColors {
 interface ColorPickerProps {
   colors: TextColors;
   onChange: (colors: TextColors) => void;
-  images?: (string | Blob)[]; // Update type to accept both strings and Blobs
+  images?: (string | Blob)[];
+  compact?: boolean;
 }
 
-export default function SimpleColorPicker({ colors, onChange, images = [] }: ColorPickerProps) {
+export default function SimpleColorPicker({ colors, onChange, images = [], compact = false }: ColorPickerProps) {
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
 
@@ -25,11 +26,11 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       console.log('SimpleColorPicker: Extracting colors from images');
       // Force immediate color extraction with a clean state
       setIsExtracting(true);
-      extractColorsFromImages(images);
+      extractColorsFromImages(images, 16);
     } else {
       console.log('SimpleColorPicker: No images available for color extraction');
       // Set default colors when no images are available
-      setExtractedColors(getDefaultColors(12));
+      setExtractedColors(getDefaultColors(16));
     }
   }, [images]);
 
@@ -71,7 +72,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   };
   
   // Function to extract dominant colors from images
-  const extractColorsFromImages = async (imageUrls: (string | Blob)[]) => {
+  const extractColorsFromImages = async (imageUrls: (string | Blob)[], paletteSize: number = 16) => {
     console.log('Starting color extraction from', imageUrls.length, 'images');
     setIsExtracting(true);
     const allColorCandidates: {hex: string, hsl: {h: number, s: number, l: number}, rgb: {r: number, g: number, b: number}}[] = [];
@@ -149,7 +150,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
                   
                   // Check brightness - exclude very dark or very light colors
                   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                  if (brightness > 30 && brightness < 230) { // Wider range for more colors
+                  if (brightness > 20 && brightness < 240) { // More lenient brightness range
                     candidateColors.push({ hex, hsl, rgb });
                     colorCount++;
                   }
@@ -178,20 +179,20 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       console.log(`Total color candidates extracted: ${allColorCandidates.length}`);
       if (allColorCandidates.length === 0) {
         console.warn('No colors were extracted from images. Using default colors.');
-        setExtractedColors(getDefaultColors(12));
+        setExtractedColors(getDefaultColors(paletteSize));
         setIsExtracting(false);
         return;
       }
       
       // Create a palette with maximum color diversity
-      const finalColors = createDiversePalette(allColorCandidates, 12);
+      const finalColors = createDiversePalette(allColorCandidates, paletteSize);
       console.log('Final colors extracted:', finalColors);
       setExtractedColors(finalColors);
       
     } catch (err) {
       console.error("Error extracting colors:", err);
       
-      // Fallback to ensure we always have 12 diverse colors
+      // Fallback to ensure we always have 16 diverse colors
       const fallbackColors = [
         '#E74C3C', // Red
         '#3498DB', // Blue
@@ -251,10 +252,10 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       let h = color.hsl.h;
       
       // Skip very light or very dark colors
-      if (color.hsl.l < 15 || color.hsl.l > 85) return;
+      if (color.hsl.l < 10 || color.hsl.l > 90) return; // More lenient lightness range
       
       // Skip colors with very low saturation
-      if (color.hsl.s < 15) return;
+      if (color.hsl.s < 10) return; // More lenient saturation threshold
       
       // Find which segment this color belongs to
       for (const segment of HUE_SEGMENTS) {
@@ -274,33 +275,17 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
     // Get representative colors from each segment
     const representatives: typeof candidates = [];
     
-    // For each segment, get the most vibrant and distinct colors
+    // For each segment, get multiple colors if available
     Object.entries(segmentedColors).forEach(([segmentName, colors]) => {
       if (colors.length === 0) return;
       
       // Sort by saturation (most saturated first)
       colors.sort((a, b) => b.hsl.s - a.hsl.s);
       
-      // Get the most saturated color
+      // Get up to 2 colors from each segment
       representatives.push(colors[0]);
-      
-      // If we have many colors in this segment, also add one with different lightness
-      if (colors.length > 3) {
-        // Sort remaining colors by lightness
-        const remainingColors = colors.slice(1);
-        remainingColors.sort((a, b) => {
-          // Find the most different lightness from the already selected color
-          const lightnessDiffA = Math.abs(a.hsl.l - colors[0].hsl.l);
-          const lightnessDiffB = Math.abs(b.hsl.l - colors[0].hsl.l);
-          return lightnessDiffB - lightnessDiffA;
-        });
-        
-        // Add a color with very different lightness if it's distinct enough
-        if (remainingColors.length > 0 && 
-            Math.abs(remainingColors[0].hsl.l - colors[0].hsl.l) > 30 &&
-            calculateColorDifference(colors[0].rgb, remainingColors[0].rgb) > 120) {
-          representatives.push(remainingColors[0]);
-        }
+      if (colors.length > 1) {
+        representatives.push(colors[1]);
       }
     });
     
@@ -318,8 +303,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       });
     }
     
-    // Use a greedy algorithm to add colors with maximum distance from existing ones
-    const MINIMUM_DIFFERENCE = 120; // Higher threshold for much more diversity
+    // Use a lower threshold to allow more colors
+    const MINIMUM_DIFFERENCE = 80; // Lower threshold for more colors
     
     while (selectedColors.length < paletteSize && representatives.length > 0) {
       let bestIndex = -1;
@@ -438,7 +423,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   };
   
   // Get a preset palette of diverse colors for fallback
-  const getDefaultColors = (count: number = 12): string[] => {
+  const getDefaultColors = (count: number = 16): string[] => {
     const defaultPalette = [
       '#E74C3C', // Bright Red
       '#3498DB', // Bright Blue
@@ -451,15 +436,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
       '#CB4335', // Dark Red
       '#16A085', // Dark Teal
       '#8E44AD', // Violet
-      '#D35400', // Dark Orange
-      '#27AE60', // Medium Green
-      '#2980B9', // Medium Blue
-      '#F39C12', // Medium Orange
-      '#7D3C98', // Medium Purple
-      '#C0392B', // Crimson
-      '#196F3D', // Forest Green
-      '#A569BD', // Light Purple
-      '#5DADE2'  // Light Blue
+      '#D35400'  // Dark Orange
     ];
     
     return defaultPalette.slice(0, count);
@@ -575,6 +552,41 @@ export default function SimpleColorPicker({ colors, onChange, images = [] }: Col
   
   // Sort the extracted colors for display
   const sortedColors = sortColorsByHue(extractedColors);
+  
+  if (compact) {
+    // Always show exactly 12 colors, using fallback if needed
+    let palette = sortedColors.slice(0, 12);
+    if (palette.length < 12) {
+      const fallback = getDefaultColors(12).filter(c => !palette.includes(c));
+      palette = [...palette, ...fallback].slice(0, 12);
+    }
+    while (palette.length < 12) {
+      palette.push(getDefaultColors(12)[palette.length]);
+    }
+
+    return (
+      <div className="w-full flex justify-center items-center py-2">
+        <div className="grid grid-cols-12 gap-0.5 w-full max-w-xs items-center justify-center">
+          {palette.map((color, i) => (
+            <button
+              key={`color-${i}`}
+              className={`w-2 h-2 rounded flex items-center justify-center shadow-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white/0
+                ${colors.locationColor === color ? 'ring-1 ring-blue-500' : ''}`}
+              style={{ backgroundColor: color }}
+              onClick={() => selectColor(color)}
+              title={color}
+            >
+              {colors.locationColor === color && (
+                <svg className="w-1 h-1 text-white drop-shadow" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="p-5 bg-black/70 backdrop-blur-md rounded-lg border border-white/20">

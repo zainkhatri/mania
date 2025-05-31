@@ -29,12 +29,13 @@ try {
       apiKey: apiKey,
       dangerouslyAllowBrowser: true // Allow running in browser environment
     });
-    console.log('OpenAI API initialized successfully');
+    console.log('✅ OpenAI API initialized successfully with key:', apiKey.substring(0, 10) + '...');
   } else {
-    console.warn('OpenAI API key not found or using placeholder value. The AI journal enhancement feature will use fallback suggestions.');
+    console.warn('⚠️ OpenAI API key not found or using placeholder value. Current key:', apiKey ? apiKey.substring(0, 10) + '...' : 'undefined');
+    console.warn('The AI journal enhancement feature will use fallback suggestions.');
   }
 } catch (error) {
-  console.error('Failed to initialize OpenAI API:', error);
+  console.error('❌ Failed to initialize OpenAI API:', error);
 }
 
 // Helper utility for async retries
@@ -91,7 +92,7 @@ export const generateJournalPrompts = async (
         throw new Error('OpenAI API not initialized');
       }
       
-      // Use a more sophisticated prompt that can handle lyrics, poetry, and personal journal entries
+      // Enhanced prompt that emphasizes uniqueness and variety
       const prompt = `
 I'm keeping a journal and have written the following entry:
 "${cleanJournalText}"
@@ -99,20 +100,25 @@ ${cleanLocation ? `\nLocation: ${cleanLocation}` : ''}
 
 This entry appears to be ${detectContentType(cleanJournalText)}.
 
-I need thoughtful, creative follow-up questions that will help me expand on this journal entry and make it deeper and more reflective.
+I need a thoughtful, creative follow-up question that will help me expand on this journal entry and make it deeper and more reflective.
 
-Generate ONE insightful question that:
+Generate ONE unique, insightful question that:
 1. Shows deep understanding of the content's style and substance
 2. Makes a specific reference to details or themes in my entry
 3. Encourages me to explore emotions, motivations, or meanings beyond what I've written
 4. Is phrased in a natural, conversational way
 5. Feels personalized and tailored to exactly what I've shared
+6. Is different from typical journaling questions - be creative and unique
+7. Focuses on a specific aspect, detail, or emotion from my entry
+
+IMPORTANT: Be creative and avoid generic questions. Each question should feel fresh and specifically crafted for this exact entry.
 
 Avoid:
 - Generic questions that could apply to any entry
 - Questions that misinterpret lyrics or poetic content as literal experiences
 - Questions about "rather" as if it's a person or thing
 - Using phrases like "tell me more about" without specific context
+- Repetitive or common journaling prompts
 
 Examples of good questions for lyrics or poetic content:
 - "What emotions were you channeling when you connected with these lyrics?"
@@ -125,19 +131,21 @@ Examples of good questions for personal narratives:
 
 Respond ONLY with the question - no explanation, no introduction, no extra text.`;
       
-      // Generate content using OpenAI
+      // Generate content using OpenAI with enhanced parameters for variety
       const response = await openai.chat.completions.create({
         model: DEFAULT_MODEL,
         messages: [
           { 
             role: "system", 
-            content: "You are an expert writing coach and journaling companion who helps people reflect deeply on their experiences, emotions, and creative expressions. You're skilled at recognizing different writing styles including poetry, lyrics, personal narratives, and creative fiction."
+            content: "You are an expert writing coach and journaling companion who helps people reflect deeply on their experiences, emotions, and creative expressions. You're skilled at recognizing different writing styles including poetry, lyrics, personal narratives, and creative fiction. You always generate unique, creative questions that are specifically tailored to the content provided."
           },
           { role: "user", content: prompt }
         ],
-        temperature: 0.7,
+        temperature: 0.8, // Increased for more variety
         max_tokens: 150,
-        seed: seed
+        seed: seed,
+        presence_penalty: 0.6, // Encourage novel content
+        frequency_penalty: 0.3  // Reduce repetition
       });
       
       const text = response.choices[0].message.content || '';
@@ -153,14 +161,21 @@ Respond ONLY with the question - no explanation, no introduction, no extra text.
         ? cleanedQuestion 
         : cleanedQuestion + '?';
       
+      // Validate the question quality
+      if (finalQuestion.length < 10 || finalQuestion.toLowerCase().includes('experience with rather')) {
+        throw new Error('Generated question quality is poor');
+      }
+      
       // Store the question in the recent questions list
       addToRecentQuestions(finalQuestion);
       
+      console.log('✅ Successfully generated GPT question:', finalQuestion);
       return [finalQuestion];
     } catch (error) {
-      console.error('Error generating prompts with OpenAI:', error);
+      console.error('❌ Error generating prompts with OpenAI:', error);
       
       // If we've retried and still failed, fall back to default prompts
+      console.log('🔄 Falling back to default prompts after GPT failure');
       return [getUniqueDefaultPrompt(cleanJournalText, cleanLocation)];
     }
   }, retries);

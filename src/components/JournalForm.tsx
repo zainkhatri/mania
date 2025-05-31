@@ -2578,7 +2578,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           <JournalEnhancer
                             journalText={journalText}
                             location={location}
-                            minWordCount={20}
+                            minWordCount={10}
                             showInitially={false}
                           />
                         )}

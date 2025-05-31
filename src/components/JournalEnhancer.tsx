@@ -137,8 +137,50 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
 
   // Extract specific phrases from text
   const extractSpecificPhrases = (text: string): string[] => {
-    // Implementation here...
-    return [];
+    const phrases: string[] = [];
+    const lowerText = text.toLowerCase();
+    
+    // Look for emotional expressions
+    const emotionalPhrases = [
+      'felt like', 'feeling', 'made me', 'i was', 'i am', 'i feel',
+      'it was', 'seemed like', 'reminded me', 'thought about'
+    ];
+    
+    emotionalPhrases.forEach(phrase => {
+      if (lowerText.includes(phrase)) {
+        // Try to extract the full context around the phrase
+        const index = lowerText.indexOf(phrase);
+        const start = Math.max(0, index - 10);
+        const end = Math.min(text.length, index + phrase.length + 20);
+        phrases.push(text.substring(start, end).trim());
+      }
+    });
+    
+    // Look for time references
+    const timeReferences = [
+      'today', 'yesterday', 'tomorrow', 'this morning', 'tonight',
+      'last week', 'next week', 'earlier', 'later', 'now'
+    ];
+    
+    timeReferences.forEach(timeRef => {
+      if (lowerText.includes(timeRef)) {
+        phrases.push(timeRef);
+      }
+    });
+    
+    // Look for action words
+    const actionWords = [
+      'went to', 'decided to', 'tried to', 'wanted to', 'needed to',
+      'started', 'finished', 'completed', 'began', 'ended'
+    ];
+    
+    actionWords.forEach(action => {
+      if (lowerText.includes(action)) {
+        phrases.push(action);
+      }
+    });
+    
+    return Array.from(new Set(phrases)); // Remove duplicates
   };
 
   // Generate personalized questions from journal content - core of the feature
@@ -180,8 +222,49 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
       return questions;
     }
     
-    // Rest of function implementation
-    return questions;
+    // Handle regular journal entries
+    const defaultQuestions = [
+      "What emotions were you feeling as you wrote this?",
+      "What's something you learned from this experience?",
+      "How might your future self look back on this moment?",
+      "What would you like to remember most about today?",
+      "What strength did you demonstrate in this situation?",
+      "How does this relate to your current goals or values?",
+      "What support might you need moving forward?",
+      "If you could change one thing about this experience, what would it be?"
+    ];
+    
+    // Add context-specific questions based on analysis
+    if (analysis.people.length > 0) {
+      questions.push(`How did your interaction with ${analysis.people[0]} affect you?`);
+      questions.push("What did you learn about yourself through this relationship?");
+    }
+    
+    if (analysis.locations.length > 0) {
+      questions.push(`What makes ${analysis.locations[0]} special to you?`);
+      questions.push("How did the setting influence your experience?");
+    }
+    
+    if (analysis.emotions.length > 0) {
+      questions.push(`What triggered the feeling of ${analysis.emotions[0]}?`);
+      questions.push("How do you want to handle similar emotions in the future?");
+    }
+    
+    if (analysis.isPastEvent) {
+      questions.push("What would you tell someone else going through a similar experience?");
+      questions.push("How has this experience changed your perspective?");
+    }
+    
+    if (analysis.isFuturePlanning) {
+      questions.push("What steps will you take to make this happen?");
+      questions.push("What obstacles might you face and how will you overcome them?");
+    }
+    
+    // Add some default questions if we don't have enough context-specific ones
+    const allQuestions = [...questions, ...defaultQuestions];
+    
+    // Return a mix of context-specific and general questions
+    return allQuestions.slice(0, 6);
   }, [analyzeJournalContent]);
 
   // Check if a question is relevant to journal content
@@ -192,14 +275,23 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
 
   // Only show the enhancer when user stops typing
   useEffect(() => {
+    console.log('🔍 JournalEnhancer useEffect triggered:', {
+      journalTextLength: journalText.trim().length,
+      minWordCount,
+      isVisible,
+      questionsLength: questions.length
+    });
+    
     // Clear any existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
     if (journalText.trim().length >= minWordCount) {
-      // Set a delay before showing the enhancer (1.5 seconds after typing stops)
+      console.log('✅ Text meets minimum word count, setting timeout...');
+      // Set a delay before showing the enhancer (1 second after typing stops)
       typingTimeoutRef.current = setTimeout(() => {
+        console.log('⏰ Timeout triggered, making enhancer visible');
         setIsVisible(true);
          
         // If no questions have been generated yet and this is the first time
@@ -278,7 +370,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
           
           generateInitialQuestion();
         }
-      }, 1500);
+      }, 1000);
     } else {
       // Hide if below minimum word count
       setIsVisible(false);
@@ -318,29 +410,19 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
         (lowerText.includes("truth is") && lowerText.includes("love")) ||
         journalText.split('\n').length >= 3;
       
-      // If we have multiple questions, just cycle through them first
-      if (questions.length > 1 && shuffleAttempts.current <= questions.length) {
-        const currentIndex = questions.indexOf(currentQuestion);
-        const nextIndex = (currentIndex + 1) % questions.length;
-        setCurrentQuestion(questions[nextIndex]);
-        console.log("Cycling to existing question:", questions[nextIndex]);
-      } else {
-        // Try to generate a new question
-        console.log("Attempting to generate a new question...");
+      // ALWAYS try to get a GPT-generated question first
+      console.log("Attempting to generate a new GPT question...");
+      
+      try {
+        // If no analysis yet, create one
+        if (!journalAnalysis.current) {
+          journalAnalysis.current = analyzeJournalContent(journalText);
+        }
         
-        try {
-          // Use a different seed each time
-          const seed = Date.now();
-          
-          // If no analysis yet, create one
-          if (!journalAnalysis.current) {
-            journalAnalysis.current = analyzeJournalContent(journalText);
-          }
-          
-          // For lyrics, don't append any focus element
-          let focusedPrompt = journalText;
-          
-          if (!isLyrics) {
+        // For lyrics, don't append any focus element
+        let focusedPrompt = journalText;
+        
+        if (!isLyrics) {
           // Get key details to focus on
           const analysis = journalAnalysis.current;
           
@@ -350,9 +432,9 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
             ...(analysis.people.length > 0 ? analysis.people : []),
             ...(analysis.locations.length > 0 ? analysis.locations : []),
             ...(analysis.activities.length > 0 ? analysis.activities : []),
-              ...(analysis.keyWords.length > 0 ? analysis.keyWords
-                .filter((word: string) => !['rather', 'would', 'could', 'should'].includes(word.toLowerCase()))
-                .slice(0, 3) : [])
+            ...(analysis.keyWords.length > 0 ? analysis.keyWords
+              .filter((word: string) => !['rather', 'would', 'could', 'should'].includes(word.toLowerCase()))
+              .slice(0, 3) : [])
           ];
           
           if (focusOptions.length > 0) {
@@ -361,72 +443,92 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
           
           console.log("Using focus element:", focusElement);
           
-            // Only add focus for non-lyrics
-            if (focusElement) {
-              focusedPrompt = `${journalText} (Focus especially on "${focusElement}" in your question)`;
-            }
+          // Only add focus for non-lyrics
+          if (focusElement) {
+            focusedPrompt = `${journalText} (Focus especially on "${focusElement}" in your question)`;
           }
+        }
+        
+        // Use a different seed each time to get variety
+        const seed = Date.now() + shuffleAttempts.current;
+        
+        // Try getting an AI-generated question with retries
+        const newQuestions = await generateJournalPrompts(
+          focusedPrompt,
+          location,
+          minWordCount,
+          seed,
+          3 // Increase retry attempts for "try another"
+        );
+        
+        console.log("New GPT questions generated:", newQuestions);
+        
+        if (newQuestions && newQuestions.length > 0) {
+          const newQuestion = newQuestions[0];
           
-          // Try getting an AI-generated question
-          const newQuestions = await generateJournalPrompts(
-            focusedPrompt,
-            location,
-            minWordCount,
-            seed
-          );
-          
-          console.log("New questions generated:", newQuestions);
-          
-          if (newQuestions && newQuestions.length > 0) {
-            // Check if it's unique and relevant
-            const newQuestion = newQuestions[0];
+          // Check if it's unique and relevant
+          if (!questions.includes(newQuestion) && 
+              isRelevantQuestion(newQuestion, journalText) &&
+              !newQuestion.toLowerCase().includes("experience with rather")) {
+            // Add to question list and display
+            setQuestions(prevQuestions => [...prevQuestions, newQuestion]);
+            setCurrentQuestion(newQuestion);
+            console.log("✅ Added new GPT question:", newQuestion);
+            return; // Success! Exit early
+          } else {
+            console.log("⚠️ GPT question was duplicate or irrelevant, trying again...");
+            // Try one more time with a different approach
+            const retryQuestions = await generateJournalPrompts(
+              journalText, // Use original text without focus
+              location,
+              minWordCount,
+              Date.now() + Math.random() * 1000, // Different seed
+              2 // Fewer retries for the retry attempt
+            );
             
-            if (!questions.includes(newQuestion) && 
-                isRelevantQuestion(newQuestion, journalText) &&
-                !newQuestion.toLowerCase().includes("experience with rather")) {
-              // Add to question list and display
-              setQuestions(prevQuestions => [...prevQuestions, newQuestion]);
-              setCurrentQuestion(newQuestion);
-              console.log("Added new question:", newQuestion);
-            } else {
-              // Get a fresh direct question
-              const directQuestions = generateDirectQuestions(journalText);
-              
-              // Find a direct question that isn't already in our list
-              const newDirectQuestion = directQuestions.find(q => !questions.includes(q));
-              
-              if (newDirectQuestion) {
-                setQuestions(prevQuestions => [...prevQuestions, newDirectQuestion]);
-                setCurrentQuestion(newDirectQuestion);
-                console.log("Added new direct question:", newDirectQuestion);
-              } else {
-                // Just cycle to the next question if we can't generate a unique one
-                const currentIndex = questions.indexOf(currentQuestion);
-                const nextIndex = (currentIndex + 1) % questions.length;
-                setCurrentQuestion(questions[nextIndex]);
-                console.log("Cycling to next question:", questions[nextIndex]);
+            if (retryQuestions && retryQuestions.length > 0) {
+              const retryQuestion = retryQuestions[0];
+              if (!questions.includes(retryQuestion) && 
+                  !retryQuestion.toLowerCase().includes("experience with rather")) {
+                setQuestions(prevQuestions => [...prevQuestions, retryQuestion]);
+                setCurrentQuestion(retryQuestion);
+                console.log("✅ Added retry GPT question:", retryQuestion);
+                return; // Success! Exit early
               }
             }
-          } else {
-            throw new Error("No new questions generated");
           }
-        } catch (error) {
-          console.error("Error generating new question:", error);
-          
-          // Generate fresh direct questions
+        }
+        
+        // If we get here, GPT didn't provide a good unique question
+        throw new Error("GPT didn't provide a unique question");
+        
+      } catch (gptError) {
+        console.error("❌ GPT question generation failed:", gptError);
+        
+        // Only now fall back to cycling existing questions or direct questions
+        console.log("🔄 Falling back to existing questions or direct questions...");
+        
+        // If we have multiple questions, cycle through them first
+        if (questions.length > 1) {
+          const currentIndex = questions.indexOf(currentQuestion);
+          const nextIndex = (currentIndex + 1) % questions.length;
+          setCurrentQuestion(questions[nextIndex]);
+          console.log("🔄 Cycling to existing question:", questions[nextIndex]);
+        } else {
+          // Generate fresh direct questions as absolute last resort
           const directQuestions = generateDirectQuestions(journalText);
           const newDirectQuestion = directQuestions.find(q => !questions.includes(q));
           
           if (newDirectQuestion) {
             setQuestions(prevQuestions => [...prevQuestions, newDirectQuestion]);
             setCurrentQuestion(newDirectQuestion);
-            console.log("Added fallback direct question:", newDirectQuestion);
+            console.log("⚠️ Added fallback direct question:", newDirectQuestion);
           } else {
             // Cycle questions if we can't generate a unique one
             const currentIndex = questions.indexOf(currentQuestion);
             const nextIndex = (currentIndex + 1) % questions.length;
             setCurrentQuestion(questions[nextIndex]);
-            console.log("Cycling to next question after error:", questions[nextIndex]);
+            console.log("🔄 Cycling to next question after all fallbacks:", questions[nextIndex]);
           }
         }
       }
@@ -440,8 +542,17 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
   };
 
   if (!isVisible) {
+    console.log('🚫 JournalEnhancer not visible, returning null');
     return null;
   }
+
+  console.log('✨ JournalEnhancer rendering with:', {
+    isVisible,
+    expanded,
+    currentQuestion,
+    questionsLength: questions.length,
+    isLoading
+  });
 
   return (
     <AnimatePresence>

@@ -96,6 +96,9 @@ interface JournalCanvasProps {
     showLocation: boolean;
     dateFormat: string;
   };
+  showCursor?: boolean; // Add showCursor prop
+  cursorVisible?: boolean; // Add cursorVisible prop
+  cursorPosition?: { textAreaIndex: number; characterIndex: number } | { isLocation: true; characterIndex: number }; // Add cursorPosition prop
 }
 
 // Export the imperative handle type
@@ -179,6 +182,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     showLocation: true,
     dateFormat: 'MMMM DD, YYYY'
   },
+  showCursor = false,
+  cursorVisible = false,
+  cursorPosition,
   ...props
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -673,7 +679,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const textColumnWidth = fullWidth * 0.45; // Wider text
       
       // Define grid layout that fills the entire canvas with no margins
-      let gridLayout;
+      interface GridLayoutItem {
+        type: 'date' | 'location' | 'text' | 'image';
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+      
+      let gridLayout: GridLayoutItem[];
       
       if (layoutMode === 'standard') {
         // Standard layout (original): Images on left, text on right
@@ -827,6 +841,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`;
               ctx.font = testFontString;
               
+              const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
               const smallestAreaWidth = Math.min(
                 textAreas[0].width - 160,
                 textAreas[1].width - 160,
@@ -854,7 +869,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               
               return lines;
             } catch (err) {
-              console.error('Error counting reference lines:', err);
               return totalLines + 1;
             }
           };
@@ -944,7 +958,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 
                 if (metrics.width > areaWidth && currentLine) {
                   // Line is full, draw it and move to the next line
+                  ctx.save();
+                  // Ensure no horizontal flip or reversal is applied for text
+                  ctx.setTransform(1, 0, 0, 1, 0, 0);
+                  ctx.direction = 'ltr';
                   ctx.fillText(currentLine, areaX, currentY);
+                  ctx.restore();
                   currentLine = '';
                   break;
                 } else {
@@ -957,7 +976,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               // If we've processed all words or this is the last line in the range, draw any remaining text
               if (currentWord >= words.length || lineIndex === lineRange.endLine) {
                 if (currentLine) {
+                  ctx.save();
+                  ctx.setTransform(1, 0, 0, 1, 0, 0);
+                  ctx.direction = 'ltr';
                   ctx.fillText(currentLine, areaX, currentY);
+                  ctx.restore();
                   currentLine = '';
                 }
               }
@@ -965,6 +988,237 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           }
         } catch (err) {
           console.error('Error drawing journal text:', err);
+        }
+      }
+      
+      // Draw cursor if enabled - always show when focused, blink with cursorVisible
+      if (showCursor && cursorPosition) {
+        console.log('Cursor drawing conditions met:', { showCursor, cursorPosition, cursorVisible });
+        try {
+          // Check if it's a location cursor or text area cursor
+          if ('isLocation' in cursorPosition) {
+            // Handle location cursor
+            const { characterIndex } = cursorPosition;
+            console.log('Drawing location cursor at character:', characterIndex);
+            
+            // Get location area from grid layout
+            const locationArea = gridLayout.find((item: GridLayoutItem) => item.type === 'location');
+            if (locationArea) {
+              // Calculate font size for location
+              const locationFontSize = getDefaultLocationFontSize(ctx, canvas.width);
+              ctx.font = `bold ${locationFontSize}px TitleFont, Arial, sans-serif`;
+              
+              // Calculate cursor position in location text
+              const locationText = location || '';
+              const textBeforeCursor = locationText.substring(0, characterIndex);
+              const textMetrics = ctx.measureText(textBeforeCursor);
+              
+              // Use the exact same positioning logic as the location text drawing
+              const locationMetrics = ctx.measureText(locationText.toUpperCase());
+              let locationBaseline;
+              if (locationMetrics.fontBoundingBoxAscent) {
+                locationBaseline = locationMetrics.fontBoundingBoxAscent;
+              } else {
+                // Fallback: estimate ascent as 0.8x the font size
+                locationBaseline = locationFontSize * 0.8;
+              }
+              
+              // Position the cursor at the exact same baseline as the location text
+              const yPosition = locationArea.y + locationBaseline;
+              
+              const cursorX = 40 + textMetrics.width; // Same X offset as location text (40)
+              const cursorY = yPosition;
+              
+              // Draw the location cursor
+              ctx.save();
+              ctx.fillStyle = '#000000'; // Black cursor
+              ctx.globalAlpha = cursorVisible ? 1.0 : 0.3;
+              ctx.fillRect(cursorX, cursorY - locationFontSize * 0.8, 12, locationFontSize);
+              ctx.restore();
+              
+              console.log('LOCATION CURSOR DRAWN! Position:', { cursorX, cursorY, characterIndex, locationFontSize, cursorVisible });
+            }
+          } else {
+            // Handle text area cursor (existing logic)
+            const { textAreaIndex, characterIndex } = cursorPosition;
+            
+            // Get the text from the specific text area
+            const textAreaText = textSections[textAreaIndex] || '';
+            console.log('Drawing cursor for text area:', textAreaIndex, 'with text:', textAreaText, 'at character:', characterIndex);
+            
+            // Calculate font size (same logic as text drawing)
+            const minFontSize = 28;
+            const maxFontSize = 140;
+            const totalLines = 21;
+            
+            let low = minFontSize;
+            let high = maxFontSize;
+            let fontSize = minFontSize;
+            
+            const referenceText = Array(98).fill("word").join(" ");
+            const referenceWords = referenceText.split(' ');
+            
+            const countReferenceLines = (size: number): number => {
+              try {
+                const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`;
+                ctx.font = testFontString;
+                
+                const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
+                const smallestAreaWidth = Math.min(
+                  textAreas[0].width - 160,
+                  textAreas[1].width - 160,
+                  textAreas[2].width - 160
+                );
+                
+                let lines = 0;
+                let currentLine = '';
+                
+                for (const word of referenceWords) {
+                  const testLine = currentLine ? `${currentLine} ${word}` : word;
+                  const metrics = ctx.measureText(testLine);
+                  
+                  if (metrics.width > smallestAreaWidth && currentLine) {
+                    lines++;
+                    currentLine = word;
+                  } else {
+                    currentLine = testLine;
+                  }
+                }
+                
+                if (currentLine) {
+                  lines++;
+                }
+                
+                return lines;
+              } catch (err) {
+                return totalLines + 1;
+              }
+            };
+            
+            while (low <= high) {
+              const mid = Math.floor((low + high) / 2);
+              const lineCount = countReferenceLines(mid);
+              
+              if (lineCount <= totalLines) {
+                fontSize = mid;
+                low = mid + 1;
+              } else {
+                high = mid - 1;
+              }
+            }
+            
+            while (fontSize < maxFontSize && countReferenceLines(fontSize + 1) <= totalLines) {
+              fontSize += 1;
+            }
+            
+            fontSize = Math.max(minFontSize, fontSize * 0.85);
+            
+            // Set font for cursor positioning
+            ctx.font = `990 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+            
+            // Get text areas and calculate cursor position
+            const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
+            const orderedTextAreas = [textAreas[0], textAreas[1], textAreas[2]];
+            
+            if (textAreaIndex >= 0 && textAreaIndex < orderedTextAreas.length) {
+              const area = orderedTextAreas[textAreaIndex];
+              const areaX = area.x + 60;
+              const areaWidth = area.width - 160;
+              
+              // Get the line ranges for each text area
+              const textAreaLineRanges = [
+                { startLine: 0, endLine: 6 },
+                { startLine: 7, endLine: 13 },
+                { startLine: 14, endLine: 20 }
+              ];
+              
+              const lineRange = textAreaLineRanges[textAreaIndex];
+              
+              // Default cursor position (for empty text)
+              let cursorX = areaX;
+              let cursorY = journalLineYCoords[lineRange.startLine];
+              
+              // If there's text, calculate the exact cursor position
+              if (textAreaText.length > 0) {
+                // Split text into words and simulate layout for this specific text area
+                const words = textAreaText.split(' ');
+                let currentWord = 0;
+                let currentLine = '';
+                let charactersProcessed = 0;
+                let cursorFound = false;
+                
+                for (let lineIndex = lineRange.startLine; lineIndex <= lineRange.endLine && currentWord < words.length; lineIndex++) {
+                  const currentY = journalLineYCoords[lineIndex];
+                  currentLine = '';
+                  
+                  while (currentWord < words.length) {
+                    const nextWord = words[currentWord];
+                    const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
+                    const metrics = ctx.measureText(testLine);
+                    
+                    if (metrics.width > areaWidth && currentLine) {
+                      // Line is full, check if cursor is in this line
+                      const lineLength = currentLine.length;
+                      
+                      if (charactersProcessed <= characterIndex && characterIndex <= charactersProcessed + lineLength) {
+                        // Cursor is in this line
+                        const charIndexInLine = characterIndex - charactersProcessed;
+                        const textBeforeCursor = currentLine.substring(0, charIndexInLine);
+                        const textMetrics = ctx.measureText(textBeforeCursor);
+                        
+                        cursorX = areaX + textMetrics.width;
+                        cursorY = currentY;
+                        cursorFound = true;
+                        break;
+                      }
+                      
+                      charactersProcessed += lineLength + 1; // +1 for space
+                      currentLine = '';
+                      break;
+                    } else {
+                      currentLine = testLine;
+                      currentWord++;
+                    }
+                  }
+                  
+                  if (cursorFound) break;
+                  
+                  // Check if cursor is at the end of the last line
+                  if (currentWord >= words.length || lineIndex === lineRange.endLine) {
+                    if (currentLine) {
+                      const lineLength = currentLine.length;
+                      
+                      if (charactersProcessed <= characterIndex && characterIndex <= charactersProcessed + lineLength) {
+                        const charIndexInLine = characterIndex - charactersProcessed;
+                        const textBeforeCursor = currentLine.substring(0, charIndexInLine);
+                        const textMetrics = ctx.measureText(textBeforeCursor);
+                        
+                        cursorX = areaX + textMetrics.width;
+                        cursorY = currentY;
+                        cursorFound = true;
+                      }
+                      
+                      charactersProcessed += lineLength + 1;
+                    }
+                    break;
+                  }
+                }
+              }
+              
+              // Draw the chunky cursor - always visible when focused, blink with opacity
+              ctx.save();
+              ctx.fillStyle = '#000000'; // Black cursor
+              ctx.globalAlpha = cursorVisible ? 1.0 : 0.3; // Use opacity for blinking, never fully invisible
+              ctx.fillRect(cursorX, cursorY - fontSize * 0.8, 12, fontSize); // 12px wide chunky cursor
+              ctx.restore();
+              
+              console.log('CURSOR DRAWN! Position:', { cursorX, cursorY, textAreaIndex, characterIndex, fontSize, cursorVisible, opacity: cursorVisible ? 1.0 : 0.3, hasText: textAreaText.length > 0 });
+              console.log('Canvas dimensions:', { width: canvas.width, height: canvas.height });
+              console.log('Cursor rect:', { x: cursorX, y: cursorY - fontSize * 0.8, width: 12, height: fontSize });
+            }
+          }
+        } catch (err) {
+          console.error('Error drawing cursor:', err);
         }
       }
       
