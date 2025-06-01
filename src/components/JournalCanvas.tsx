@@ -608,6 +608,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const canvas = canvasRef.current;
       if (!canvas) return;
       
+    // Get device pixel ratio for mobile optimization
+    const dpr = window.devicePixelRatio || 1;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    
+    // Adjust canvas resolution based on device type
+    let canvasWidth, canvasHeight;
+    if (isMobile) {
+      // Use lower resolution on mobile to prevent text rendering artifacts
+      canvasWidth = 1550; // 1.25x instead of 2.5x
+      canvasHeight = 2185; // 1.25x instead of 2.5x
+    } else {
+      // Use higher resolution on desktop
+      canvasWidth = 3100; // 2.5x from 1240
+      canvasHeight = 4370; // 2.5x from 1748
+    }
+          
           // Create an optimized rendering context
     const ctx = canvas.getContext('2d', { 
       alpha: true, 
@@ -617,13 +633,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     if (!ctx) return;
     
     try {
-      // Use higher resolution for image quality
-      canvas.width = 3100; // 2.5x from 1240
-      canvas.height = 4370; // 2.5x from 1748
+      // Set canvas dimensions
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
       
       // Enable quality rendering but without excessive filtering
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
+      
+      // Add mobile-specific text rendering optimizations
+      if (isMobile) {
+        // Disable image smoothing for text to prevent blur on mobile
+        ctx.imageSmoothingEnabled = false;
+        // Force pixel-perfect rendering on mobile
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
       
       // Remove filters for better performance
       
