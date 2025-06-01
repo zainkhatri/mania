@@ -764,13 +764,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'left';
           
-          // Apply text enhancement techniques
-          if (ctx.shadowBlur !== undefined) {
-            ctx.shadowColor = 'rgba(0,0,0,0.01)';
-            ctx.shadowBlur = 0.5;
-            ctx.shadowOffsetX = 0.2;
-            ctx.shadowOffsetY = 0.2;
-          }
+          // Remove all shadow effects for clean, crisp text
+          ctx.shadowColor = 'rgba(0,0,0,0)';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
           
           // Calculate metrics for the date text
           const dateMetrics = ctx.measureText(dateText);
@@ -896,7 +894,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
-          const fontString = `990 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+          const fontString = `700 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           
@@ -1114,7 +1112,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize = Math.max(minFontSize, fontSize * 0.85);
             
             // Set font for cursor positioning
-            ctx.font = `990 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+            ctx.font = `700 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
             
             // Get text areas and calculate cursor position
             const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
