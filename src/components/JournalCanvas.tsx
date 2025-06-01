@@ -1323,14 +1323,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
           ctx.restore();
           
-          // Shadow layer with customizable offsets
-          const shadowOffsetX = 25;
-          const shadowOffsetY = 25;
+          // Use canvas shadow instead of double text to avoid doubling issue
+          ctx.save();
+          ctx.shadowColor = locationShadowColor;
+          ctx.shadowBlur = 3; // Very subtle blur
+          ctx.shadowOffsetX = 2; // Very small offset
+          ctx.shadowOffsetY = 2; // Very small offset
           
-          ctx.fillStyle = locationShadowColor;
-          ctx.fillText(location.toUpperCase(), 40 + shadowOffsetX, yPosition + shadowOffsetY);
-
-          // Main text
+          // Draw the main text with subtle shadow
           ctx.fillStyle = locationColor;
           ctx.fillText(location.toUpperCase(), 40, yPosition);
           
