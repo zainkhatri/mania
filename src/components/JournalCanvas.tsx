@@ -648,6 +648,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Force pixel-perfect rendering on mobile
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
+        // Disable all filters and effects
+        ctx.filter = 'none';
+        // Force no subpixel rendering and pixel-perfect alignment
+        ctx.translate(0.5, 0.5);
+        ctx.translate(-0.5, -0.5);
+        // Additional mobile text optimizations
+        if (ctx.fontKerning !== undefined) {
+          ctx.fontKerning = 'none'; // Disable kerning for crisp mobile text
+        }
+        // Force text to render at exact pixel boundaries
+        ctx.globalCompositeOperation = 'source-over';
       }
       
       // Remove filters for better performance
@@ -805,7 +816,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           }
           
           // Draw the date text (moved down)
-          ctx.fillText(dateText, dateCell.x + 20, dateCell.y + 25);
+          const dateX = isMobile ? Math.round(dateCell.x + 20) : dateCell.x + 20;
+          const dateY = isMobile ? Math.round(dateCell.y + 25) : dateCell.y + 25;
+          ctx.fillText(dateText, dateX, dateY);
           
           // Calculate the Y position for the location with minimal spacing
           currentYPosition = dateCell.y + dateTextBaselineOffset + minSpacingBetweenElements + 15; // Increased spacing
@@ -919,7 +932,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Set the font with our precisely determined size for content text
           ctx.fontKerning = 'normal';
-          const fontString = `700 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+          // Use lighter font weight on mobile to prevent stacking
+          const fontWeight = isMobile ? '400' : '700';
+          const fontString = `${fontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           
@@ -985,7 +1000,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   // Ensure no horizontal flip or reversal is applied for text
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
                   ctx.direction = 'ltr';
-                  ctx.fillText(currentLine, areaX, currentY);
+                  // Mobile text optimization - round coordinates for crisp text
+                  const drawX = isMobile ? Math.round(areaX) : areaX;
+                  const drawY = isMobile ? Math.round(currentY) : currentY;
+                  ctx.fillText(currentLine, drawX, drawY);
                   ctx.restore();
                   currentLine = '';
                   break;
@@ -1002,7 +1020,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.save();
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
                   ctx.direction = 'ltr';
-                  ctx.fillText(currentLine, areaX, currentY);
+                  // Mobile text optimization - round coordinates for crisp text
+                  const drawX = isMobile ? Math.round(areaX) : areaX;
+                  const drawY = isMobile ? Math.round(currentY) : currentY;
+                  ctx.fillText(currentLine, drawX, drawY);
                   ctx.restore();
                   currentLine = '';
                 }
@@ -1137,7 +1158,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize = Math.max(minFontSize, fontSize * 0.85);
             
             // Set font for cursor positioning
-            ctx.font = `700 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+            const cursorFontWeight = isMobile ? '400' : '700';
+            ctx.font = `${cursorFontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
             
             // Get text areas and calculate cursor position
             const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
@@ -1346,9 +1368,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
           ctx.restore();
           
-          // Draw only the main text with no shadow for crisp appearance
+          // Create graffiti lag effect for location text - draw shadow first
+          ctx.fillStyle = locationShadowColor;
+          const shadowX = isMobile ? Math.round(65) : 65;
+          const shadowY = isMobile ? Math.round(yPosition + 25) : yPosition + 25;
+          ctx.fillText(location.toUpperCase(), shadowX, shadowY); // Offset by +5x, +5y for lag effect
+          
+          // Draw main location text on top
           ctx.fillStyle = locationColor;
-          ctx.fillText(location.toUpperCase(), 40, yPosition);
+          const mainX = isMobile ? Math.round(40) : 40;
+          const mainY = isMobile ? Math.round(yPosition) : yPosition;
+          ctx.fillText(location.toUpperCase(), mainX, mainY);
           
           ctx.restore();
         } catch (err) {
