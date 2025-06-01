@@ -65,6 +65,19 @@ const Home: React.FC = () => {
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-screen overflow-hidden">
+      {/* TV static background video */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover z-0 static-bg"
+      >
+        <source src="/background/static.webm" type="video/webm" />
+        Your browser does not support the video tag.
+      </video>
+      
       {/* Content overlay */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8 home-overlay">
         <h1 
