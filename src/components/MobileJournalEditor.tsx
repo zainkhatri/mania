@@ -382,6 +382,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [isWriting, setIsWriting] = useState(false);
   const hiddenTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Add state for location editing mode
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const locationTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
@@ -636,8 +640,43 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, []);
 
+  // Add function to handle location area click
+  const handleLocationClick = useCallback(() => {
+    setIsEditingLocation(true);
+    setActiveEditTab('location');
+    
+    // Focus the hidden location textarea
+    setTimeout(() => {
+      if (locationTextareaRef.current) {
+        locationTextareaRef.current.focus();
+        
+        // Additional iOS keyboard trigger if needed
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          locationTextareaRef.current.click();
+        }
+      }
+    }, 100);
+    
+    hapticFeedback('light');
+  }, [hapticFeedback]);
+
+  // Handle location text input changes
+  const handleLocationChange = useCallback((newLocation: string) => {
+    setLocation(newLocation.toUpperCase());
+    onUpdate({ date, location: newLocation.toUpperCase(), images, textSections });
+  }, [date, images, textSections, onUpdate]);
+
+  // Close location editing mode
+  const closeLocationEditing = useCallback(() => {
+    setIsEditingLocation(false);
+    setActiveEditTab('none');
+    if (locationTextareaRef.current) {
+      locationTextareaRef.current.blur();
+    }
+  }, []);
+
   return (
-    <div className="bg-gray-100 overflow-hidden flex flex-col ios-container">
+    <div className="bg-gray-100 overflow-hidden flex flex-col ios-container mobile-no-scroll">
       {/* Global CSS fix for backwards text */}
       <style>
         {`
@@ -706,6 +745,31 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           .location-input-normal::placeholder {
             text-align: center !important;
+          }
+          
+          /* DISABLE MOBILE SCROLLING - Critical for sticker manipulation */
+          .mobile-no-scroll {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            overflow: hidden !important;
+            -webkit-overflow-scrolling: none !important;
+            overscroll-behavior: none !important;
+            touch-action: pan-x pan-y !important;
+          }
+          
+          /* Disable body scrolling on mobile */
+          @media (max-width: 768px) {
+            body {
+              overflow: hidden !important;
+              position: fixed !important;
+              width: 100% !important;
+              height: 100% !important;
+              -webkit-overflow-scrolling: none !important;
+              overscroll-behavior: none !important;
+            }
           }
           
           /* Keyboard-aware layout - prioritize journal visibility */
@@ -826,10 +890,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                 {/* Location tap area */}
                 <div
                   className="absolute top-[5%] left-0 right-0 h-[6%] pointer-events-auto cursor-pointer"
-                  onClick={() => {
-                    setActiveEditTab('location');
-                    hapticFeedback('light');
-                  }}
+                  onClick={handleLocationClick}
                 />
               </div>
               
@@ -867,6 +928,41 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   data-enable-grammarly="false"
                 />
               )}
+              
+              {/* Hidden textarea for location editing */}
+              {isEditingLocation && (
+                <textarea
+                  ref={locationTextareaRef}
+                  value={location}
+                  onChange={(e) => handleLocationChange(e.target.value)}
+                  onBlur={closeLocationEditing}
+                  className="absolute top-[5%] left-0 right-0 h-[6%] opacity-0 pointer-events-auto resize-none bg-transparent text-center"
+                  style={{
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '16px', // Prevent zoom on iOS
+                    direction: 'ltr',
+                    textAlign: 'center',
+                    unicodeBidi: 'normal',
+                    writingMode: 'horizontal-tb',
+                    transform: 'translateZ(0)', // Hardware acceleration
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    WebkitTransform: 'translateZ(0)',
+                  }}
+                  placeholder="Location..."
+                  autoFocus
+                  dir="ltr"
+                  lang="en"
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="characters"
+                  inputMode="text"
+                  enterKeyHint="done"
+                  data-gramm="false"
+                  data-enable-grammarly="false"
+                />
+              )}
             </motion.div>
           </div>
         </div>
@@ -884,7 +980,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               </button>
               <button
                 className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={() => setActiveEditTab('location')}
+                onClick={handleLocationClick}
               >
                 📍
               </button>
@@ -912,57 +1008,33 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           </div>
 
           {/* Control Content */}
-          <div className="flex-1 p-3 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
             {activeEditTab === 'date' && (
-              <div className="h-full flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-gray-900 text-center">Select Date</h3>
+              <div className="h-full w-full">
                 <DatePicker
                   selected={date}
                   onChange={(newDate: Date | null) => {
                     if (newDate) {
                       setDate(newDate);
                       onUpdate({ date: newDate, location, images, textSections });
+                      // Auto-close after selection
+                      setActiveEditTab('none');
+                      hapticFeedback('medium');
                     }
                   }}
-                  className="w-full p-2 border border-gray-200 bg-white rounded-lg text-center font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  dateFormat="MMMM d, yyyy"
+                  inline
                   showPopperArrow={false}
-                  popperClassName="react-datepicker-popper"
-                  calendarClassName="react-datepicker-custom"
+                  calendarClassName="react-datepicker-custom-mobile"
                 />
               </div>
             )}
             
             {activeEditTab === 'location' && (
-              <div className="h-full flex flex-col gap-2 overflow-hidden">
-                <h3 className="text-base font-semibold text-gray-900 text-center">Location</h3>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={e => {
-                    setLocation(e.target.value.toUpperCase());
-                    onUpdate({ date, location: e.target.value.toUpperCase(), images, textSections });
-                  }}
-                  placeholder="Where are you?"
-                  className="w-full p-2 border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-sm text-gray-900 placeholder-gray-400 font-medium"
-                  style={{
-                    fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                    direction: 'ltr',
-                    textAlign: 'center',
-                    unicodeBidi: 'normal',
-                    writingMode: 'horizontal-tb',
-                  }}
-                  dir="ltr"
-                  lang="en"
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="characters"
-                  autoFocus
-                />
+              <div className="h-full flex flex-col gap-2 overflow-hidden p-3">
+                <h3 className="text-base font-semibold text-gray-900 text-center">Location Colors</h3>
                 
-                {/* Color Picker - Compressed to fit */}
-                <div className="flex-1 bg-gray-50 rounded-lg p-2 overflow-y-auto min-h-0" style={{ maxHeight: '120px' }}>
+                {/* Color Picker - Full height for better visibility */}
+                <div className="flex-1 bg-gray-50 rounded-lg p-2 overflow-y-auto min-h-0">
                   <SimpleColorPicker
                     colors={textColors}
                     onChange={newColors => {
@@ -977,7 +1049,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             )}
             
             {activeEditTab === 'stickers' && (
-              <div className="h-full flex flex-col gap-2 justify-center">
+              <div className="h-full flex flex-col gap-2 justify-center p-3">
                 <h3 className="text-base font-semibold text-gray-900 text-center">Add Stickers</h3>
                 <button
                   onClick={() => {
@@ -992,7 +1064,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             )}
             
             {activeEditTab === 'write' && (
-              <div className="h-full flex items-center justify-center">
+              <div className="h-full flex items-center justify-center p-3">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 mx-auto">
                     <FontAwesomeIcon icon={faPencil} className="text-white text-xl" />
@@ -1168,6 +1240,111 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           .react-datepicker__navigation--next {
             border-left-color: #6b7280;
             right: 12px;
+          }
+          
+          /* Mobile inline calendar styles */
+          .react-datepicker-custom-mobile {
+            border: none !important;
+            border-radius: 6px;
+            box-shadow: none !important;
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 11px;
+            background: white;
+            width: 100% !important;
+            margin: 0 auto;
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100% !important;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__header {
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            border-radius: 6px 6px 0 0;
+            padding: 4px 0;
+            flex-shrink: 0;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__current-month {
+            font-weight: 600;
+            font-size: 12px;
+            color: #374151;
+            margin-bottom: 2px;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__day-names {
+            margin-bottom: 1px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 4px;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__day-name {
+            color: #6b7280;
+            font-weight: 500;
+            font-size: 9px;
+            flex: 1;
+            line-height: 20px;
+            text-align: center;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__month {
+            padding: 4px;
+            background: white;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__week {
+            display: flex;
+            justify-content: space-between;
+            flex: 1;
+            align-items: center;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__day {
+            border-radius: 4px;
+            margin: 1px;
+            color: #374151;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            flex: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 32px;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__day--selected {
+            background-color: #3b82f6 !important;
+            color: white;
+            font-weight: 600;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__day:hover {
+            background-color: #eff6ff;
+            color: #1e40af;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__navigation {
+            top: 6px;
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            background: white;
+            border: 1px solid #e5e7eb;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__navigation--previous {
+            left: 6px;
+          }
+          
+          .react-datepicker-custom-mobile .react-datepicker__navigation--next {
+            right: 6px;
           }
         `}
       </style>
