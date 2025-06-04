@@ -623,7 +623,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const ctx = canvas.getContext('2d', { 
       alpha: true, 
       willReadFrequently: false, // Disable for better performance
-      desynchronized: true, // Enable for better performance
+      desynchronized: false, // Changed to false for better text quality
     });
     if (!ctx) return;
     
@@ -632,17 +632,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       canvas.width = canvasWidth;
       canvas.height = canvasHeight;
       
-      // Enable identical high-quality rendering for all devices
+      // Enable identical high-quality rendering for all devices with focus on text clarity
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       
-      // Use identical text rendering settings for all devices
+      // Use identical crisp text rendering settings for all devices
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
       ctx.filter = 'none';
       ctx.globalCompositeOperation = 'source-over';
-      
-      // No device-specific rendering optimizations to ensure consistency
+      ctx.globalAlpha = 1.0;
       
       // Clear canvas and fill with template background color
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -776,7 +775,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           );
           
           // Set font and color - always black for date text
-          ctx.fontKerning = 'normal';
           ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'left';
@@ -912,18 +910,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           fontSize = Math.max(minFontSize, fontSize * 0.85);
           
           // Set the font with our precisely determined size for content text
-          ctx.fontKerning = 'normal';
-          // Use consistent font weight across all devices for identical appearance
-          const fontWeight = '700';
+          // Use normal font weight for crisp, clean text on all devices
+          const fontWeight = '400'; // Changed from 700 to 400 for normal weight
           const fontString = `${fontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
           
-          // Reset any shadow settings before journal text
-          ctx.shadowColor = 'rgba(0,0,0,0)';
+          // COMPLETELY disable all shadow effects for journal text
+          ctx.shadowColor = 'transparent';
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
+          
+          // Ensure crisp text rendering on mobile devices
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.filter = 'none';
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1.0;
           
           // Split text into words for layout
           let currentWord = 0;
@@ -978,10 +982,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 if (metrics.width > areaWidth && currentLine) {
                   // Line is full, draw it and move to the next line
                   ctx.save();
-                  // Ensure no horizontal flip or reversal is applied for text
+                  // Ensure crisp rendering with no transforms or effects
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
                   ctx.direction = 'ltr';
-                  // Use consistent coordinates for identical positioning on all devices
+                  ctx.fillStyle = '#000000'; // Solid black, no transparency
+                  ctx.globalAlpha = 1.0;
+                  // Disable all shadow effects again before drawing
+                  ctx.shadowColor = 'transparent';
+                  ctx.shadowBlur = 0;
+                  ctx.shadowOffsetX = 0;
+                  ctx.shadowOffsetY = 0;
                   ctx.fillText(currentLine, areaX, currentY);
                   ctx.restore();
                   currentLine = '';
@@ -999,7 +1009,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.save();
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
                   ctx.direction = 'ltr';
-                  // Use consistent coordinates for identical positioning on all devices
+                  ctx.fillStyle = '#000000'; // Solid black, no transparency
+                  ctx.globalAlpha = 1.0;
+                  // Disable all shadow effects again before drawing
+                  ctx.shadowColor = 'transparent';
+                  ctx.shadowBlur = 0;
+                  ctx.shadowOffsetX = 0;
+                  ctx.shadowOffsetY = 0;
                   ctx.fillText(currentLine, areaX, currentY);
                   ctx.restore();
                   currentLine = '';
@@ -1135,7 +1151,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize = Math.max(minFontSize, fontSize * 0.85);
             
             // Set font for cursor positioning
-            const cursorFontWeight = '700';
+            const cursorFontWeight = '400'; // Changed from '700' to '400' for normal weight
             ctx.font = `${cursorFontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
             
             // Get text areas and calculate cursor position
