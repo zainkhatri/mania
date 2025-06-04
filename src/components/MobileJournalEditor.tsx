@@ -3,6 +3,7 @@ import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import JournalCanvas from './JournalCanvas';
 import JournalEnhancer from './JournalEnhancer';
 import 'react-datepicker/dist/react-datepicker.css';
+import DatePicker from 'react-datepicker';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faLocationDot, 
@@ -22,7 +23,8 @@ import {
   faChevronDown,
   faGripVertical,
   faStar,
-  faBars
+  faBars,
+  faGift
 } from '@fortawesome/free-solid-svg-icons';
 import SimpleColorPicker from './TempColorPicker';
 import LayoutToggle from './LayoutToggle';
@@ -328,6 +330,8 @@ const OptimizedTextInput = memo(({
       autoCapitalize="sentences"
       inputMode="text"
       enterKeyHint="enter"
+      data-gramm="false" // Disable Grammarly
+      data-enable-grammarly="false"
     />
   );
 });
@@ -366,12 +370,17 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   // Refs
   const journalCanvasRef = useRef(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const stickerInputRef = useRef<HTMLInputElement>(null);
   
   // Auto-hide controls on scroll
   const [lastScrollY, setLastScrollY] = useState(0);
   
-  // Add state for which edit tab is open
-  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format'>('none');
+  // Add state for which edit tab is open - added back 'write' as a simple pencil button
+  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format' | 'date' | 'stickers'>('none');
+  
+  // Simple state for writing mode
+  const [isWriting, setIsWriting] = useState(false);
+  const hiddenTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -436,6 +445,45 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       event.target.value = '';
     }
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
+
+  // Enhanced sticker upload with high quality preservation
+  const handleStickerUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsLoading(true);
+    hapticFeedback('medium');
+    
+    try {
+      const filesToProcess = Array.from(files);
+      
+      // Use the JournalCanvas ref to add stickers with high quality
+      if (journalCanvasRef.current && 'addMultipleStickers' in journalCanvasRef.current) {
+        (journalCanvasRef.current as any).addMultipleStickers(filesToProcess);
+      }
+      
+      // Show success animation
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1500);
+      
+      toast.success(`Added ${filesToProcess.length} sticker${filesToProcess.length > 1 ? 's' : ''}`, {
+        position: 'bottom-center',
+        style: { 
+          background: '#1a1a1a',
+          color: 'white',
+          borderRadius: '12px',
+          fontSize: '14px',
+          padding: '12px 20px'
+        }
+      });
+      
+    } catch (error) {
+      toast.error('Failed to upload stickers');
+    } finally {
+      setIsLoading(false);
+      event.target.value = '';
+    }
+  }, [hapticFeedback]);
 
   // Initialize local states when entering edit mode
   useEffect(() => {
@@ -552,16 +600,52 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setDraggedImageIndex(null);
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
+  // Add function to handle pencil button click
+  const handlePencilClick = useCallback(() => {
+    setIsWriting(true);
+    setActiveEditTab('write');
+    
+    // Focus the hidden textarea - simple and consistent
+    setTimeout(() => {
+      if (hiddenTextareaRef.current) {
+        hiddenTextareaRef.current.focus();
+        
+        // Additional iOS keyboard trigger if needed
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          hiddenTextareaRef.current.click();
+        }
+      }
+    }, 100);
+    
+    hapticFeedback('light');
+  }, [hapticFeedback]);
+
+  // Handle text input changes
+  const handleTextChange = useCallback((newText: string) => {
+    const newTextSections = [newText]; // Just use one text section for simplicity
+    setTextSections(newTextSections);
+    onUpdate({ date, location, images, textSections: newTextSections });
+  }, [date, location, images, onUpdate]);
+
+  // Close writing mode
+  const closeWriting = useCallback(() => {
+    setIsWriting(false);
+    setActiveEditTab('none');
+    if (hiddenTextareaRef.current) {
+      hiddenTextareaRef.current.blur();
+    }
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-50 overflow-hidden">
+    <div className="bg-gray-100 overflow-hidden flex flex-col ios-container">
       {/* Global CSS fix for backwards text */}
       <style>
         {`
           /* Force normal text direction globally for this component */
-          .min-h-screen textarea,
-          .min-h-screen input[type="text"],
-          .min-h-screen input,
-          .min-h-screen * {
+          .h-screen textarea,
+          .h-screen input[type="text"],
+          .h-screen input,
+          .h-screen * {
             direction: ltr !important;
             unicode-bidi: normal !important;
             writing-mode: horizontal-tb !important;
@@ -623,333 +707,327 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           .location-input-normal::placeholder {
             text-align: center !important;
           }
+          
+          /* Keyboard-aware layout - prioritize journal visibility */
+          @media (max-height: 600px) {
+            .full-journal {
+              height: 60vh !important;
+            }
+            .compact-edit-panel {
+              height: 30vh !important;
+            }
+          }
+          
+          /* iOS Keyboard Optimization */
+          @supports (-webkit-touch-callout: none) {
+            /* Keep layout consistent - just make tabs sticky */
+            .keyboard-aware {
+              position: relative !important;
+            }
+            
+            .sticky-tabs {
+              position: sticky !important;
+              top: 0 !important;
+              z-index: 1000 !important;
+              background: white !important;
+              border-bottom: 1px solid #f3f4f6 !important;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+            }
+            
+            /* Ensure tab content is scrollable when keyboard appears */
+            .keyboard-aware .flex-1 {
+              overflow-y: auto !important;
+              -webkit-overflow-scrolling: touch !important;
+            }
+            
+            /* Small viewport adjustments - minimal changes */
+            @media screen and (max-height: 600px) {
+              .full-journal {
+                height: 60vh !important;
+              }
+              .compact-edit-panel {
+                height: 40vh !important;
+              }
+            }
+            
+            /* iPhone-specific minor adjustments */
+            @media screen and (max-height: 750px) and (max-width: 430px) {
+              .full-journal {
+                height: 55vh !important;
+              }
+              .compact-edit-panel {
+                height: 45vh !important;
+              }
+            }
+          }
+          
+          /* Force body to use dynamic viewport units on iOS */
+          @supports (-webkit-touch-callout: none) {
+            body {
+              height: 100dvh !important;
+            }
+          }
+          
+          /* iOS Container with proper height fallbacks */
+          .ios-container {
+            height: 100vh;
+            height: 100dvh;
+          }
         `}
       </style>
 
-      {/* Single Header */}
-      <div className="sticky top-0 z-30 bg-black py-4 px-4">
-        <div className="flex items-center justify-between">
-          <span className="text-white text-5xl" style={{ fontFamily: "'Libre Baskerville', Georgia, serif" }}>mania</span>
+      {/* Clean Header - Made Much Smaller */}
+      <div className="bg-white py-0.5 px-3 flex-shrink-0 border-b border-gray-200" style={{ minHeight: '32px' }}>
+        <div className="flex items-center justify-end h-8">
           <button
-              onClick={handleDownload}
-              disabled={isLoading}
-            className="text-white"
-            >
-              {isLoading ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                />
-              ) : (
-              <FontAwesomeIcon icon={faDownload} className="text-2xl" />
-              )}
-          </button>
-          </div>
-        </div>
-
-      {/* Main Content */}
-      <div className="p-4"> {/* Removed extra bottom padding to prevent scroll */}
-        {/* Journal Canvas */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative bg-white rounded-2xl shadow-sm overflow-hidden mb-4"
-          style={{ aspectRatio: '1240/1748' }}
-        >
-          <JournalCanvas
-            ref={journalCanvasRef}
-            date={date}
-            location={location}
-            images={images}
-            textSections={textSections}
-            editMode={false}
-            templateUrl="/templates/goodnotes-a6-yellow.jpg"
-            textColors={textColors}
-            layoutMode={layoutMode}
-            onNewEntry={() => {}}
-          />
-          
-          {/* Interactive overlay */}
-          <div className="absolute inset-0 pointer-events-none">
-            {/* Location tap area */}
-            <div
-              className="absolute top-[5%] left-0 right-0 h-[6%] pointer-events-auto cursor-pointer"
-              onClick={() => {
-                setEditMode('location');
-                hapticFeedback('light');
-              }}
-            />
-            
-            {/* Text areas */}
-            {[13, 42, 72].map((top, index) => (
-              <div
-                key={index}
-                className="absolute pointer-events-auto cursor-pointer"
-                style={{
-                  top: `${top}%`,
-                  left: layoutMode === 'standard' ? '55%' : '2%',
-                  width: '44%',
-                  height: '27%'
-                }}
-                onClick={() => {
-                  setActiveTextIndex(index);
-                  setEditMode('text');
-                  hapticFeedback('light');
-                }}
+            onClick={handleDownload}
+            disabled={isLoading}
+            className="text-gray-700 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            {isLoading ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full"
               />
-            ))}
-          </div>
-        </motion.div>
+            ) : (
+              <FontAwesomeIcon icon={faDownload} className="text-sm" />
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Persistent Bottom Edit Panel */}
-      <div className="fixed bottom-0 left-0 w-full z-50 bg-white border-t border-gray-200" style={{ height: '25vh', minHeight: 220, boxShadow: '0 -2px 16px rgba(0,0,0,0.06)', overflow: 'hidden', pointerEvents: 'auto' }}>
-        {/* Edit Tab Buttons */}
-        <div className="flex justify-around items-center h-14 border-b border-gray-100">
-          <button
-            className={`flex-1 h-full flex flex-col items-center justify-center font-semibold text-lg transition-colors text-gray-700`}
-            onClick={() => {
-              if (fileInputRef.current) fileInputRef.current.click();
-            }}
-          >
-            <span role="img" aria-label="Images" className="text-xl">🖼️</span>
-            <span className="text-xs mt-1">Images</span>
-          </button>
-          <button
-            className={`flex-1 h-full flex flex-col items-center justify-center font-semibold text-lg transition-colors ${activeEditTab === 'write' ? 'text-purple-600' : 'text-gray-700'}`}
-            onClick={() => setActiveEditTab('write')}
-          >
-            ✏️<span className="text-xs mt-1">Write</span>
-          </button>
-          <button
-            className={`flex-1 h-full flex flex-col items-center justify-center font-semibold text-lg transition-colors ${activeEditTab === 'location' ? 'text-blue-600' : 'text-gray-700'}`}
-            onClick={() => setActiveEditTab('location')}
-          >
-            📍<span className="text-xs mt-1">Location</span>
-          </button>
-          <button
-            className={`flex-1 h-full flex flex-col items-center justify-center font-semibold text-lg transition-colors ${activeEditTab === 'format' ? 'text-green-600' : 'text-gray-700'}`}
-            onClick={() => setActiveEditTab('format')}
-          >
-            🎨<span className="text-xs mt-1">Format</span>
-          </button>
-        </div>
-        {/* Edit Controls Area */}
-        <div className="h-[calc(25vh-3.5rem)] flex flex-col justify-center items-center px-2 pt-1 pb-1 overflow-hidden">
-          {activeEditTab === 'write' && (
-            <OptimizedTextInput
-              initialValue={textSections[0] || ''}
-              onUpdateComplete={(newText) => {
-                setTextSections([newText]);
-                onUpdate({
-                  date,
-                  location,
-                  images,
-                  textSections: [newText]
-                });
-              }}
-            />
-          )}
-          {activeEditTab === 'location' && (
-            <div className="w-full flex flex-col items-center gap-1 py-1" style={{height: '100%', overflow: 'hidden'}}>
-              <input
-                type="text"
-                value={location}
-                onChange={e => {
-                  setLocation(e.target.value.toUpperCase());
-                  onUpdate({ date, location: e.target.value.toUpperCase(), images, textSections });
-                }}
-                placeholder="Enter location..."
-                className="w-full p-1 border border-gray-200 rounded-md focus:border-gray-400 focus:outline-none text-center text-base text-gray-900 placeholder-gray-400 transition-all duration-200 mb-1"
-                style={{
-                  fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-                  direction: 'ltr',
-                  textAlign: 'center',
-                  unicodeBidi: 'normal',
-                  writingMode: 'horizontal-tb',
-                  transform: 'none',
-                  WebkitTransform: 'none',
-                  MozTransform: 'none',
-                  msTransform: 'none',
-                  OTransform: 'none',
-                  textRendering: 'auto',
-                  fontFeatureSettings: 'normal',
-                  maxHeight: '32px',
-                  fontSize: '15px',
-                }}
-                dir="ltr"
-                lang="en"
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="characters"
-                autoFocus
+      {/* Journal View with iOS Keyboard Optimization */}
+      <div className={`flex-1 flex flex-col min-h-0 bg-white`}>
+        {/* Journal Section - Adjust for smaller header */}
+        <div className="full-journal" style={{ height: '68vh' }}>
+          <div className="h-full p-4">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative bg-white rounded-xl shadow-md overflow-hidden h-full border border-gray-200"
+              style={{ aspectRatio: '1240/1748' }}
+            >
+              <JournalCanvas
+                ref={journalCanvasRef}
+                date={date}
+                location={location}
+                images={images}
+                textSections={textSections}
+                editMode={true}
+                templateUrl="/templates/goodnotes-a6-yellow.jpg"
+                textColors={textColors}
+                layoutMode={layoutMode}
+                onNewEntry={() => {}}
               />
-              {/* Image-derived Color Picker - compact */}
-              <div className="w-full flex flex-col items-center justify-center mt-1">
-                <SimpleColorPicker
-                  colors={textColors}
-                  onChange={newColors => {
-                    setTextColors(newColors);
-                    onUpdate({ date, location, images, textSections });
+              
+              {/* Interactive overlay */}
+              <div className="absolute inset-0 pointer-events-none">
+                {/* Location tap area */}
+                <div
+                  className="absolute top-[5%] left-0 right-0 h-[6%] pointer-events-auto cursor-pointer"
+                  onClick={() => {
+                    setActiveEditTab('location');
+                    hapticFeedback('light');
                   }}
-                  images={images}
-                  compact={true}
                 />
               </div>
-            </div>
-          )}
-          {activeEditTab === 'format' && (
-            <div className="w-full flex flex-row items-center justify-center gap-4">
-              {/* Style 1 Icon */}
-              <button
-                className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${layoutMode === 'standard' ? 'border-green-500 bg-green-50' : 'border-transparent bg-gray-100'}`}
-                style={{ width: 90 }}
-                onClick={() => setLayoutMode('standard')}
-              >
-                {/* Mini journal preview SVG for Style 1 */}
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <rect x="4" y="4" width="40" height="40" rx="8" fill="#444" />
-                  <rect x="10" y="10" width="28" height="6" rx="2" fill="#bbb" />
-                  <rect x="10" y="18" width="12" height="6" rx="2" fill="#bbb" />
-                  <rect x="24" y="18" width="14" height="6" rx="2" fill="#bbb" />
-                  <rect x="10" y="26" width="28" height="6" rx="2" fill="#bbb" />
-                  <rect x="10" y="34" width="14" height="6" rx="2" fill="#bbb" />
-                  <rect x="26" y="34" width="12" height="6" rx="2" fill="#bbb" />
-                </svg>
-                <span className="text-xs font-semibold mt-1">Style 1</span>
-              </button>
-              {/* Style 2 Icon */}
-              <button
-                className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${layoutMode === 'mirrored' ? 'border-green-500 bg-green-50' : 'border-transparent bg-gray-100'}`}
-                style={{ width: 90 }}
-                onClick={() => setLayoutMode('mirrored')}
-              >
-                {/* Mini journal preview SVG for Style 2 */}
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <rect x="4" y="4" width="40" height="40" rx="8" fill="#888" />
-                  <rect x="10" y="10" width="28" height="6" rx="2" fill="#eee" />
-                  <rect x="26" y="18" width="12" height="6" rx="2" fill="#eee" />
-                  <rect x="10" y="18" width="14" height="6" rx="2" fill="#eee" />
-                  <rect x="10" y="26" width="28" height="6" rx="2" fill="#eee" />
-                  <rect x="26" y="34" width="14" height="6" rx="2" fill="#eee" />
-                  <rect x="10" y="34" width="12" height="6" rx="2" fill="#eee" />
-                </svg>
-                <span className="text-xs font-semibold mt-1">Style 2</span>
-              </button>
-              </div>
-          )}
-              </div>
-            </div>
+              
+              {/* Hidden textarea for writing mode */}
+              {isWriting && (
+                <textarea
+                  ref={hiddenTextareaRef}
+                  value={textSections[0] || ''}
+                  onChange={(e) => handleTextChange(e.target.value)}
+                  onBlur={closeWriting}
+                  className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto resize-none bg-transparent"
+                  style={{
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '16px', // Prevent zoom on iOS
+                    direction: 'ltr',
+                    textAlign: 'left',
+                    unicodeBidi: 'normal',
+                    writingMode: 'horizontal-tb',
+                    transform: 'translateZ(0)', // Hardware acceleration
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    WebkitTransform: 'translateZ(0)',
+                  }}
+                  placeholder="Start writing..."
+                  autoFocus
+                  dir="ltr"
+                  lang="en"
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="sentences"
+                  inputMode="text"
+                  enterKeyHint="enter"
+                  data-gramm="false" // Disable Grammarly
+                  data-enable-grammarly="false"
+                />
+              )}
+            </motion.div>
+          </div>
+        </div>
 
-      {/* Image Gallery Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="bg-white rounded-2xl p-6 shadow-sm mb-4"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Images ({images.length}/3)</h3>
-              <div className="flex gap-1">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-2 h-2 rounded-full ${
-                      i < images.length ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  />
-                ))}
-              </div>
+        {/* Integrated Control Panel - Smaller height */}
+        <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>
+          {/* Clean Tab Bar - Smaller height */}
+          <div className={`flex items-center h-12 px-4 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
+            <div className="flex w-full bg-gray-100 rounded-xl p-1">
+              <button
+                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                onClick={() => setActiveEditTab('date')}
+              >
+                📅
+              </button>
+              <button
+                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                onClick={() => setActiveEditTab('location')}
+              >
+                📍
+              </button>
+              <button
+                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-900`}
+                onClick={() => {
+                  if (fileInputRef.current) fileInputRef.current.click();
+                }}
+              >
+                🖼️
+              </button>
+              <button
+                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                onClick={() => setActiveEditTab('stickers')}
+              >
+                ✨
+              </button>
+              <button
+                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                onClick={handlePencilClick}
+              >
+                ✏️
+              </button>
             </div>
-        
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="aspect-square relative">
-              {images[index] ? (
-                <motion.div
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  onDrag={(_, info) => handleImageDrag(index, info)}
-                  onDragEnd={(_, info) => handleImageDragEnd(index, info)}
-                  className={`relative w-full h-full rounded-xl overflow-hidden ${
-                    draggedImageIndex === index ? 'z-10 scale-105' : ''
-                  } transition-all duration-200`}
-                >
-                  <img
-                    src={typeof images[index] === 'string' ? images[index] as string : URL.createObjectURL(images[index] as Blob)}
-                    alt={`Memory ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    onClick={() => {
-                      const newImages = images.filter((_, i) => i !== index);
-                      setImages(newImages);
-                      hapticFeedback('medium');
-                    }}
-                    className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full text-xs hover:bg-black/70 transition-colors"
-                  >
-                    <FontAwesomeIcon icon={faTimes} />
-                  </button>
-                </motion.div>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (fileInputRef.current) {
-                      fileInputRef.current.click();
-                      hapticFeedback('light');
+          </div>
+
+          {/* Control Content */}
+          <div className="flex-1 p-3 overflow-hidden">
+            {activeEditTab === 'date' && (
+              <div className="h-full flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-gray-900 text-center">Select Date</h3>
+                <DatePicker
+                  selected={date}
+                  onChange={(newDate: Date | null) => {
+                    if (newDate) {
+                      setDate(newDate);
+                      onUpdate({ date: newDate, location, images, textSections });
                     }
                   }}
-                  className="w-full h-full border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-all duration-200"
+                  className="w-full p-2 border border-gray-200 bg-white rounded-lg text-center font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  dateFormat="MMMM d, yyyy"
+                  showPopperArrow={false}
+                  popperClassName="react-datepicker-popper"
+                  calendarClassName="react-datepicker-custom"
+                />
+              </div>
+            )}
+            
+            {activeEditTab === 'location' && (
+              <div className="h-full flex flex-col gap-2 overflow-hidden">
+                <h3 className="text-base font-semibold text-gray-900 text-center">Location</h3>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={e => {
+                    setLocation(e.target.value.toUpperCase());
+                    onUpdate({ date, location: e.target.value.toUpperCase(), images, textSections });
+                  }}
+                  placeholder="Where are you?"
+                  className="w-full p-2 border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-sm text-gray-900 placeholder-gray-400 font-medium"
+                  style={{
+                    fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+                    direction: 'ltr',
+                    textAlign: 'center',
+                    unicodeBidi: 'normal',
+                    writingMode: 'horizontal-tb',
+                  }}
+                  dir="ltr"
+                  lang="en"
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="characters"
+                  autoFocus
+                />
+                
+                {/* Color Picker - Compressed to fit */}
+                <div className="flex-1 bg-gray-50 rounded-lg p-2 overflow-y-auto min-h-0" style={{ maxHeight: '120px' }}>
+                  <SimpleColorPicker
+                    colors={textColors}
+                    onChange={newColors => {
+                      setTextColors(newColors);
+                      onUpdate({ date, location, images, textSections });
+                    }}
+                    images={images}
+                    compact={true}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {activeEditTab === 'stickers' && (
+              <div className="h-full flex flex-col gap-2 justify-center">
+                <h3 className="text-base font-semibold text-gray-900 text-center">Add Stickers</h3>
+                <button
+                  onClick={() => {
+                    if (stickerInputRef.current) stickerInputRef.current.click();
+                  }}
+                  className="w-full py-3 bg-blue-500 text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors"
                 >
-                  <FontAwesomeIcon icon={faCamera} className="text-xl mb-1" />
-                  <span className="text-xs">Add</span>
+                  <FontAwesomeIcon icon={faGift} className="text-base" />
+                  Choose Stickers
                 </button>
-              )}
+              </div>
+            )}
+            
+            {activeEditTab === 'write' && (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <FontAwesomeIcon icon={faPencil} className="text-white text-xl" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Writing Mode</h3>
+                  <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                    Type and watch your words appear on the journal
+                  </p>
+                  <button
+                    onClick={closeWriting}
+                    className="px-6 py-2 bg-gray-100 text-gray-900 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Default state */}
+            {activeEditTab === 'none' && (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <span className="text-gray-600 text-2xl">📝</span>
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Journal</h2>
+                  <p className="text-sm text-gray-600">
+                    Use the tabs above to add content
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-          ))}
-          </div>
-        </motion.div>
-
-        {/* Color Picker Panel */}
-        <AnimatePresence>
-          {editMode === 'color' && (
-            <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-white rounded-2xl p-6 shadow-sm mb-4"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Colors</h3>
-              <SimpleColorPicker
-                colors={textColors}
-                onChange={setTextColors}
-                images={images}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* AI Enhancement Panel */}
-        <AnimatePresence>
-          {editMode === 'ai' && textSections.some(section => section.trim().length > 0) && (
-            <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-white rounded-2xl p-6 shadow-sm mb-4"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Assistant</h3>
-              <JournalEnhancer
-                journalText={textSections.join('\n\n')}
-                location={location}
-                minWordCount={5}
-                showInitially={true}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
+      </div>
 
       {/* Success Animation */}
       <AnimatePresence>
@@ -960,14 +1038,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             exit={{ scale: 0, opacity: 0 }}
             className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
           >
-            <div className="bg-green-500 text-white p-6 rounded-full shadow-lg">
-              <FontAwesomeIcon icon={faCheck} className="text-2xl" />
+            <div className="bg-green-500 text-white p-3 rounded-full shadow-lg">
+              <FontAwesomeIcon icon={faCheck} className="text-lg" />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
@@ -976,6 +1054,123 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         onChange={handleImageUpload}
         multiple
       />
+      
+      {/* Hidden sticker input */}
+      <input
+        ref={stickerInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleStickerUpload}
+        multiple
+      />
+      
+      {/* Clean DatePicker Styles */}
+      <style>
+        {`
+          .react-datepicker-wrapper {
+            width: 100%;
+          }
+          
+          .react-datepicker-popper {
+            z-index: 9999 !important;
+          }
+          
+          .react-datepicker-custom {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 14px;
+            overflow: hidden;
+            background: white;
+          }
+          
+          .react-datepicker__header {
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            border-radius: 12px 12px 0 0;
+            padding: 12px 0;
+          }
+          
+          .react-datepicker__current-month {
+            font-weight: 600;
+            font-size: 16px;
+            color: #374151;
+            margin-bottom: 8px;
+          }
+          
+          .react-datepicker__day-names {
+            margin-bottom: 8px;
+          }
+          
+          .react-datepicker__day-name {
+            color: #6b7280;
+            font-weight: 500;
+            font-size: 12px;
+            width: 32px;
+            line-height: 32px;
+          }
+          
+          .react-datepicker__month {
+            padding: 8px;
+            background: white;
+          }
+          
+          .react-datepicker__day {
+            border-radius: 8px;
+            margin: 1px;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            color: #374151;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+          }
+          
+          .react-datepicker__day--selected {
+            background-color: #3b82f6 !important;
+            color: white;
+            font-weight: 600;
+          }
+          
+          .react-datepicker__day:hover {
+            background-color: #eff6ff;
+            color: #1e40af;
+          }
+          
+          .react-datepicker__day--today {
+            background-color: #f3f4f6;
+            color: #374151;
+            font-weight: 600;
+          }
+          
+          .react-datepicker__navigation {
+            top: 14px;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+          }
+          
+          .react-datepicker__navigation:hover {
+            background: #f9fafb;
+          }
+          
+          .react-datepicker__navigation--previous {
+            border-right-color: #6b7280;
+            left: 12px;
+          }
+          
+          .react-datepicker__navigation--next {
+            border-left-color: #6b7280;
+            right: 12px;
+          }
+        `}
+      </style>
     </div>
   );
 };
