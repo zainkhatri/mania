@@ -221,6 +221,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [debounceRender, setDebounceRender] = useState(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Performance optimization refs
+  const animationFrameRef = useRef<number | null>(null);
+  const lastUpdateTimeRef = useRef<number>(0);
+  const isRenderingRef = useRef<boolean>(false);
+  
   // Function to trigger a re-render when needed
   const renderJournal = useCallback(() => {
     setForceRender(prev => prev + 1); // Increment to trigger a re-render
@@ -563,7 +568,26 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   };
 
-  // Use debounce to limit renders
+  // High-performance render throttling using requestAnimationFrame
+  const throttledRender = useCallback(() => {
+    if (isRenderingRef.current) return;
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const now = performance.now();
+      if (now - lastUpdateTimeRef.current >= 8) { // ~120fps cap
+        isRenderingRef.current = true;
+        setDebounceRender(prev => prev + 1);
+        lastUpdateTimeRef.current = now;
+        isRenderingRef.current = false;
+      }
+    });
+  }, []);
+
+  // Legacy debounced render for non-critical updates
   const debouncedRender = useCallback(() => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -1373,6 +1397,36 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const mainY = yPosition;
           ctx.fillText(location.toUpperCase(), mainX, mainY);
           
+          // Draw location cursor if editing location
+          if (cursorPosition && 'isLocation' in cursorPosition && cursorVisible) {
+            const characterIndex = cursorPosition.characterIndex;
+            const locationText = location.toUpperCase();
+            
+            // Calculate cursor position in location text
+            let cursorX = mainX;
+            if (characterIndex > 0 && locationText.length > 0) {
+              const textBeforeCursor = locationText.substring(0, Math.min(characterIndex, locationText.length));
+              const textMetrics = ctx.measureText(textBeforeCursor);
+              cursorX = mainX + textMetrics.width;
+            }
+            
+            // Draw blinking cursor for location
+            ctx.save();
+            ctx.fillStyle = '#000000'; // Black cursor
+            ctx.globalAlpha = cursorVisible ? 1.0 : 0.3;
+            ctx.fillRect(cursorX, mainY - maxLocationFontSize * 0.8, 8, maxLocationFontSize); // 8px wide cursor
+            ctx.restore();
+            
+            console.log('LOCATION CURSOR DRAWN! Position:', { 
+              cursorX, 
+              cursorY: mainY, 
+              characterIndex, 
+              fontSize: maxLocationFontSize, 
+              locationText,
+              textBeforeCursor: location.toUpperCase().substring(0, characterIndex)
+            });
+          }
+          
           ctx.restore();
         } catch (err) {
           console.error('Error drawing location:', err);
@@ -2084,16 +2138,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const originalWidth = img.naturalWidth || img.width;
       const originalHeight = img.naturalHeight || img.height;
       
-      // Store original dimensions but scale display size if needed
-      let displayWidth = originalWidth;
-      let displayHeight = originalHeight;
+      // Set default sticker size to 200px for much better visibility
+      const defaultStickerSize = 200;
+      let displayWidth = defaultStickerSize;
+      let displayHeight = defaultStickerSize;
       
-      // Only scale down the display size if the image is extremely large
-      const maxDisplayDimension = 2000;
-      if (displayWidth > maxDisplayDimension || displayHeight > maxDisplayDimension) {
-        const scale = maxDisplayDimension / Math.max(displayWidth, displayHeight);
-        displayWidth *= scale;
-        displayHeight *= scale;
+      // Maintain aspect ratio while fitting in default size
+      const aspectRatio = originalWidth / originalHeight;
+      if (aspectRatio > 1) {
+        // Wide image: fit by width
+        displayWidth = defaultStickerSize;
+        displayHeight = defaultStickerSize / aspectRatio;
+      } else {
+        // Tall image: fit by height
+        displayHeight = defaultStickerSize;
+        displayWidth = defaultStickerSize * aspectRatio;
       }
       
       // Create a new sticker with both original and display dimensions
@@ -2114,7 +2173,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       ]);
       
       // Force a re-render to show the high-quality sticker
-      renderJournal();
+      throttledRender();
     };
     
     // Use synchronous decoding for best quality
@@ -2420,10 +2479,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.8) {
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
-        setStickers(newStickers);
+        updateStickersOptimized(newStickers);
         setActiveSticker(null);
         setButtonClickHandling(true);
-        renderJournal();
         return;
       }
       
@@ -2766,11 +2824,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setIsDragging(false);
   };
 
-  // Clean up any timers
+  // Clean up any timers and animation frames
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (stickerUpdateBatchRef.current.timeoutId) {
+        clearTimeout(stickerUpdateBatchRef.current.timeoutId);
       }
     };
   }, []);
@@ -2795,16 +2859,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const originalWidth = img.naturalWidth || img.width;
           const originalHeight = img.naturalHeight || img.height;
           
-          // Scale large images down for display, but preserve original dimensions
-          let width = originalWidth;
-          let height = originalHeight;
+          // Set default sticker size to 200px for much better visibility
+          const defaultStickerSize = 800;
+          let width = defaultStickerSize;
+          let height = defaultStickerSize;
           
-          // For extremely large images, apply reasonable scaling for display
-          const maxDimension = 2000; // High-resolution cap
-          if (width > maxDimension || height > maxDimension) {
-            const scaleFactor = maxDimension / Math.max(width, height);
-            width = width * scaleFactor;
-            height = height * scaleFactor;
+          // Maintain aspect ratio while fitting in default size
+          const aspectRatio = originalWidth / originalHeight;
+          if (aspectRatio > 1) {
+            // Wide image: fit by width
+            width = defaultStickerSize;
+            height = defaultStickerSize / aspectRatio;
+          } else {
+            // Tall image: fit by height
+            height = defaultStickerSize;
+            width = defaultStickerSize * aspectRatio;
           }
           
           // Create a grid-like distribution with some randomness
@@ -2862,6 +2931,71 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     });
   };
 
+  // High-performance sticker state management with batching
+  const stickerUpdateBatchRef = useRef<{
+    pendingUpdates: Partial<StickerImage>[];
+    timeoutId: NodeJS.Timeout | null;
+  }>({ pendingUpdates: [], timeoutId: null });
+
+  // Optimized sticker update function with batching
+  const updateStickerOptimized = useCallback((index: number, updates: Partial<StickerImage>) => {
+    if (index < 0 || index >= stickers.length) return;
+
+    // Direct state update for immediate visual feedback
+    setStickers(prev => {
+      const newStickers = [...prev];
+      newStickers[index] = { ...newStickers[index], ...updates };
+      return newStickers;
+    });
+
+    // Use high-performance rendering
+    throttledRender();
+  }, [stickers.length, throttledRender]);
+
+  // Optimized batch update for multiple stickers
+  const updateStickersOptimized = useCallback((newStickers: StickerImage[]) => {
+    setStickers(newStickers);
+    throttledRender();
+  }, [throttledRender]);
+
+  // Optimized touch event handling with reduced state updates
+  const handleStickerTouchMove = useCallback((
+    activeIndex: number, 
+    action: 'move' | 'resize' | 'rotate',
+    touchData: any
+  ) => {
+    if (activeIndex < 0 || activeIndex >= stickers.length) return;
+
+    const activeSticker = stickers[activeIndex];
+    let updates: Partial<StickerImage> = {};
+
+    switch (action) {
+      case 'move':
+        updates = {
+          x: touchData.x - touchData.offsetX,
+          y: touchData.y - touchData.offsetY
+        };
+        break;
+      case 'resize':
+        if (touchData.newWidth && touchData.newHeight) {
+          updates = {
+            width: touchData.newWidth,
+            height: touchData.newHeight,
+            x: touchData.newX,
+            y: touchData.newY
+          };
+        }
+        break;
+      case 'rotate':
+        updates = { rotation: touchData.rotation };
+        break;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      updateStickerOptimized(activeIndex, updates);
+    }
+  }, [stickers, updateStickerOptimized]);
+
   return (
     <div className="relative w-full overflow-hidden">
       {isLoading ? (
@@ -2879,7 +3013,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               width: '100%',
               maxWidth: '100%',
               margin: '0 auto',
-              cursor: canvasCursor
+              cursor: canvasCursor,
+              touchAction: 'none', // Prevent default touch behaviors for better performance
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
             }}
             whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
             onMouseDown={handleCanvasMouseDown}

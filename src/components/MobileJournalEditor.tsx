@@ -339,8 +339,14 @@ const OptimizedTextInput = memo(({
 OptimizedTextInput.displayName = 'OptimizedTextInput';
 
 const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, initialData }) => {
-  // Core data states
-  const [date, setDate] = useState<Date>(initialData?.date || new Date());
+  // Core data states - ensure we always start with today's date unless provided
+  const [date, setDate] = useState<Date>(() => {
+    if (initialData?.date) {
+      return initialData.date;
+    }
+    // Always use the current date as default
+    return new Date();
+  });
   const [location, setLocation] = useState(initialData?.location || '');
   const [images, setImages] = useState<(string | Blob)[]>(initialData?.images || []);
   const [textSections, setTextSections] = useState<string[]>(initialData?.textSections || ['']);
@@ -386,6 +392,33 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const locationTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Cursor tracking states for visual feedback
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
+  const [locationCursorPosition, setLocationCursorPosition] = useState<number>(0);
+  const [showCursor, setShowCursor] = useState(false);
+  const [cursorBlink, setCursorBlink] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
+  // Cursor blinking effect
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    if (showCursor) {
+      // Blink cursor every 500ms
+      intervalId = setInterval(() => {
+        setCursorBlink(prev => !prev);
+      }, 500);
+    } else {
+      setCursorBlink(true); // Reset to visible when not showing
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [showCursor]);
+
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
@@ -422,27 +455,40 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     hapticFeedback('medium');
     
     try {
-      const newImages = [...images];
-      const filesToProcess = Array.from(files).slice(0, 3 - images.length);
+      const currentImages = [...images];
+      const availableSlots = 3 - currentImages.length;
+      const filesToProcess = Array.from(files).slice(0, availableSlots);
       
-      for (const file of filesToProcess) {
-        // Create preview immediately
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          if (e.target?.result) {
-            newImages.push(e.target.result as string);
-            setImages([...newImages]);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
+      // Process all files and wait for all FileReader operations to complete
+      const imagePromises = filesToProcess.map((file) => {
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            if (e.target?.result) {
+              resolve(e.target.result as string);
+            } else {
+              reject(new Error('Failed to read file'));
+            }
+          };
+          reader.onerror = () => reject(new Error('FileReader error'));
+          reader.readAsDataURL(file);
+        });
+      });
+      
+      // Wait for all images to be processed
+      const processedImages = await Promise.all(imagePromises);
+      
+      // Update state with all new images at once
+      const newImages: (string | Blob)[] = [...currentImages, ...processedImages];
+      setImages(newImages);
+      onUpdate({ date, location, images: newImages, textSections });
       
       // Show success animation
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1500);
       
-      onUpdate({ date, location, images: newImages, textSections });
     } catch (error) {
+      console.error('Error uploading images:', error);
       toast.error('Failed to upload images');
     } finally {
       setIsLoading(false);
@@ -469,17 +515,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       // Show success animation
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1500);
-      
-      toast.success(`Added ${filesToProcess.length} sticker${filesToProcess.length > 1 ? 's' : ''}`, {
-        position: 'bottom-center',
-        style: { 
-          background: '#1a1a1a',
-          color: 'white',
-          borderRadius: '12px',
-          fontSize: '14px',
-          padding: '12px 20px'
-        }
-      });
       
     } catch (error) {
       toast.error('Failed to upload stickers');
@@ -606,35 +641,53 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
   // Add function to handle pencil button click
   const handlePencilClick = useCallback(() => {
+    // Set all states immediately for instant cursor visibility
+    const currentText = textSections[0] || '';
+    
     setIsWriting(true);
     setActiveEditTab('write');
+    setShowCursor(true);
+    setCursorBlink(true); // Start with cursor visible
+    setCursorPosition(currentText.length);
     
-    // Focus the hidden textarea - simple and consistent
+    // Force immediate re-render of the canvas to show cursor
+    setForceUpdate(prev => prev + 1);
+    
+    // Focus the hidden textarea - but cursor should already be visible
     setTimeout(() => {
       if (hiddenTextareaRef.current) {
         hiddenTextareaRef.current.focus();
+        // Set cursor to end of text
+        hiddenTextareaRef.current.setSelectionRange(currentText.length, currentText.length);
+        setCursorPosition(currentText.length);
         
         // Additional iOS keyboard trigger if needed
         if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
           hiddenTextareaRef.current.click();
         }
       }
-    }, 100);
+    }, 50); // Reduced timeout for faster response
     
     hapticFeedback('light');
-  }, [hapticFeedback]);
+  }, [hapticFeedback, textSections]);
 
   // Handle text input changes
   const handleTextChange = useCallback((newText: string) => {
     const newTextSections = [newText]; // Just use one text section for simplicity
     setTextSections(newTextSections);
     onUpdate({ date, location, images, textSections: newTextSections });
+    
+    // Update cursor position
+    if (hiddenTextareaRef.current) {
+      setCursorPosition(hiddenTextareaRef.current.selectionStart || 0);
+    }
   }, [date, location, images, onUpdate]);
 
   // Close writing mode
   const closeWriting = useCallback(() => {
     setIsWriting(false);
     setActiveEditTab('none');
+    setShowCursor(false);
     if (hiddenTextareaRef.current) {
       hiddenTextareaRef.current.blur();
     }
@@ -644,11 +697,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const handleLocationClick = useCallback(() => {
     setIsEditingLocation(true);
     setActiveEditTab('location');
+    setShowCursor(true);
+    setCursorBlink(true); // Start with cursor visible
+    
+    // Set cursor position immediately to end of existing location text
+    setLocationCursorPosition(location.length);
     
     // Focus the hidden location textarea
     setTimeout(() => {
       if (locationTextareaRef.current) {
         locationTextareaRef.current.focus();
+        // Set cursor to end of location text
+        locationTextareaRef.current.setSelectionRange(location.length, location.length);
+        setLocationCursorPosition(location.length);
         
         // Additional iOS keyboard trigger if needed
         if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
@@ -658,17 +719,23 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }, 100);
     
     hapticFeedback('light');
-  }, [hapticFeedback]);
+  }, [hapticFeedback, location]);
 
   // Handle location text input changes
   const handleLocationChange = useCallback((newLocation: string) => {
     setLocation(newLocation.toUpperCase());
     onUpdate({ date, location: newLocation.toUpperCase(), images, textSections });
+    
+    // Update location cursor position
+    if (locationTextareaRef.current) {
+      setLocationCursorPosition(locationTextareaRef.current.selectionStart || 0);
+    }
   }, [date, images, textSections, onUpdate]);
 
   // Close location editing mode
   const closeLocationEditing = useCallback(() => {
     setIsEditingLocation(false);
+    setShowCursor(false);
     // Keep the location tab active so user can see color picker
     setActiveEditTab('location');
     if (locationTextareaRef.current) {
@@ -783,23 +850,33 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             }
           }
           
-          /* iPhone SE specific adjustments */
-          @media screen and (max-height: 500px) {
+          /* iPhone SE and small screens - prioritize calendar */
+          @media screen and (max-height: 650px) {
             .full-journal {
-              height: 45vh !important;
+              height: 35vh !important;
             }
             .compact-edit-panel {
-              height: 55vh !important;
+              height: 65vh !important;
+            }
+          }
+          
+          /* Very small screens */
+          @media screen and (max-height: 500px) {
+            .full-journal {
+              height: 30vh !important;
+            }
+            .compact-edit-panel {
+              height: 70vh !important;
             }
           }
           
           /* Ultra-small screens */
           @media screen and (max-height: 400px) {
             .full-journal {
-              height: 40vh !important;
+              height: 25vh !important;
             }
             .compact-edit-panel {
-              height: 60vh !important;
+              height: 75vh !important;
             }
           }
           
@@ -861,22 +938,22 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         `}
       </style>
 
-      {/* Clean Header - Made Much Smaller */}
-      <div className="bg-white py-0.5 px-3 flex-shrink-0 border-b border-gray-200" style={{ minHeight: '32px' }}>
-        <div className="flex items-center justify-end h-8">
+      {/* Ultra-Compact Header */}
+      <div className="bg-white py-0 px-3 flex-shrink-0 border-b border-gray-200" style={{ minHeight: '24px' }}>
+        <div className="flex items-center justify-end h-6">
           <button
             onClick={handleDownload}
             disabled={isLoading}
-            className="text-gray-700 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+            className="text-gray-700 p-0.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             {isLoading ? (
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full"
+                className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full"
               />
             ) : (
-              <FontAwesomeIcon icon={faDownload} className="text-sm" />
+              <FontAwesomeIcon icon={faDownload} className="text-xs" />
             )}
           </button>
         </div>
@@ -886,7 +963,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       <div className={`flex-1 flex flex-col min-h-0 bg-white`}>
         {/* Journal Section - Adjust for smaller header */}
         <div className="full-journal" style={{ height: '68vh' }}>
-          <div className="h-full p-4">
+          <div className="h-full p-2">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -904,6 +981,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                 textColors={textColors}
                 layoutMode={layoutMode}
                 onNewEntry={() => {}}
+                showCursor={showCursor}
+                cursorVisible={cursorBlink && (isWriting || isEditingLocation)}
+                cursorPosition={isEditingLocation 
+                  ? { isLocation: true, characterIndex: locationCursorPosition }
+                  : { textAreaIndex: 0, characterIndex: cursorPosition }
+                }
+                forceUpdate={forceUpdate}
               />
               
               {/* Interactive overlay */}
@@ -922,6 +1006,18 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   value={textSections[0] || ''}
                   onChange={(e) => handleTextChange(e.target.value)}
                   onBlur={closeWriting}
+                  onKeyUp={(e) => {
+                    // Update cursor position on key events
+                    setCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
+                  onMouseUp={(e) => {
+                    // Update cursor position on mouse clicks
+                    setCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
+                  onSelect={(e) => {
+                    // Update cursor position on text selection
+                    setCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
                   className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto resize-none bg-transparent"
                   style={{
                     fontFamily: 'Arial, sans-serif',
@@ -957,6 +1053,18 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   value={location}
                   onChange={(e) => handleLocationChange(e.target.value)}
                   onBlur={closeLocationEditing}
+                  onKeyUp={(e) => {
+                    // Update location cursor position on key events
+                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
+                  onMouseUp={(e) => {
+                    // Update location cursor position on mouse clicks
+                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
+                  onSelect={(e) => {
+                    // Update location cursor position on text selection
+                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
+                  }}
                   className="absolute top-[5%] left-0 right-0 h-[6%] opacity-0 pointer-events-auto resize-none bg-transparent text-center"
                   style={{
                     fontFamily: 'Arial, sans-serif',
@@ -990,23 +1098,17 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
         {/* Integrated Control Panel - Smaller height */}
         <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>
-          {/* Clean Tab Bar - Smaller height */}
-          <div className={`flex items-center h-10 px-4 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
-            <div className="flex w-full bg-gray-100 rounded-xl p-1">
-                              <button
-                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          {/* Ultra-Compact Tab Bar */}
+          <div className={`flex items-center h-8 px-2 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
+            <div className="flex w-full bg-gray-100 rounded-lg p-0.5">
+                                              <button
+                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                   onClick={() => setActiveEditTab('date')}
                 >
                   📅
                 </button>
-                              <button
-                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  onClick={handleLocationClick}
-                >
-                  📍
-                </button>
                 <button
-                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-900`}
+                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-gray-600 hover:text-gray-900`}
                   onClick={() => {
                     if (fileInputRef.current) fileInputRef.current.click();
                   }}
@@ -1014,13 +1116,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   🖼️
                 </button>
                 <button
-                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  onClick={handleLocationClick}
+                >
+                  📍
+                </button>
+                <button
+                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                   onClick={() => setActiveEditTab('stickers')}
                 >
                   ✨
                 </button>
                 <button
-                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                   onClick={handlePencilClick}
                 >
                   ✏️
@@ -1031,23 +1139,33 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           {/* Control Content */}
           <div className="flex-1 overflow-hidden">
             {activeEditTab === 'date' && (
-              <div className="h-full w-full overflow-hidden flex items-center justify-center">
-                <div className="w-full max-h-full overflow-hidden">
-                  <DatePicker
-                    selected={date}
-                    onChange={(newDate: Date | null) => {
-                      if (newDate) {
-                        setDate(newDate);
-                        onUpdate({ date: newDate, location, images, textSections });
-                        // Auto-close after selection
-                        setActiveEditTab('none');
-                        hapticFeedback('medium');
-                      }
-                    }}
-                    inline
-                    showPopperArrow={false}
-                    calendarClassName="react-datepicker-custom-mobile"
-                  />
+              <div className="h-full w-full flex items-center justify-center p-2 overflow-hidden">
+                <div className="w-full max-h-full">
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <DatePicker
+                      selected={date}
+                      onChange={(newDate: Date | null) => {
+                        if (newDate) {
+                          setDate(newDate);
+                          onUpdate({ date: newDate, location, images, textSections });
+                          // Auto-close after selection
+                          setActiveEditTab('none');
+                          hapticFeedback('medium');
+                        }
+                      }}
+                      inline
+                      showPopperArrow={false}
+                      calendarClassName="compact-calendar"
+                      fixedHeight={false}
+                      showWeekNumbers={false}
+                      monthsShown={1}
+                      peekNextMonth={false}
+                      openToDate={date}
+                      todayButton="Today"
+                      disabledKeyboardNavigation={true}
+                      shouldCloseOnSelect={false}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1174,7 +1292,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           .react-datepicker-custom {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             font-family: 'Inter', system-ui, sans-serif;
             font-size: 14px;
             overflow: hidden;
@@ -1265,260 +1382,358 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             right: 12px;
           }
           
-          /* Mobile inline calendar styles */
-          .react-datepicker-custom-mobile {
+                    /* Ultra-clean, perfectly fitted calendar */
+          .compact-calendar {
             border: none !important;
-            border-radius: 6px;
             box-shadow: none !important;
-            font-family: 'Inter', system-ui, sans-serif;
-            font-size: 11px;
-            background: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: transparent !important;
             width: 100% !important;
-            margin: 0 auto;
-            display: flex !important;
-            flex-direction: column !important;
-            height: 100% !important;
-            max-height: 100% !important;
-            overflow: hidden !important;
+            margin: 0 !important;
+            max-width: none !important;
+            height: auto !important;
+            max-height: 220px !important;
           }
           
-          .react-datepicker-custom-mobile .react-datepicker__header {
-            background: #f9fafb;
-            border-bottom: 1px solid #e5e7eb;
-            border-radius: 6px 6px 0 0;
-            padding: 4px 0;
-            flex-shrink: 0;
+          /* Force all weeks to show */
+          .compact-calendar .react-datepicker__month-container {
+            height: auto !important;
+            max-height: 220px !important;
           }
           
-          .react-datepicker-custom-mobile .react-datepicker__current-month {
-            font-weight: 600;
-            font-size: 12px;
-            color: #374151;
-            margin-bottom: 2px;
+          .compact-calendar .react-datepicker__header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 0;
+            position: relative;
           }
           
-          .react-datepicker-custom-mobile .react-datepicker__day-names {
-            margin-bottom: 1px;
+          .compact-calendar .react-datepicker__current-month {
+            font-weight: 700;
+            font-size: 14px;
+            color: white;
+            margin-bottom: 0;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+          }
+          
+          .compact-calendar .react-datepicker__day-names {
             display: flex;
-            justify-content: space-between;
-            padding: 0 4px;
+            justify-content: space-around;
+            margin-bottom: 0;
+            padding: 4px 8px 2px 8px; /* More horizontal padding to match month */
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
           }
           
-          .react-datepicker-custom-mobile .react-datepicker__day-name {
+          .compact-calendar .react-datepicker__day-name {
             color: #6b7280;
-            font-weight: 500;
+            font-weight: 600;
             font-size: 9px;
             flex: 1;
-            line-height: 20px;
+            line-height: 14px;
             text-align: center;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__month {
-            padding: 2px;
-            background: white;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-evenly;
-            min-height: 0;
-            overflow: hidden;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__week {
-            display: flex;
-            justify-content: space-between;
-            flex: 1;
-            align-items: center;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__day {
-            border-radius: 4px;
-            margin: 0.5px;
-            color: #374151;
-            font-size: 10px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            flex: 1;
-            height: 100%;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 24px;
-            max-height: 36px;
           }
           
-          /* Responsive calendar adjustments for different screen sizes */
-          @media screen and (max-height: 700px) {
-            .react-datepicker-custom-mobile .react-datepicker__day {
-              min-height: 20px;
-              max-height: 28px;
-              font-size: 9px;
+          .compact-calendar .react-datepicker__month {
+            padding: 2px 8px; /* More horizontal padding to avoid arrows */
+            background: white;
+            height: 180px !important; /* Smaller height for 6 weeks (30px * 6) */
+            min-height: 180px !important;
+            max-height: 180px !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            margin: 0 4px; /* Extra margin to ensure no overlap */
+          }
+          
+          .compact-calendar .react-datepicker__month-container {
+            width: 100%;
+          }
+          
+          .compact-calendar .react-datepicker__week {
+            display: flex;
+            justify-content: space-around;
+            margin: 0;
+            height: 28px !important; /* Smaller height for each week row */
+            min-height: 28px !important;
+            max-height: 28px !important;
+            flex: 1;
+            align-items: center;
+            width: 100%;
+          }
+          
+          .compact-calendar .react-datepicker__day {
+            border-radius: 4px;
+            margin: 0 0.5px;
+            flex: 1;
+            height: 26px !important;
+            min-height: 26px !important;
+            max-height: 26px !important;
+            line-height: 26px;
+            color: #374151;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: none;
+          }
+          
+          .compact-calendar .react-datepicker__day--selected {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+            color: white !important;
+            font-weight: 700;
+            transform: scale(1.05);
+            border-radius: 8px;
+          }
+          
+          /* Hide selection if it's outside the current month */
+          .compact-calendar .react-datepicker__day--selected.react-datepicker__day--outside-month {
+            background: transparent !important;
+            color: inherit !important;
+            font-weight: normal !important;
+            box-shadow: none !important;
+            transform: none !important;
+          }
+          
+          .compact-calendar .react-datepicker__day:hover:not(.react-datepicker__day--selected) {
+            background-color: #eef2ff;
+            color: #4f46e5;
+            transform: scale(1.02);
+          }
+          
+          .compact-calendar .react-datepicker__day--today:not(.react-datepicker__day--selected) {
+            background-color: transparent;
+            color: inherit;
+            font-weight: normal;
+            box-shadow: none;
+          }
+          
+          .compact-calendar .react-datepicker__day--outside-month {
+            visibility: hidden;
+            pointer-events: none;
+          }
+          
+          /* Fix grid layout for incomplete weeks */
+          .compact-calendar .react-datepicker__week {
+            display: flex;
+            justify-content: space-between;
+          }
+          
+          .compact-calendar .react-datepicker__day {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          
+          .compact-calendar .react-datepicker__navigation {
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: transparent;
+            border: none;
+            transition: all 0.15s ease;
+            box-shadow: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.6;
+          }
+          
+          .compact-calendar .react-datepicker__navigation:hover {
+            background: transparent;
+            opacity: 1;
+            transform: scale(1.05);
+          }
+          
+          .compact-calendar .react-datepicker__navigation--previous {
+            left: -20px;
+          }
+          
+          .compact-calendar .react-datepicker__navigation--next {
+            right: -20px;
+          }
+          
+          .compact-calendar .react-datepicker__navigation-icon::before {
+            border-color: #6366f1;
+            border-width: 1px 1px 0 0;
+            width: 3px;
+            height: 3px;
+            margin: 0;
+          }
+          
+          /* Responsive Design for All Devices */
+          
+          /* iPhone SE and small phones (320px - 374px) */
+          @media screen and (max-width: 374px) {
+            .compact-calendar .react-datepicker__month {
+              height: 160px !important;
+              min-height: 160px !important;
+              max-height: 160px !important;
+              padding: 2px 6px; /* Slightly less padding on very small screens */
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__current-month {
+            .compact-calendar .react-datepicker__navigation {
+              width: 10px;
+              height: 10px;
+              top: 16px;
+              border-radius: 1px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -16px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -16px;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 24px !important;
+              min-height: 24px !important;
+              max-height: 24px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 22px !important;
+              min-height: 22px !important;
+              max-height: 22px !important;
+              line-height: 22px;
+              font-size: 10px;
+            }
+            .compact-calendar .react-datepicker__day-name {
+              font-size: 8px;
+              line-height: 12px;
+            }
+            .compact-calendar .react-datepicker__current-month {
+              font-size: 12px;
+            }
+          }
+          
+          /* iPhone 6/7/8 (375px - 413px) */
+          @media screen and (min-width: 375px) and (max-width: 413px) {
+            .compact-calendar .react-datepicker__month {
+              height: 170px !important;
+              min-height: 170px !important;
+              max-height: 170px !important;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 26px !important;
+              min-height: 26px !important;
+              max-height: 26px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 24px !important;
+              min-height: 24px !important;
+              max-height: 24px !important;
+              line-height: 24px;
+              font-size: 10px;
+            }
+          }
+          
+          /* iPhone Plus/Pro Max (414px - 479px) */
+          @media screen and (min-width: 414px) and (max-width: 479px) {
+            .compact-calendar .react-datepicker__month {
+              height: 185px !important;
+              min-height: 185px !important;
+              max-height: 185px !important;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 29px !important;
+              min-height: 29px !important;
+              max-height: 29px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 27px !important;
+              min-height: 27px !important;
+              max-height: 27px !important;
+              line-height: 27px;
               font-size: 11px;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day-name {
-              font-size: 8px;
+          }
+          
+          /* Tablets and larger (480px+) */
+          @media screen and (min-width: 480px) {
+            .compact-calendar .react-datepicker__month {
+              height: 200px !important;
+              min-height: 200px !important;
+              max-height: 200px !important;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 32px !important;
+              min-height: 32px !important;
+              max-height: 32px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 30px !important;
+              min-height: 30px !important;
+              max-height: 30px !important;
+              line-height: 30px;
+              font-size: 12px;
+            }
+            .compact-calendar .react-datepicker__day-name {
+              font-size: 10px;
               line-height: 16px;
             }
-          }
-          
-          @media screen and (max-height: 600px) {
-            .react-datepicker-custom-mobile .react-datepicker__day {
-              min-height: 18px;
-              max-height: 24px;
-              font-size: 8px;
-              margin: 0.25px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__current-month {
-              font-size: 10px;
-              margin-bottom: 1px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day-name {
-              font-size: 7px;
-              line-height: 14px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__header {
-              padding: 2px 0;
+            .compact-calendar .react-datepicker__current-month {
+              font-size: 16px;
             }
           }
           
-          /* iPhone SE and smaller screens */
-          @media screen and (max-height: 500px) {
-            .react-datepicker-custom-mobile .react-datepicker__day {
-              min-height: 14px;
-              max-height: 18px;
-              font-size: 6px;
-              margin: 0.1px;
+          /* Landscape orientation adjustments */
+          @media screen and (max-height: 500px) and (orientation: landscape) {
+            .compact-calendar .react-datepicker__month {
+              height: 140px !important;
+              min-height: 140px !important;
+              max-height: 140px !important;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__current-month {
+            .compact-calendar .react-datepicker__week {
+              height: 22px !important;
+              min-height: 22px !important;
+              max-height: 22px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 20px !important;
+              min-height: 20px !important;
+              max-height: 20px !important;
+              line-height: 20px;
+              font-size: 9px;
+            }
+            .compact-calendar .react-datepicker__day-name {
               font-size: 8px;
-              margin-bottom: 1px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day-name {
-              font-size: 5px;
               line-height: 10px;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__header {
-              padding: 1px 0;
+            .compact-calendar .react-datepicker__current-month {
+              font-size: 11px;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__month {
-              padding: 0px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__navigation {
-              top: 3px;
-              width: 14px;
-              height: 14px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__navigation--previous {
-              left: 4px;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__navigation--next {
-              right: 4px;
+            .compact-calendar .react-datepicker__header {
+              padding: 4px 0;
             }
           }
           
-          /* Ultra-compact for very small screens (iPhone SE and similar) */
-          @media screen and (max-height: 500px) {
-            .react-datepicker-custom-mobile {
-              font-size: 8px !important;
+          /* Very short screens */
+          @media screen and (max-height: 600px) {
+            .compact-calendar {
+              max-height: 180px !important;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day {
-              min-height: 10px !important;
-              max-height: 14px !important;
-              font-size: 4px !important;
-              margin: 0px !important;
-              padding: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__current-month {
-              font-size: 6px !important;
-              margin-bottom: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day-name {
-              font-size: 3px !important;
-              line-height: 6px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__header {
-              padding: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__month {
-              padding: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__week {
-              margin-bottom: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__navigation {
-              top: 1px !important;
-              width: 10px !important;
-              height: 10px !important;
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 180px !important;
             }
           }
           
-          /* Even more compact for very small screens */
-          @media screen and (max-height: 400px) {
-            .react-datepicker-custom-mobile .react-datepicker__day {
-              min-height: 8px !important;
-              max-height: 12px !important;
-              font-size: 3px !important;
-              margin: 0px !important;
+          /* Ensure calendar never exceeds container */
+          @media screen and (max-height: 700px) {
+            .compact-edit-panel .compact-calendar {
+              max-height: calc(100% - 40px) !important;
             }
-            
-            .react-datepicker-custom-mobile .react-datepicker__current-month {
-              font-size: 5px !important;
-              margin-bottom: 0px !important;
-            }
-            
-            .react-datepicker-custom-mobile .react-datepicker__day-name {
-              font-size: 2px !important;
-              line-height: 4px !important;
-            }
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__day--selected {
-            background-color: #3b82f6 !important;
-            color: white;
-            font-weight: 600;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__day:hover {
-            background-color: #eff6ff;
-            color: #1e40af;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__navigation {
-            top: 6px;
-            width: 18px;
-            height: 18px;
-            border-radius: 3px;
-            background: white;
-            border: 1px solid #e5e7eb;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__navigation--previous {
-            left: 6px;
-          }
-          
-          .react-datepicker-custom-mobile .react-datepicker__navigation--next {
-            right: 6px;
           }
         `}
       </style>
