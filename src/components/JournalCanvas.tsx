@@ -225,11 +225,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const animationFrameRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const isRenderingRef = useRef<boolean>(false);
+  const dragAnimationFrameRef = useRef<number | null>(null);
+  const lastDragUpdateRef = useRef<number>(0);
   
   // Function to trigger a re-render when needed
   const renderJournal = useCallback(() => {
     setForceRender(prev => prev + 1); // Increment to trigger a re-render
   }, []);
+
+  // Optimized throttled render function for better performance
+  const throttledRender = useCallback(() => {
+    const now = Date.now();
+    if (now - lastUpdateTimeRef.current > 16) { // ~60fps
+      lastUpdateTimeRef.current = now;
+      renderJournal();
+    }
+  }, [renderJournal]);
+
+  // Optimized debounced render function for drag operations
+  const debouncedDragRender = useCallback(() => {
+    if (dragAnimationFrameRef.current) {
+      cancelAnimationFrame(dragAnimationFrameRef.current);
+    }
+    
+    dragAnimationFrameRef.current = requestAnimationFrame(() => {
+      const now = Date.now();
+      if (now - lastDragUpdateRef.current > 8) { // ~120fps for smooth dragging
+        lastDragUpdateRef.current = now;
+        renderJournal();
+      }
+    });
+  }, [renderJournal]);
   
   // Font loading using FontFace API
   useEffect(() => {
@@ -568,24 +594,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   };
 
-  // High-performance render throttling using requestAnimationFrame
-  const throttledRender = useCallback(() => {
-    if (isRenderingRef.current) return;
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(() => {
-      const now = performance.now();
-      if (now - lastUpdateTimeRef.current >= 8) { // ~120fps cap
-        isRenderingRef.current = true;
-        setDebounceRender(prev => prev + 1);
-        lastUpdateTimeRef.current = now;
-        isRenderingRef.current = false;
-      }
-    });
-  }, []);
+
 
   // Legacy debounced render for non-critical updates
   const debouncedRender = useCallback(() => {
@@ -1898,6 +1907,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
+    try {
+    
       const rect = canvasRef.current.getBoundingClientRect();
       const scaleX = canvasRef.current.width / rect.width;
       const scaleY = canvasRef.current.height / rect.height;
@@ -2078,7 +2089,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       
       setStickers(newStickers);
-      renderJournal();
+      debouncedDragRender();
+    }
+    } catch (error) {
+      console.error('Error in handleMouseMove:', error);
+      // Reset sticker action on error to prevent crashes
+      setStickerAction(null);
+      setStickerDragOffset(null);
+      setIsDragging(false);
     }
   };
 
@@ -2813,7 +2831,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       
       setStickers(newStickers);
-      renderJournal();
+      debouncedDragRender();
     }
   };
 
@@ -2832,6 +2850,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (dragAnimationFrameRef.current) {
+        cancelAnimationFrame(dragAnimationFrameRef.current);
       }
       if (stickerUpdateBatchRef.current.timeoutId) {
         clearTimeout(stickerUpdateBatchRef.current.timeoutId);

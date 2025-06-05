@@ -1170,10 +1170,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                       inline
                       showPopperArrow={false}
                       calendarClassName="compact-calendar"
-                      fixedHeight={false}
+                      fixedHeight={true}
                       showWeekNumbers={false}
                       monthsShown={1}
-                      peekNextMonth={false}
+                      peekNextMonth={true}
                       openToDate={date}
                       todayButton="Today"
                       disabledKeyboardNavigation={true}
@@ -1418,13 +1418,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             margin: 0 !important;
             max-width: none !important;
             height: auto !important;
-            max-height: 260px !important;
+            max-height: 300px !important;
           }
           
           /* Force all weeks to show */
           .compact-calendar .react-datepicker__month-container {
             height: auto !important;
-            max-height: 260px !important;
+            max-height: 300px !important;
           }
           
           .compact-calendar .react-datepicker__header {
@@ -1470,9 +1470,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           .compact-calendar .react-datepicker__month {
             padding: 2px 8px; /* More horizontal padding to avoid arrows */
             background: white;
-            height: 200px !important; /* Increased height to fit all weeks */
-            min-height: 200px !important;
-            max-height: 200px !important;
+            height: 240px !important; /* Increased height to fit all 6 weeks */
+            min-height: 240px !important;
+            max-height: 240px !important;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -1608,9 +1608,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           /* iPhone SE and small phones (320px - 374px) */
           @media screen and (max-width: 374px) {
             .compact-calendar .react-datepicker__month {
-              height: 160px !important;
-              min-height: 160px !important;
-              max-height: 160px !important;
+              height: 192px !important;
+              min-height: 192px !important;
+              max-height: 192px !important;
               padding: 2px 6px; /* Slightly less padding on very small screens */
             }
             .compact-calendar .react-datepicker__navigation {
@@ -1649,9 +1649,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           /* iPhone 6/7/8 (375px - 413px) */
           @media screen and (min-width: 375px) and (max-width: 413px) {
             .compact-calendar .react-datepicker__month {
-              height: 170px !important;
-              min-height: 170px !important;
-              max-height: 170px !important;
+              height: 204px !important;
+              min-height: 204px !important;
+              max-height: 204px !important;
             }
             .compact-calendar .react-datepicker__week {
               height: 26px !important;
@@ -1670,9 +1670,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           /* iPhone Plus/Pro Max/iPhone 15 Pro (414px - 479px) */
           @media screen and (min-width: 414px) and (max-width: 479px) {
             .compact-calendar .react-datepicker__month {
-              height: 210px !important;
-              min-height: 210px !important;
-              max-height: 210px !important;
+              height: 252px !important;
+              min-height: 252px !important;
+              max-height: 252px !important;
             }
             .compact-calendar .react-datepicker__week {
               height: 34px !important;
@@ -1687,10 +1687,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               font-size: 12px;
             }
             .compact-calendar {
-              max-height: 280px !important;
+              max-height: 320px !important;
             }
             .compact-calendar .react-datepicker__month-container {
-              max-height: 280px !important;
+              max-height: 320px !important;
             }
             .compact-calendar .react-datepicker__navigation {
               width: 14px;
@@ -1707,9 +1707,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           /* Tablets and larger (480px+) */
           @media screen and (min-width: 480px) {
             .compact-calendar .react-datepicker__month {
-              height: 200px !important;
-              min-height: 200px !important;
-              max-height: 200px !important;
+              height: 240px !important;
+              min-height: 240px !important;
+              max-height: 240px !important;
             }
             .compact-calendar .react-datepicker__week {
               height: 32px !important;

@@ -1,0 +1,239 @@
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { motion } from 'framer-motion';
+import { TextColors } from './TempColorPicker';
+import html2canvas from 'html2canvas';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
+
+// Define types for image positioning
+export interface ImagePosition {
+  x: number;       // x coordinate percentage (0-100)
+  y: number;       // y coordinate percentage (0-100)
+  width: number;   // width percentage (0-100)
+  height: number;  // height percentage (0-100)
+  rotation: number; // rotation in degrees
+  flipH: boolean;  // flip horizontally
+  flipV: boolean;  // flip vertically
+  zIndex: number;  // z-index for layering (higher numbers appear on top)
+}
+
+// Define draggable image information
+export interface DraggableImageInfo {
+  index: number;
+  isDragging: boolean;
+  offsetX: number;
+  offsetY: number;
+}
+
+// Color theme options for text shadows
+export type ColorTheme = 'classic' | 'pastel' | 'monochrome' | 'forest' | 'sunset' | 'ocean';
+
+// Define clickable text area
+export interface ClickableTextArea {
+  type: 'location' | 'text' | 'image';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  index?: number; // For text sections or images
+}
+
+// 1. Sticker type and state additions
+interface StickerImage {
+  src: string | Blob;
+  x: number; // px
+  y: number; // px
+  width: number; // px
+  height: number; // px
+  rotation: number; // degrees
+  zIndex: number;
+  imageObj?: HTMLImageElement; // for caching loaded image
+  originalWidth?: number; // store original width for high quality rendering
+  originalHeight?: number; // store original height for high quality rendering
+}
+
+interface JournalCanvasProps {
+  date: Date;
+  location: string;
+  textSections: string[];
+  images: (string | Blob)[];
+  onNewEntry: () => void;
+  templateUrl?: string;
+  textColors?: TextColors;
+  layoutMode?: 'standard' | 'mirrored';
+  editMode?: boolean;
+  onTextClick?: (area: ClickableTextArea) => void;
+  onImageDrag?: (index: number, x: number, y: number) => void;
+  onImageClick?: (x: number, y: number) => void;
+  forceUpdate?: number;
+  onAddSticker?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  template?: {
+    name: string;
+    backgroundColor: string;
+    textColor: string;
+    accentColor: string;
+    fontFamily: string;
+    fontWeight: string;
+    fontSize: string;
+    lineHeight: string;
+    textAlign: string;
+    padding: string;
+    borderRadius: string;
+    showDate: boolean;
+    showLocation: boolean;
+    dateFormat: string;
+  };
+  showCursor?: boolean;
+  cursorVisible?: boolean;
+  cursorPosition?: { textAreaIndex: number; characterIndex: number } | { isLocation: true; characterIndex: number };
+}
+
+// Export the imperative handle type
+export interface JournalCanvasHandle {
+  addSticker: (file: File, width?: number, height?: number) => void;
+  addMultipleStickers: (files: File[]) => void;
+}
+
+// Change to use forwardRef
+const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
+  date,
+  location,
+  textSections,
+  images,
+  onNewEntry,
+  templateUrl = '/templates/goodnotes-a6-yellow.jpg',
+  textColors = {
+    locationColor: '#3498DB',
+    locationShadowColor: '#AED6F1'
+  },
+  layoutMode = 'standard',
+  onAddSticker,
+  template = {
+    name: 'Default',
+    backgroundColor: '#111111',
+    textColor: '#22c55e',
+    accentColor: '#15803d',
+    fontFamily: 'Arial, sans-serif',
+    fontWeight: '400',
+    fontSize: '16px',
+    lineHeight: '1.5',
+    textAlign: 'left',
+    padding: '40px',
+    borderRadius: '12px',
+    showDate: true,
+    showLocation: true,
+    dateFormat: 'MMMM DD, YYYY'
+  },
+  showCursor = false,
+  cursorVisible = false,
+  cursorPosition,
+  ...props
+}, ref) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [stickers, setStickers] = useState<StickerImage[]>([]);
+  const [activeSticker, setActiveSticker] = useState<number | null>(null);
+
+  // Simple sticker file handler
+  const handleStickerFile = (file: File) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    
+    img.onload = () => {
+      const originalWidth = img.naturalWidth || img.width;
+      const originalHeight = img.naturalHeight || img.height;
+      const defaultStickerSize = 200;
+      let displayWidth = defaultStickerSize;
+      let displayHeight = defaultStickerSize;
+      
+      const aspectRatio = originalWidth / originalHeight;
+      if (aspectRatio > 1) {
+        displayWidth = defaultStickerSize;
+        displayHeight = defaultStickerSize / aspectRatio;
+      } else {
+        displayHeight = defaultStickerSize;
+        displayWidth = defaultStickerSize * aspectRatio;
+      }
+      
+      setStickers(prevStickers => [
+        ...prevStickers,
+        {
+          src: file,
+          x: Math.random() * 400 + 200,
+          y: Math.random() * 400 + 200,
+          width: displayWidth,
+          height: displayHeight,
+          rotation: 0,
+          zIndex: prevStickers.length + 10,
+          imageObj: img,
+          originalWidth: originalWidth,
+          originalHeight: originalHeight
+        },
+      ]);
+    };
+    
+    img.src = URL.createObjectURL(file);
+  };
+
+  // Expose the addSticker method via the forwarded ref
+  useImperativeHandle(ref, () => ({
+    addSticker: (file: File, width?: number, height?: number) => {
+      console.log("Adding sticker:", file.name);
+      try {
+        handleStickerFile(file);
+        return true;
+      } catch (err) {
+        console.error("Error adding sticker:", err);
+        return false;
+      }
+    },
+    addMultipleStickers: (files: File[]) => {
+      try {
+        files.forEach(file => handleStickerFile(file));
+        return true;
+      } catch (err) {
+        console.error("Error adding multiple stickers:", err);
+        return false;
+      }
+    }
+  }));
+
+  return (
+    <div className="relative w-full overflow-hidden">
+      {isLoading ? (
+        <div className="bg-gray-100 animate-pulse w-full h-96 rounded-lg flex items-center justify-center">
+          <span className="text-gray-400">Loading journal...</span>
+        </div>
+      ) : (
+        <>
+          <motion.canvas
+            ref={canvasRef}
+            id="journal-canvas"
+            className="w-full h-auto max-w-full bg-[#f5f2e9] rounded-lg shadow-lg"
+            style={{ 
+              aspectRatio: '1240 / 1748',
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto',
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
+            }}
+            whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          />
+        </>
+      )}
+    </div>
+  );
+});
+
+export default JournalCanvas;
+
+// Ensure TypeScript recognizes this module
+export { JournalCanvas }; 
