@@ -565,25 +565,23 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
     }
 
     return (
-      <div className="w-full flex justify-center items-center py-2 overflow-x-auto whitespace-nowrap pl-2 pr-2">
-        <div className="inline-flex flex-row items-center">
+      <div className="w-full flex justify-center items-center py-2 px-1">
+        <div className="flex flex-row items-center gap-1 w-full justify-between">
           {palette.map((color, i) => (
-            <div key={`color-wrap-${i}`} className="bg-white p-[2.5px] rounded">
-              <button
-                key={`color-${i}`}
-                className={`w-2 h-2 rounded flex items-center justify-center shadow-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white/0
-                  ${colors.locationColor === color ? 'ring-1 ring-blue-500' : ''}`}
-                style={{ backgroundColor: color }}
-                onClick={() => selectColor(color)}
-                title={color}
-              >
-                {colors.locationColor === color && (
-                  <svg className="w-1 h-1 text-white drop-shadow" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            <button
+              key={`color-${i}`}
+              className={`flex-1 aspect-square rounded transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm
+                ${colors.locationColor === color ? 'ring-2 ring-blue-500 scale-105' : 'hover:scale-105'}`}
+              style={{ backgroundColor: color }}
+              onClick={() => selectColor(color)}
+              title={color}
+            >
+              {colors.locationColor === color && (
+                <svg className="w-3 h-3 text-white drop-shadow mx-auto" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
           ))}
         </div>
       </div>
@@ -694,7 +692,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
                     setTimeout(() => window.forceCanvasRedraw?.(), 10);
                   }
                 }}
-                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             
@@ -715,7 +713,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
                       setTimeout(() => window.forceCanvasRedraw?.(), 10);
                     }
                   }}
-                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
               
@@ -735,7 +733,7 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
                       setTimeout(() => window.forceCanvasRedraw?.(), 10);
                     }
                   }}
-                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>

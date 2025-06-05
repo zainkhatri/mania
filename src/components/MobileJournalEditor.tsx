@@ -24,7 +24,8 @@ import {
   faGripVertical,
   faStar,
   faBars,
-  faGift
+  faGift,
+  faBook
 } from '@fortawesome/free-solid-svg-icons';
 import SimpleColorPicker from './TempColorPicker';
 import LayoutToggle from './LayoutToggle';
@@ -1100,39 +1101,39 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>
           {/* Ultra-Compact Tab Bar */}
           <div className={`flex items-center h-8 px-2 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
-            <div className="flex w-full bg-gray-100 rounded-lg p-0.5">
-                                              <button
-                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  onClick={() => setActiveEditTab('date')}
-                >
-                  📅
-                </button>
-                <button
-                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-gray-600 hover:text-gray-900`}
-                  onClick={() => {
-                    if (fileInputRef.current) fileInputRef.current.click();
-                  }}
-                >
-                  🖼️
-                </button>
-                <button
-                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  onClick={handleLocationClick}
-                >
-                  📍
-                </button>
-                <button
-                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  onClick={() => setActiveEditTab('stickers')}
-                >
-                  ✨
-                </button>
-                <button
-                  className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                  onClick={handlePencilClick}
-                >
-                  ✏️
-                </button>
+            <div className="flex w-full bg-white rounded-lg p-0.5">
+              <button
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'date' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
+                onClick={() => setActiveEditTab('date')}
+              >
+                <FontAwesomeIcon icon={faCalendarAlt} className="text-sm" />
+              </button>
+              <button
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100`}
+                onClick={() => {
+                  if (fileInputRef.current) fileInputRef.current.click();
+                }}
+              >
+                <FontAwesomeIcon icon={faPalette} className="text-sm" />
+              </button>
+              <button
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'location' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
+                onClick={handleLocationClick}
+              >
+                <FontAwesomeIcon icon={faLocationDot} className="text-sm" />
+              </button>
+              <button
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
+                onClick={() => setActiveEditTab('stickers')}
+              >
+                <FontAwesomeIcon icon={faGift} className="text-sm" />
+              </button>
+              <button
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'write' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
+                onClick={handlePencilClick}
+              >
+                <FontAwesomeIcon icon={faPencil} className="text-sm" />
+              </button>
             </div>
           </div>
 
@@ -1141,7 +1142,20 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             {activeEditTab === 'date' && (
               <div className="h-full w-full flex items-center justify-center p-2 overflow-hidden">
                 <div className="w-full max-h-full">
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden relative">
+                    {/* Calendar header video background */}
+                    <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden rounded-t-lg z-0">
+                      <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover opacity-20"
+                        style={{ filter: 'contrast(3) brightness(0.3) grayscale(1)' }}
+                      >
+                        <source src="/background/static.webm" type="video/webm" />
+                      </video>
+                    </div>
                     <DatePicker
                       selected={date}
                       onChange={(newDate: Date | null) => {
@@ -1171,11 +1185,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             )}
             
             {activeEditTab === 'location' && (
-              <div className="h-full flex flex-col gap-2 overflow-hidden p-3">
-                <h3 className="text-base font-semibold text-gray-900 text-center">Location Colors</h3>
+              <div className="h-full flex flex-col justify-center items-center gap-8 overflow-hidden p-6">
+                <h3 className="text-lg font-semibold text-gray-900 text-center">Title Color</h3>
                 
-                {/* Color Picker - Full height for better visibility */}
-                <div className="flex-1 bg-gray-50 rounded-lg p-2 overflow-y-auto min-h-0">
+                {/* Color Picker - Much more space */}
+                <div className="w-full bg-gray-50 rounded-lg p-4 overflow-y-auto">
                   <SimpleColorPicker
                     colors={textColors}
                     onChange={newColors => {
@@ -1190,33 +1204,45 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             )}
             
             {activeEditTab === 'stickers' && (
-              <div className="h-full flex flex-col gap-2 justify-center p-3">
-                <h3 className="text-base font-semibold text-gray-900 text-center">Add Stickers</h3>
+              <div className="h-full flex flex-col gap-8 justify-center p-6">
+                <h3 className="text-lg font-semibold text-gray-900 text-center">Add Stickers</h3>
                 <button
                   onClick={() => {
                     if (stickerInputRef.current) stickerInputRef.current.click();
                   }}
-                  className="w-full py-3 bg-blue-500 text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors"
+                  className="relative w-full py-3 bg-black text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 hover:bg-gray-900 transition-all overflow-hidden border border-white/20"
                 >
-                  <FontAwesomeIcon icon={faGift} className="text-base" />
-                  Choose Stickers
+                  <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover opacity-30"
+                    style={{ filter: 'contrast(2) brightness(0.5)' }}
+                  >
+                    <source src="/background/static.webm" type="video/webm" />
+                  </video>
+                  <div className="relative z-10 flex items-center justify-center gap-2">
+                    <FontAwesomeIcon icon={faGift} className="text-base" />
+                    Choose Stickers
+                  </div>
                 </button>
               </div>
             )}
             
             {activeEditTab === 'write' && (
-              <div className="h-full flex items-center justify-center p-3">
+              <div className="h-full flex items-center justify-center p-3 bg-white">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mb-4 mx-auto">
                     <FontAwesomeIcon icon={faPencil} className="text-white text-xl" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Writing Mode</h3>
+                  <h3 className="text-lg font-semibold text-black mb-2">Writing Mode</h3>
                   <p className="text-sm text-gray-600 mb-4 leading-relaxed">
                     Type and watch your words appear on the journal
                   </p>
                   <button
                     onClick={closeWriting}
-                    className="px-6 py-2 bg-gray-100 text-gray-900 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                    className="px-6 py-2 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
                   >
                     Done
                   </button>
@@ -1226,12 +1252,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             
             {/* Default state */}
             {activeEditTab === 'none' && (
-              <div className="h-full flex items-center justify-center">
+              <div className="h-full flex items-center justify-center bg-white">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4 mx-auto">
-                    <span className="text-gray-600 text-2xl">📝</span>
+                  <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <FontAwesomeIcon icon={faBook} className="text-white text-xl" />
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Journal</h2>
+                  <h2 className="text-xl font-semibold text-black mb-2">Your Journal</h2>
                   <p className="text-sm text-gray-600">
                     Use the tabs above to add content
                   </p>
@@ -1392,21 +1418,22 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             margin: 0 !important;
             max-width: none !important;
             height: auto !important;
-            max-height: 220px !important;
+            max-height: 260px !important;
           }
           
           /* Force all weeks to show */
           .compact-calendar .react-datepicker__month-container {
             height: auto !important;
-            max-height: 220px !important;
+            max-height: 260px !important;
           }
           
           .compact-calendar .react-datepicker__header {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            background: #000000;
             border: none;
             border-radius: 8px 8px 0 0;
             padding: 8px 0;
             position: relative;
+            overflow: hidden;
           }
           
           .compact-calendar .react-datepicker__current-month {
@@ -1422,12 +1449,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             justify-content: space-around;
             margin-bottom: 0;
             padding: 4px 8px 2px 8px; /* More horizontal padding to match month */
-            background: #f8fafc;
-            border-bottom: 1px solid #e5e7eb;
+            background: #000000;
+            border-bottom: 1px solid #000000;
           }
           
           .compact-calendar .react-datepicker__day-name {
-            color: #6b7280;
+            color: #ffffff;
             font-weight: 600;
             font-size: 9px;
             flex: 1;
@@ -1443,9 +1470,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           .compact-calendar .react-datepicker__month {
             padding: 2px 8px; /* More horizontal padding to avoid arrows */
             background: white;
-            height: 180px !important; /* Smaller height for 6 weeks (30px * 6) */
-            min-height: 180px !important;
-            max-height: 180px !important;
+            height: 200px !important; /* Increased height to fit all weeks */
+            min-height: 200px !important;
+            max-height: 200px !important;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -1460,9 +1487,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             display: flex;
             justify-content: space-around;
             margin: 0;
-            height: 28px !important; /* Smaller height for each week row */
-            min-height: 28px !important;
-            max-height: 28px !important;
+            height: 32px !important; /* Increased height for each week row */
+            min-height: 32px !important;
+            max-height: 32px !important;
             flex: 1;
             align-items: center;
             width: 100%;
@@ -1472,10 +1499,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             border-radius: 4px;
             margin: 0 0.5px;
             flex: 1;
-            height: 26px !important;
-            min-height: 26px !important;
-            max-height: 26px !important;
-            line-height: 26px;
+            height: 30px !important;
+            min-height: 30px !important;
+            max-height: 30px !important;
+            line-height: 30px;
             color: #374151;
             font-size: 11px;
             font-weight: 500;
@@ -1490,11 +1517,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .compact-calendar .react-datepicker__day--selected {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+            background: #000000 !important;
             color: white !important;
             font-weight: 700;
             transform: scale(1.05);
             border-radius: 8px;
+            border: 1px solid #ffffff !important;
           }
           
           /* Hide selection if it's outside the current month */
@@ -1507,8 +1535,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .compact-calendar .react-datepicker__day:hover:not(.react-datepicker__day--selected) {
-            background-color: #eef2ff;
-            color: #4f46e5;
+            background-color: #f3f4f6;
+            color: #000000;
             transform: scale(1.02);
           }
           
@@ -1538,40 +1566,40 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .compact-calendar .react-datepicker__navigation {
-            top: 18px;
+            top: 50px;
             width: 12px;
             height: 12px;
-            border-radius: 2px;
+            border-radius: 0;
             background: transparent;
             border: none;
             transition: all 0.15s ease;
             box-shadow: none;
-            z-index: 10;
+            z-index: 20;
             display: flex;
             align-items: center;
             justify-content: center;
-            opacity: 0.6;
+            opacity: 0.8;
           }
           
           .compact-calendar .react-datepicker__navigation:hover {
             background: transparent;
             opacity: 1;
-            transform: scale(1.05);
+            transform: scale(1.2);
           }
           
           .compact-calendar .react-datepicker__navigation--previous {
-            left: -20px;
+            left: -15px;
           }
           
           .compact-calendar .react-datepicker__navigation--next {
-            right: -20px;
+            right: -15px;
           }
           
           .compact-calendar .react-datepicker__navigation-icon::before {
-            border-color: #6366f1;
-            border-width: 1px 1px 0 0;
-            width: 3px;
-            height: 3px;
+            border-color: #000000;
+            border-width: 2px 2px 0 0;
+            width: 6px;
+            height: 6px;
             margin: 0;
           }
           
@@ -1639,24 +1667,40 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             }
           }
           
-          /* iPhone Plus/Pro Max (414px - 479px) */
+          /* iPhone Plus/Pro Max/iPhone 15 Pro (414px - 479px) */
           @media screen and (min-width: 414px) and (max-width: 479px) {
             .compact-calendar .react-datepicker__month {
-              height: 185px !important;
-              min-height: 185px !important;
-              max-height: 185px !important;
+              height: 210px !important;
+              min-height: 210px !important;
+              max-height: 210px !important;
             }
             .compact-calendar .react-datepicker__week {
-              height: 29px !important;
-              min-height: 29px !important;
-              max-height: 29px !important;
+              height: 34px !important;
+              min-height: 34px !important;
+              max-height: 34px !important;
             }
             .compact-calendar .react-datepicker__day {
-              height: 27px !important;
-              min-height: 27px !important;
-              max-height: 27px !important;
-              line-height: 27px;
-              font-size: 11px;
+              height: 32px !important;
+              min-height: 32px !important;
+              max-height: 32px !important;
+              line-height: 32px;
+              font-size: 12px;
+            }
+            .compact-calendar {
+              max-height: 280px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 280px !important;
+            }
+            .compact-calendar .react-datepicker__navigation {
+              width: 14px;
+              height: 14px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -18px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -18px;
             }
           }
           
