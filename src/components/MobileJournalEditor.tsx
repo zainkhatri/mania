@@ -669,7 +669,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   // Close location editing mode
   const closeLocationEditing = useCallback(() => {
     setIsEditingLocation(false);
-    setActiveEditTab('none');
+    // Keep the location tab active so user can see color picker
+    setActiveEditTab('location');
     if (locationTextareaRef.current) {
       locationTextareaRef.current.blur();
     }
@@ -778,7 +779,27 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               height: 60vh !important;
             }
             .compact-edit-panel {
-              height: 30vh !important;
+              height: 40vh !important;
+            }
+          }
+          
+          /* iPhone SE specific adjustments */
+          @media screen and (max-height: 500px) {
+            .full-journal {
+              height: 45vh !important;
+            }
+            .compact-edit-panel {
+              height: 55vh !important;
+            }
+          }
+          
+          /* Ultra-small screens */
+          @media screen and (max-height: 400px) {
+            .full-journal {
+              height: 40vh !important;
+            }
+            .compact-edit-panel {
+              height: 60vh !important;
             }
           }
           
@@ -970,62 +991,64 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         {/* Integrated Control Panel - Smaller height */}
         <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>
           {/* Clean Tab Bar - Smaller height */}
-          <div className={`flex items-center h-12 px-4 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
+          <div className={`flex items-center h-10 px-4 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
             <div className="flex w-full bg-gray-100 rounded-xl p-1">
-              <button
-                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={() => setActiveEditTab('date')}
-              >
-                📅
-              </button>
-              <button
-                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={handleLocationClick}
-              >
-                📍
-              </button>
-              <button
-                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-900`}
-                onClick={() => {
-                  if (fileInputRef.current) fileInputRef.current.click();
-                }}
-              >
-                🖼️
-              </button>
-              <button
-                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={() => setActiveEditTab('stickers')}
-              >
-                ✨
-              </button>
-              <button
-                className={`flex-1 h-10 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                onClick={handlePencilClick}
-              >
-                ✏️
-              </button>
+                              <button
+                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'date' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  onClick={() => setActiveEditTab('date')}
+                >
+                  📅
+                </button>
+                              <button
+                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'location' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  onClick={handleLocationClick}
+                >
+                  📍
+                </button>
+                <button
+                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-900`}
+                  onClick={() => {
+                    if (fileInputRef.current) fileInputRef.current.click();
+                  }}
+                >
+                  🖼️
+                </button>
+                <button
+                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  onClick={() => setActiveEditTab('stickers')}
+                >
+                  ✨
+                </button>
+                <button
+                  className={`flex-1 h-8 flex items-center justify-center font-medium text-sm rounded-lg transition-all duration-200 ${activeEditTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  onClick={handlePencilClick}
+                >
+                  ✏️
+                </button>
             </div>
           </div>
 
           {/* Control Content */}
           <div className="flex-1 overflow-hidden">
             {activeEditTab === 'date' && (
-              <div className="h-full w-full">
-                <DatePicker
-                  selected={date}
-                  onChange={(newDate: Date | null) => {
-                    if (newDate) {
-                      setDate(newDate);
-                      onUpdate({ date: newDate, location, images, textSections });
-                      // Auto-close after selection
-                      setActiveEditTab('none');
-                      hapticFeedback('medium');
-                    }
-                  }}
-                  inline
-                  showPopperArrow={false}
-                  calendarClassName="react-datepicker-custom-mobile"
-                />
+              <div className="h-full w-full overflow-hidden flex items-center justify-center">
+                <div className="w-full max-h-full overflow-hidden">
+                  <DatePicker
+                    selected={date}
+                    onChange={(newDate: Date | null) => {
+                      if (newDate) {
+                        setDate(newDate);
+                        onUpdate({ date: newDate, location, images, textSections });
+                        // Auto-close after selection
+                        setActiveEditTab('none');
+                        hapticFeedback('medium');
+                      }
+                    }}
+                    inline
+                    showPopperArrow={false}
+                    calendarClassName="react-datepicker-custom-mobile"
+                  />
+                </div>
               </div>
             )}
             
@@ -1255,6 +1278,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             display: flex !important;
             flex-direction: column !important;
             height: 100% !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
           }
           
           .react-datepicker-custom-mobile .react-datepicker__header {
@@ -1289,12 +1314,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .react-datepicker-custom-mobile .react-datepicker__month {
-            padding: 4px;
+            padding: 2px;
             background: white;
             flex: 1;
             display: flex;
             flex-direction: column;
             justify-content: space-evenly;
+            min-height: 0;
+            overflow: hidden;
           }
           
           .react-datepicker-custom-mobile .react-datepicker__week {
@@ -1306,9 +1333,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           
           .react-datepicker-custom-mobile .react-datepicker__day {
             border-radius: 4px;
-            margin: 1px;
+            margin: 0.5px;
             color: #374151;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 500;
             transition: all 0.2s ease;
             flex: 1;
@@ -1316,7 +1343,154 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 32px;
+            min-height: 24px;
+            max-height: 36px;
+          }
+          
+          /* Responsive calendar adjustments for different screen sizes */
+          @media screen and (max-height: 700px) {
+            .react-datepicker-custom-mobile .react-datepicker__day {
+              min-height: 20px;
+              max-height: 28px;
+              font-size: 9px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__current-month {
+              font-size: 11px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day-name {
+              font-size: 8px;
+              line-height: 16px;
+            }
+          }
+          
+          @media screen and (max-height: 600px) {
+            .react-datepicker-custom-mobile .react-datepicker__day {
+              min-height: 18px;
+              max-height: 24px;
+              font-size: 8px;
+              margin: 0.25px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__current-month {
+              font-size: 10px;
+              margin-bottom: 1px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day-name {
+              font-size: 7px;
+              line-height: 14px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__header {
+              padding: 2px 0;
+            }
+          }
+          
+          /* iPhone SE and smaller screens */
+          @media screen and (max-height: 500px) {
+            .react-datepicker-custom-mobile .react-datepicker__day {
+              min-height: 14px;
+              max-height: 18px;
+              font-size: 6px;
+              margin: 0.1px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__current-month {
+              font-size: 8px;
+              margin-bottom: 1px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day-name {
+              font-size: 5px;
+              line-height: 10px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__header {
+              padding: 1px 0;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__month {
+              padding: 0px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__navigation {
+              top: 3px;
+              width: 14px;
+              height: 14px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__navigation--previous {
+              left: 4px;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__navigation--next {
+              right: 4px;
+            }
+          }
+          
+          /* Ultra-compact for very small screens (iPhone SE and similar) */
+          @media screen and (max-height: 500px) {
+            .react-datepicker-custom-mobile {
+              font-size: 8px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day {
+              min-height: 10px !important;
+              max-height: 14px !important;
+              font-size: 4px !important;
+              margin: 0px !important;
+              padding: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__current-month {
+              font-size: 6px !important;
+              margin-bottom: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day-name {
+              font-size: 3px !important;
+              line-height: 6px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__header {
+              padding: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__month {
+              padding: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__week {
+              margin-bottom: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__navigation {
+              top: 1px !important;
+              width: 10px !important;
+              height: 10px !important;
+            }
+          }
+          
+          /* Even more compact for very small screens */
+          @media screen and (max-height: 400px) {
+            .react-datepicker-custom-mobile .react-datepicker__day {
+              min-height: 8px !important;
+              max-height: 12px !important;
+              font-size: 3px !important;
+              margin: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__current-month {
+              font-size: 5px !important;
+              margin-bottom: 0px !important;
+            }
+            
+            .react-datepicker-custom-mobile .react-datepicker__day-name {
+              font-size: 2px !important;
+              line-height: 4px !important;
+            }
           }
           
           .react-datepicker-custom-mobile .react-datepicker__day--selected {
