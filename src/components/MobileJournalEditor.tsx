@@ -268,6 +268,171 @@ function createDiversePalette(
 }
 // --- END COLOR UTILS ---
 
+// --- IMAGE COMPRESSION UTILITIES ---
+interface CompressionOptions {
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+  maxSizeKB?: number;
+  format?: 'jpeg' | 'webp' | 'png';
+}
+
+async function compressImage(
+  file: File,
+  options: CompressionOptions = {}
+): Promise<{ blob: Blob; wasCompressed: boolean; originalSize: number; newSize: number }> {
+  const {
+    maxWidth = 1920,
+    maxHeight = 1920,
+    quality = 0.85,
+    maxSizeKB = 1024, // 1MB default
+    format = 'jpeg'
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { 
+          // Performance optimizations for stickers
+          alpha: format === 'png',
+          desynchronized: true,
+          powerPreference: 'high-performance'
+        }) as CanvasRenderingContext2D | null;
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        // Calculate new dimensions while maintaining aspect ratio
+        let { width, height } = img;
+        const aspectRatio = width / height;
+
+        if (width > maxWidth) {
+          width = maxWidth;
+          height = width / aspectRatio;
+        }
+        if (height > maxHeight) {
+          height = maxHeight;
+          width = height * aspectRatio;
+        }
+
+        // Set canvas dimensions
+        canvas.width = width;
+        canvas.height = height;
+
+        // Optimize rendering for both speed and quality
+        ctx.imageSmoothingEnabled = true;
+        if (maxWidth <= 800 && maxHeight <= 800 && format === 'png') {
+          // For stickers, use high quality since we're optimizing elsewhere
+          ctx.imageSmoothingQuality = 'high';
+        } else {
+          // For large photos, use high quality
+          ctx.imageSmoothingQuality = 'high';
+        }
+
+        // Draw image
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to blob with compression
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to compress image'));
+              return;
+            }
+
+            const originalSize = file.size;
+            const newSize = blob.size;
+            const wasCompressed = newSize < originalSize;
+
+            // For stickers, accept larger files to maintain quality
+            const sizeLimit = maxWidth <= 800 && format === 'png' ? maxSizeKB * 2 : maxSizeKB;
+
+            // If still too large, try with lower quality (but only once for speed)
+            if (newSize > sizeLimit * 1024 && quality > 0.85) {
+              // Minimal quality reduction to preserve quality
+              const lowerQuality = Math.max(0.85, quality - 0.1);
+              compressImage(file, { ...options, quality: lowerQuality })
+                .then(resolve)
+                .catch(reject);
+              return;
+            }
+
+            resolve({
+              blob,
+              wasCompressed,
+              originalSize,
+              newSize
+            });
+          },
+          format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg',
+          format === 'png' ? undefined : quality
+        );
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+    
+    // Create object URL and revoke immediately after load for memory efficiency
+    const objectUrl = URL.createObjectURL(file);
+    img.src = objectUrl;
+    
+    // Clean up object URL after a brief delay
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
+  });
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+async function smartImageResize(
+  file: File,
+  targetType: 'sticker' | 'photo' = 'photo'
+): Promise<{ blob: Blob; compressionInfo: string }> {
+  const isSticker = targetType === 'sticker';
+  
+  const options: CompressionOptions = isSticker
+    ? {
+        maxWidth: 800,   // Smaller for stickers
+        maxHeight: 800,
+        quality: 0.9,    // Higher quality for stickers (they're usually smaller)
+        maxSizeKB: 1024, // 1MB for stickers
+        format: 'png'    // PNG for stickers to preserve transparency
+      }
+    : {
+        maxWidth: 1920,  // Larger for photos
+        maxHeight: 1920,
+        quality: 0.85,   // Good quality for photos
+        maxSizeKB: 2048, // 2MB for photos
+        format: 'jpeg'   // JPEG for photos (better compression)
+      };
+
+  const result = await compressImage(file, options);
+  
+  let compressionInfo = '';
+  if (result.wasCompressed) {
+    const savings = ((result.originalSize - result.newSize) / result.originalSize * 100).toFixed(1);
+    compressionInfo = `Compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.newSize)} (${savings}% smaller)`;
+  } else {
+    compressionInfo = `Original size: ${formatFileSize(result.originalSize)}`;
+  }
+
+  return {
+    blob: result.blob,
+    compressionInfo
+  };
+}
+// --- END IMAGE COMPRESSION UTILITIES ---
+
 // Optimized Text Input Component
 const OptimizedTextInput = memo(({ 
   initialValue, 
@@ -382,8 +547,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   // Auto-hide controls on scroll
   const [lastScrollY, setLastScrollY] = useState(0);
   
-  // Add state for which edit tab is open - added back 'write' as a simple pencil button
-  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format' | 'date' | 'stickers'>('none');
+  // Add state for which edit tab is open - default to date tab
+  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format' | 'date' | 'stickers'>('date');
   
   // Simple state for writing mode
   const [isWriting, setIsWriting] = useState(false);
@@ -447,12 +612,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, []);
 
-  // Enhanced image upload with multiple selection and preview
+  // Clean image upload without toast notifications
   const handleImageUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
-    setIsLoading(true);
     hapticFeedback('medium');
     
     try {
@@ -460,69 +624,104 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       const availableSlots = 3 - currentImages.length;
       const filesToProcess = Array.from(files).slice(0, availableSlots);
       
-      // Process all files and wait for all FileReader operations to complete
-      const imagePromises = filesToProcess.map((file) => {
-        return new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            if (e.target?.result) {
-              resolve(e.target.result as string);
-            } else {
-              reject(new Error('Failed to read file'));
-            }
-          };
-          reader.onerror = () => reject(new Error('FileReader error'));
-          reader.readAsDataURL(file);
-        });
-      });
+      // Process images one by one with smart compression
+      const processedImages: string[] = [];
       
-      // Wait for all images to be processed
-      const processedImages = await Promise.all(imagePromises);
+      for (let i = 0; i < filesToProcess.length; i++) {
+        const file = filesToProcess[i];
+        
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+          continue;
+        }
+        
+        try {
+          // Smart compression for photos
+          const { blob } = await smartImageResize(file, 'photo');
+          
+          // Convert compressed blob to data URL for images
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              if (e.target?.result) {
+                resolve(e.target.result as string);
+              } else {
+                reject(new Error('Failed to read compressed image'));
+              }
+            };
+            reader.onerror = () => reject(new Error('FileReader error'));
+            reader.readAsDataURL(blob);
+          });
+          
+          processedImages.push(dataUrl);
+          
+        } catch (imageError) {
+          // Fail silently for cleaner experience
+          console.warn(`Failed to process image ${i + 1}:`, imageError);
+        }
+      }
       
-      // Update state with all new images at once
-      const newImages: (string | Blob)[] = [...currentImages, ...processedImages];
-      setImages(newImages);
-      onUpdate({ date, location, images: newImages, textSections });
-      
-      // Show success animation
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 1500);
+      if (processedImages.length > 0) {
+        // Update state with processed images
+        const newImages: (string | Blob)[] = [...currentImages, ...processedImages];
+        setImages(newImages);
+        onUpdate({ date, location, images: newImages, textSections });
+        
+        // Show brief success animation only
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 800);
+      }
       
     } catch (error) {
       console.error('Error uploading images:', error);
-      toast.error('Failed to upload images');
+      // Only show error toast for critical failures
+      toast.error('Failed to add photos', {
+        autoClose: 2000,
+        style: { 
+          background: '#dc2626',
+          color: 'white',
+          borderRadius: '8px',
+          fontSize: '12px',
+          padding: '8px 12px'
+        }
+      });
     } finally {
-      setIsLoading(false);
       event.target.value = '';
     }
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
-  // Enhanced sticker upload with high quality preservation
-  const handleStickerUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+      // BUTTER SMOOTH sticker upload - GoodNotes level performance
+  const handleStickerUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
-    setIsLoading(true);
-    hapticFeedback('medium');
+    // INSTANT haptic feedback - no async
+    hapticFeedback('light');
     
-    try {
-      const filesToProcess = Array.from(files);
-      
-      // Use the JournalCanvas ref to add stickers with high quality
-      if (journalCanvasRef.current && 'addMultipleStickers' in journalCanvasRef.current) {
-        (journalCanvasRef.current as any).addMultipleStickers(filesToProcess);
-      }
-      
-      // Show success animation
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 1500);
-      
-    } catch (error) {
-      toast.error('Failed to upload stickers');
-    } finally {
-      setIsLoading(false);
-      event.target.value = '';
+    // INSTANT visual feedback
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 300);
+    
+    // NO async processing - everything synchronous for maximum speed
+    const filesToProcess = Array.from(files).slice(0, 12); // Increased since we're not processing
+    
+    // Add stickers IMMEDIATELY - no compression, no delays, no batching
+    if (journalCanvasRef.current && 'addSticker' in journalCanvasRef.current) {
+      filesToProcess.forEach((file) => {
+        // Only check if it's an image - add immediately
+        if (file.type.startsWith('image/')) {
+          try {
+            // Direct addition - no processing whatsoever
+            (journalCanvasRef.current as any).addSticker(file);
+          } catch {
+            // Silent failure for speed
+          }
+        }
+      });
     }
+    
+    // IMMEDIATE cleanup - no delays
+    event.target.value = '';
   }, [hapticFeedback]);
 
   // Initialize local states when entering edit mode
@@ -881,6 +1080,35 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             }
           }
           
+          /* BUTTER SMOOTH performance optimizations - GoodNotes level */
+          .sticker-button {
+            will-change: transform !important;
+            transform: translate3d(0, 0, 0) !important;
+            backface-visibility: hidden !important;
+            -webkit-backface-visibility: hidden !important;
+            perspective: 1000px !important;
+            -webkit-perspective: 1000px !important;
+            isolation: isolate !important;
+            contain: layout style paint !important;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+          }
+          
+          .sticker-button:active {
+            transform: translate3d(0, 0, 0) scale(0.96) !important;
+            transition: transform 0.05s ease-out !important;
+          }
+          
+          /* Ultra-fast file input trigger */
+          .sticker-input {
+            position: absolute !important;
+            left: -9999px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+          
           /* iOS Keyboard Optimization */
           @supports (-webkit-touch-callout: none) {
             /* Keep layout consistent - just make tabs sticky */
@@ -962,7 +1190,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
       {/* Journal View with iOS Keyboard Optimization */}
       <div className={`flex-1 flex flex-col min-h-0 bg-white`}>
-        {/* Journal Section - Adjust for smaller header */}
+        {/* Journal Section - Always visible with default content */}
         <div className="full-journal" style={{ height: '68vh' }}>
           <div className="h-full p-2">
             <motion.div
@@ -1114,7 +1342,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   if (fileInputRef.current) fileInputRef.current.click();
                 }}
               >
-                <FontAwesomeIcon icon={faPalette} className="text-sm" />
+                <FontAwesomeIcon icon={faCamera} className="text-sm" />
               </button>
               <button
                 className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'location' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
@@ -1123,8 +1351,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                 <FontAwesomeIcon icon={faLocationDot} className="text-sm" />
               </button>
               <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'stickers' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
-                onClick={() => setActiveEditTab('stickers')}
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100`}
+                onClick={() => {
+                  // Direct camera roll access like photos tab
+                  hapticFeedback('light');
+                  if (stickerInputRef.current) {
+                    stickerInputRef.current.click();
+                  }
+                }}
               >
                 <FontAwesomeIcon icon={faGift} className="text-sm" />
               </button>
@@ -1140,8 +1374,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           {/* Control Content */}
           <div className="flex-1 overflow-hidden">
             {activeEditTab === 'date' && (
-              <div className="h-full w-full flex items-center justify-center p-2 overflow-hidden">
-                <div className="w-full max-h-full">
+              <div className="h-full w-full flex items-start justify-center p-0 overflow-y-auto overflow-x-hidden">
+                <div className="w-full h-auto max-w-full mt-1 overflow-hidden">
                   <div className="bg-white rounded-lg border border-gray-200 overflow-hidden relative">
                     {/* Calendar header video background */}
                     <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden rounded-t-lg z-0">
@@ -1203,33 +1437,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               </div>
             )}
             
-            {activeEditTab === 'stickers' && (
-              <div className="h-full flex flex-col gap-8 justify-center p-6">
-                <h3 className="text-lg font-semibold text-gray-900 text-center">Add Stickers</h3>
-                <button
-                  onClick={() => {
-                    if (stickerInputRef.current) stickerInputRef.current.click();
-                  }}
-                  className="relative w-full py-3 bg-black text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 hover:bg-gray-900 transition-all overflow-hidden border border-white/20"
-                >
-                  <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover opacity-30"
-                    style={{ filter: 'contrast(2) brightness(0.5)' }}
-                  >
-                    <source src="/background/static.webm" type="video/webm" />
-                  </video>
-                  <div className="relative z-10 flex items-center justify-center gap-2">
-                    <FontAwesomeIcon icon={faGift} className="text-base" />
-                    Choose Stickers
-                  </div>
-                </button>
-              </div>
-            )}
-            
+
             {activeEditTab === 'write' && (
               <div className="h-full flex items-center justify-center p-3 bg-white">
                 <div className="text-center">
@@ -1252,13 +1460,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             
             {/* Default state */}
             {activeEditTab === 'none' && (
-              <div className="h-full flex items-center justify-center bg-white">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mb-4 mx-auto">
-                    <FontAwesomeIcon icon={faBook} className="text-white text-xl" />
+              <div className="h-full flex items-center justify-center bg-white px-6">
+                <div className="text-center max-w-sm mx-auto">
+                  <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mb-6 mx-auto shadow-lg">
+                    <FontAwesomeIcon icon={faBook} className="text-white text-2xl" />
                   </div>
-                  <h2 className="text-xl font-semibold text-black mb-2">Your Journal</h2>
-                  <p className="text-sm text-gray-600">
+                  <h2 className="text-2xl font-bold text-black mb-3 tracking-tight">Your Journal</h2>
+                  <p className="text-base text-gray-500 leading-relaxed">
                     Use the tabs above to add content
                   </p>
                 </div>
@@ -1294,14 +1502,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         multiple
       />
       
-      {/* Hidden sticker input */}
+      {/* Ultra-fast hidden sticker input */}
       <input
         ref={stickerInputRef}
         type="file"
         accept="image/*"
-        className="hidden"
+        className="sticker-input"
         onChange={handleStickerUpload}
         multiple
+        tabIndex={-1}
       />
       
       {/* Clean DatePicker Styles */}
@@ -1408,7 +1617,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             right: 12px;
           }
           
-                    /* Ultra-clean, perfectly fitted calendar */
+                    /* Ultra-clean, perfectly fitted calendar - NO HORIZONTAL SCROLL */
           .compact-calendar {
             border: none !important;
             box-shadow: none !important;
@@ -1416,15 +1625,20 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             background: transparent !important;
             width: 100% !important;
             margin: 0 !important;
-            max-width: none !important;
+            max-width: 100% !important;
             height: auto !important;
-            max-height: 300px !important;
+            max-height: 340px !important;
+            overflow: hidden !important;
+            overflow-x: hidden !important;
           }
           
-          /* Force all weeks to show */
+          /* Force all weeks to show - increased height for 6 weeks */
           .compact-calendar .react-datepicker__month-container {
             height: auto !important;
-            max-height: 300px !important;
+            max-height: 340px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
           }
           
           .compact-calendar .react-datepicker__header {
@@ -1468,15 +1682,19 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .compact-calendar .react-datepicker__month {
-            padding: 2px 8px; /* More horizontal padding to avoid arrows */
+            padding: 2px 4px; /* Reduced padding to prevent overflow */
             background: white;
-            height: 240px !important; /* Increased height to fit all 6 weeks */
-            min-height: 240px !important;
-            max-height: 240px !important;
+            height: 280px !important; /* Increased height to fit all 6 weeks properly */
+            min-height: 280px !important;
+            max-height: 280px !important;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            margin: 0 4px; /* Extra margin to ensure no overlap */
+            margin: 0 auto; /* Center instead of side margins */
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
           }
           
           .compact-calendar .react-datepicker__month-container {
@@ -1487,9 +1705,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             display: flex;
             justify-content: space-around;
             margin: 0;
-            height: 32px !important; /* Increased height for each week row */
-            min-height: 32px !important;
-            max-height: 32px !important;
+            height: 40px !important; /* Increased height for each week row to show all dates */
+            min-height: 40px !important;
+            max-height: 40px !important;
             flex: 1;
             align-items: center;
             width: 100%;
@@ -1499,12 +1717,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             border-radius: 4px;
             margin: 0 0.5px;
             flex: 1;
-            height: 30px !important;
-            min-height: 30px !important;
-            max-height: 30px !important;
-            line-height: 30px;
+            height: 36px !important;
+            min-height: 36px !important;
+            max-height: 36px !important;
+            line-height: 36px;
             color: #374151;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 500;
             transition: all 0.15s ease;
             text-align: center;
@@ -1588,11 +1806,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .compact-calendar .react-datepicker__navigation--previous {
-            left: -15px;
+            left: 4px; /* Moved inside container */
           }
           
           .compact-calendar .react-datepicker__navigation--next {
-            right: -15px;
+            right: 4px; /* Moved inside container */
           }
           
           .compact-calendar .react-datepicker__navigation-icon::before {
@@ -1603,39 +1821,97 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             margin: 0;
           }
           
-          /* Responsive Design for All Devices */
+          /* COMPREHENSIVE RESPONSIVE DESIGN - FIXED FOR ALL DEVICES */
           
-          /* iPhone SE and small phones (320px - 374px) */
-          @media screen and (max-width: 374px) {
+          /* Ultra-small phones (320px - 359px) - EXTRA COMPACT */
+          @media screen and (max-width: 359px) {
+            .compact-calendar {
+              max-height: 180px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 180px !important;
+            }
             .compact-calendar .react-datepicker__month {
-              height: 192px !important;
-              min-height: 192px !important;
-              max-height: 192px !important;
-              padding: 2px 6px; /* Slightly less padding on very small screens */
+              height: 140px !important;
+              min-height: 140px !important;
+              max-height: 140px !important;
+              padding: 1px 2px;
+            }
+            .compact-calendar .react-datepicker__header {
+              padding: 3px 0;
+            }
+            .compact-calendar .react-datepicker__navigation {
+              width: 6px;
+              height: 6px;
+              top: 10px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -10px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -10px;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 20px !important;
+              min-height: 20px !important;
+              max-height: 20px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 18px !important;
+              min-height: 18px !important;
+              max-height: 18px !important;
+              line-height: 18px;
+              font-size: 8px;
+              margin: 0;
+            }
+            .compact-calendar .react-datepicker__day-name {
+              font-size: 6px;
+              line-height: 8px;
+              height: 8px;
+            }
+            .compact-calendar .react-datepicker__current-month {
+              font-size: 9px;
+              margin-bottom: 1px;
+            }
+          }
+          
+          /* Samsung Galaxy S8+, Pixel, and similar phones (360px - 374px) */
+          @media screen and (min-width: 360px) and (max-width: 374px) {
+            .compact-calendar {
+              max-height: 300px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 300px !important;
+            }
+            .compact-calendar .react-datepicker__month {
+              height: 240px !important;
+              min-height: 240px !important;
+              max-height: 240px !important;
+              padding: 2px 6px;
             }
             .compact-calendar .react-datepicker__navigation {
               width: 10px;
               height: 10px;
-              top: 16px;
-              border-radius: 1px;
+              top: 15px;
             }
             .compact-calendar .react-datepicker__navigation--previous {
-              left: -16px;
+              left: -14px;
             }
             .compact-calendar .react-datepicker__navigation--next {
-              right: -16px;
+              right: -14px;
             }
             .compact-calendar .react-datepicker__week {
-              height: 24px !important;
-              min-height: 24px !important;
-              max-height: 24px !important;
+              height: 32px !important;
+              min-height: 32px !important;
+              max-height: 32px !important;
             }
             .compact-calendar .react-datepicker__day {
-              height: 22px !important;
-              min-height: 22px !important;
-              max-height: 22px !important;
-              line-height: 22px;
+              height: 30px !important;
+              min-height: 30px !important;
+              max-height: 30px !important;
+              line-height: 30px;
               font-size: 10px;
+              margin: 0 1px;
             }
             .compact-calendar .react-datepicker__day-name {
               font-size: 8px;
@@ -1645,52 +1921,83 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               font-size: 12px;
             }
           }
-          
-          /* iPhone 6/7/8 (375px - 413px) */
+
+          /* iPhone SE and iPhone 6/7/8 (375px - 413px) - MUCH SMALLER */
           @media screen and (min-width: 375px) and (max-width: 413px) {
+            .compact-calendar {
+              max-height: 200px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 200px !important;
+            }
             .compact-calendar .react-datepicker__month {
-              height: 204px !important;
-              min-height: 204px !important;
-              max-height: 204px !important;
+              height: 160px !important;
+              min-height: 160px !important;
+              max-height: 160px !important;
+              padding: 1px 4px;
+            }
+            .compact-calendar .react-datepicker__header {
+              padding: 4px 0;
+            }
+            .compact-calendar .react-datepicker__navigation {
+              width: 8px;
+              height: 8px;
+              top: 12px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -12px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -12px;
             }
             .compact-calendar .react-datepicker__week {
-              height: 26px !important;
-              min-height: 26px !important;
-              max-height: 26px !important;
+              height: 22px !important;
+              min-height: 22px !important;
+              max-height: 22px !important;
             }
             .compact-calendar .react-datepicker__day {
-              height: 24px !important;
-              min-height: 24px !important;
-              max-height: 24px !important;
-              line-height: 24px;
+              height: 20px !important;
+              min-height: 20px !important;
+              max-height: 20px !important;
+              line-height: 20px;
+              font-size: 9px;
+              margin: 0;
+            }
+            .compact-calendar .react-datepicker__day-name {
+              font-size: 7px;
+              line-height: 10px;
+              height: 10px;
+            }
+            .compact-calendar .react-datepicker__current-month {
               font-size: 10px;
+              margin-bottom: 2px;
             }
           }
           
           /* iPhone Plus/Pro Max/iPhone 15 Pro (414px - 479px) */
           @media screen and (min-width: 414px) and (max-width: 479px) {
             .compact-calendar .react-datepicker__month {
-              height: 252px !important;
-              min-height: 252px !important;
-              max-height: 252px !important;
+              height: 280px !important; /* Ensure all 6 weeks are visible */
+              min-height: 280px !important;
+              max-height: 280px !important;
             }
             .compact-calendar .react-datepicker__week {
-              height: 34px !important;
-              min-height: 34px !important;
-              max-height: 34px !important;
+              height: 40px !important; /* Increased to show dates properly */
+              min-height: 40px !important;
+              max-height: 40px !important;
             }
             .compact-calendar .react-datepicker__day {
-              height: 32px !important;
-              min-height: 32px !important;
-              max-height: 32px !important;
-              line-height: 32px;
+              height: 38px !important; /* Increased for better visibility */
+              min-height: 38px !important;
+              max-height: 38px !important;
+              line-height: 38px;
               font-size: 12px;
             }
             .compact-calendar {
-              max-height: 320px !important;
+              max-height: 360px !important; /* Increased container height */
             }
             .compact-calendar .react-datepicker__month-container {
-              max-height: 320px !important;
+              max-height: 360px !important; /* Increased container height */
             }
             .compact-calendar .react-datepicker__navigation {
               width: 14px;
@@ -1704,31 +2011,97 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             }
           }
           
-          /* Tablets and larger (480px+) */
-          @media screen and (min-width: 480px) {
+          /* Surface Duo and medium tablets (480px - 600px) */
+          @media screen and (min-width: 480px) and (max-width: 600px) {
+            .compact-calendar {
+              max-height: 400px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 400px !important;
+            }
             .compact-calendar .react-datepicker__month {
-              height: 240px !important;
-              min-height: 240px !important;
-              max-height: 240px !important;
+              height: 340px !important;
+              min-height: 340px !important;
+              max-height: 340px !important;
+              padding: 4px 12px;
+            }
+            .compact-calendar .react-datepicker__navigation {
+              width: 16px;
+              height: 16px;
+              top: 18px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -20px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -20px;
             }
             .compact-calendar .react-datepicker__week {
-              height: 32px !important;
-              min-height: 32px !important;
-              max-height: 32px !important;
+              height: 48px !important;
+              min-height: 48px !important;
+              max-height: 48px !important;
             }
             .compact-calendar .react-datepicker__day {
-              height: 30px !important;
-              min-height: 30px !important;
-              max-height: 30px !important;
-              line-height: 30px;
-              font-size: 12px;
+              height: 44px !important;
+              min-height: 44px !important;
+              max-height: 44px !important;
+              line-height: 44px;
+              font-size: 14px;
+              margin: 0 2px;
             }
             .compact-calendar .react-datepicker__day-name {
-              font-size: 10px;
-              line-height: 16px;
+              font-size: 11px;
+              line-height: 18px;
             }
             .compact-calendar .react-datepicker__current-month {
+              font-size: 17px;
+            }
+          }
+
+          /* Large tablets and desktop (600px+) */
+          @media screen and (min-width: 600px) {
+            .compact-calendar {
+              max-height: 450px !important;
+            }
+            .compact-calendar .react-datepicker__month-container {
+              max-height: 450px !important;
+            }
+            .compact-calendar .react-datepicker__month {
+              height: 380px !important;
+              min-height: 380px !important;
+              max-height: 380px !important;
+              padding: 6px 16px;
+            }
+            .compact-calendar .react-datepicker__navigation {
+              width: 18px;
+              height: 18px;
+              top: 20px;
+            }
+            .compact-calendar .react-datepicker__navigation--previous {
+              left: -24px;
+            }
+            .compact-calendar .react-datepicker__navigation--next {
+              right: -24px;
+            }
+            .compact-calendar .react-datepicker__week {
+              height: 52px !important;
+              min-height: 52px !important;
+              max-height: 52px !important;
+            }
+            .compact-calendar .react-datepicker__day {
+              height: 48px !important;
+              min-height: 48px !important;
+              max-height: 48px !important;
+              line-height: 48px;
               font-size: 16px;
+              margin: 0 3px;
+            }
+            .compact-calendar .react-datepicker__day-name {
+              font-size: 12px;
+              line-height: 20px;
+            }
+            .compact-calendar .react-datepicker__current-month {
+              font-size: 18px;
             }
           }
           

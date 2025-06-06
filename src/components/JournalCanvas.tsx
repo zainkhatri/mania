@@ -103,8 +103,8 @@ interface JournalCanvasProps {
 
 // Export the imperative handle type
 export interface JournalCanvasHandle {
-  addSticker: (file: File, width?: number, height?: number) => void;
-  addMultipleStickers: (files: File[]) => void;
+  addSticker: (file: File, width?: number, height?: number) => boolean;
+  addMultipleStickers: (files: File[]) => boolean;
 }
 
 // Helper function to adjust color brightness 
@@ -202,6 +202,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [forceRender, setForceRender] = useState(0); // Add state to force re-renders
   const [renderCount, setRenderCount] = useState(0);
   const [stickers, setStickers] = useState<StickerImage[]>([]);
+  
+  // Debug: Log stickers state changes
+  useEffect(() => {
+    console.log("Stickers state updated:", stickers.length, stickers);
+  }, [stickers]);
   const [activeSticker, setActiveSticker] = useState<number | null>(null);
   const [stickerDragOffset, setStickerDragOffset] = useState<StickerDragData | null>(null);
   const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
@@ -1461,6 +1466,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       imagePositionsRef.current = imagePositions;
 
       // Draw stickers after main content
+      console.log(`Checking stickers: ${stickers.length} stickers in array`);
       if (stickers.length > 0) {
           console.log(`Rendering ${stickers.length} stickers`);
           
@@ -1515,43 +1521,52 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               
               // Draw border and controls if sticker is active
               if (activeSticker !== null && stickers[activeSticker] === sticker) {
-                // Dashed blue border
-                ctx.setLineDash([16, 12]); // Doubled from [8, 6]
-                ctx.strokeStyle = '#2563eb'; // blue-600
-                ctx.lineWidth = 6; // Doubled from 3
+                // Enhanced selection border - more visible
+                ctx.setLineDash([20, 15]); // Increased dash size
+                ctx.strokeStyle = '#3b82f6'; // Brighter blue
+                ctx.lineWidth = 8; // Thicker border
                 ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
                 ctx.setLineDash([]);
                 
-                const btnRadius = 44; // Doubled from 22
+                // Add subtle background glow for better visibility
+                ctx.save();
+                ctx.shadowColor = '#3b82f6';
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+                ctx.lineWidth = 12;
+                ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
+                ctx.restore();
                 
-                // Delete (red, white X) - top-left
+                const btnRadius = 50; // Increased from 44 for better touch targets
+                
+                // Delete (bright red, white X) - top-left
                 drawSFSymbolButton(
                   ctx, 
-                  -sticker.width/2 - 32, // Doubled from 16
-                  -sticker.height/2 - 32, // Doubled from 16
-                  '#ef4444', 
+                  -sticker.width/2 - 35, // Moved further out
+                  -sticker.height/2 - 35, // Moved further out
+                  '#ef4444', // Bright red
                   'delete', 
                   btnRadius,
                   hoveredButton === 'delete'
                 );
                 
-                // Rotate (blue, white arrow) - top-center
+                // Rotate (bright blue, white arrow) - top-center
                 drawSFSymbolButton(
                   ctx, 
                   0, 
-                  -sticker.height/2 - 76, // Doubled from 38
-                  '#2563eb', 
+                  -sticker.height/2 - 80, // Moved further out
+                  '#3b82f6', // Brighter blue
                   'rotate', 
                   btnRadius,
                   hoveredButton === 'rotate'
                 );
                 
-                // Resize (blue, white diagonal) - bottom-right
+                // Resize (bright green, white diagonal) - bottom-right
                 drawSFSymbolButton(
                   ctx, 
-                  sticker.width/2 + 32, // Doubled from 16
-                  sticker.height/2 + 32, // Doubled from 16
-                  '#2563eb', 
+                  sticker.width/2 + 35, // Moved further out
+                  sticker.height/2 + 35, // Moved further out
+                  '#10b981', // Green for resize (more intuitive)
                   'resize', 
                   btnRadius,
                   hoveredButton === 'resize'
@@ -1573,18 +1588,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const sin = Math.sin(angle);
           
           // Calculate rotation-adjusted button positions
-          const deleteOffsetX = -sticker.width/2 - 16;
-          const deleteOffsetY = -sticker.height/2 - 16;
+          const deleteOffsetX = -sticker.width/2 - 35;
+          const deleteOffsetY = -sticker.height/2 - 35;
           const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
           const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
           
           const rotateOffsetX = 0;
-          const rotateOffsetY = -sticker.height/2 - 38;
+          const rotateOffsetY = -sticker.height/2 - 80;
           const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
           const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
           
-          const resizeOffsetX = sticker.width/2 + 16;
-          const resizeOffsetY = sticker.height/2 + 16;
+          const resizeOffsetX = sticker.width/2 + 35;
+          const resizeOffsetY = sticker.height/2 + 35;
           const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
           const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
           
@@ -1946,13 +1961,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
       // Check if hovering over any button
-      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.5) {
+      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.8) {
         if (hoveredButton !== 'delete') {
           setHoveredButton('delete');
           setCanvasCursor('pointer');
           debouncedRender();
         }
-      } else if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.5) {
+      } else if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.8) {
         if (hoveredButton !== 'rotate') {
           setHoveredButton('rotate');
           setCanvasCursor('pointer');
@@ -2148,16 +2163,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
+    console.log("handleStickerFile called with:", file.name, file.size, file.type);
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     
+    // Create a revocable URL for the file
+    const url = URL.createObjectURL(file);
+    
     img.onload = () => {
+      console.log("Image loaded successfully for sticker:", file.name);
+      
       // Always use original dimensions at full resolution
       const originalWidth = img.naturalWidth || img.width;
       const originalHeight = img.naturalHeight || img.height;
+      console.log("Original dimensions:", originalWidth, "x", originalHeight);
       
-      // Set default sticker size to 200px for much better visibility
-      const defaultStickerSize = 200;
+      // Set default sticker size to 400px for much better visibility like the user wants
+      const defaultStickerSize = 400;
       let displayWidth = defaultStickerSize;
       let displayHeight = defaultStickerSize;
       
@@ -2173,39 +2195,46 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         displayWidth = defaultStickerSize * aspectRatio;
       }
       
+      console.log("Display dimensions:", displayWidth, "x", displayHeight);
+      
       // Create a new sticker with both original and display dimensions
-      setStickers(prevStickers => [
-        ...prevStickers,
-        {
-          src: file,
-          x: Math.random() * 400 + 200,
-          y: Math.random() * 400 + 200,
-          width: displayWidth,
-          height: displayHeight,
-          rotation: 0,
-          zIndex: prevStickers.length + 10,
-          imageObj: img,
-          originalWidth: originalWidth,  // Store original dimensions
-          originalHeight: originalHeight // Store original dimensions
-        },
-      ]);
+      const newSticker = {
+        src: file,
+        x: Math.random() * 400 + 200,
+        y: Math.random() * 400 + 200,
+        width: displayWidth,
+        height: displayHeight,
+        rotation: 0,
+        zIndex: 0, // Will be updated below
+        imageObj: img,
+        originalWidth: originalWidth,  // Store original dimensions
+        originalHeight: originalHeight // Store original dimensions
+      };
+      
+      setStickers(prevStickers => {
+        const newZIndex = prevStickers.length + 10;
+        const stickerWithZIndex = { ...newSticker, zIndex: newZIndex };
+        console.log("Adding sticker to state:", stickerWithZIndex);
+        return [...prevStickers, stickerWithZIndex];
+      });
+      
+      // Clean up the URL after successful loading
+      URL.revokeObjectURL(url);
       
       // Force a re-render to show the high-quality sticker
       throttledRender();
     };
     
+    img.onerror = (error) => {
+      console.error("Failed to load sticker image:", file.name, error);
+      URL.revokeObjectURL(url);
+    };
+    
     // Use synchronous decoding for best quality
     img.decoding = 'sync';
     
-    // Create a revocable URL for the file
-    const url = URL.createObjectURL(file);
+    // Set the source to start loading
     img.src = url;
-    
-    // Clean up the URL after loading
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      img.onload = null;
-    };
   };
 
   // Expose the addSticker method via the forwarded ref
