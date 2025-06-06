@@ -2197,11 +2197,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       console.log("Display dimensions:", displayWidth, "x", displayHeight);
       
-      // Create a new sticker with both original and display dimensions
+      // Position stickers BELOW the location text area for easier grabbing
+      const canvasWidth = canvasRef.current?.width || 1240;
+      const canvasHeight = canvasRef.current?.height || 1748;
+      
+      // Location text is typically at top 15% of canvas - position stickers below that
+      const locationAreaHeight = canvasHeight * 0.15; // Top 15% for location
+      const stickerAreaTop = locationAreaHeight + 50; // Start 50px below location
+      const stickerAreaHeight = canvasHeight * 0.4; // Use 40% of canvas for stickers
+      
+      // Create a new sticker positioned below location text
       const newSticker = {
         src: file,
-        x: Math.random() * 400 + 200,
-        y: Math.random() * 400 + 200,
+        x: Math.random() * (canvasWidth * 0.6) + (canvasWidth * 0.2), // Center 60% of width
+        y: Math.random() * stickerAreaHeight + stickerAreaTop, // Below location text
         width: displayWidth,
         height: displayHeight,
         rotation: 0,
@@ -2932,13 +2941,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const col = index % cols;
           const row = Math.floor(index / cols);
           
-          // Calculate base position in a grid
+          // Position stickers BELOW location text for easier grabbing
+          const locationAreaHeight = canvasHeight * 0.15; // Top 15% for location
+          const stickerAreaTop = locationAreaHeight + 50; // Start 50px below location
+          const stickerAreaHeight = canvasHeight * 0.4; // Use 40% of canvas for stickers
+          
+          // Calculate base position in a grid BELOW the location
           const baseX = (canvasWidth * 0.6) * (col / cols) + canvasWidth * 0.2;
-          const baseY = (canvasHeight * 0.6) * (row / cols) + canvasHeight * 0.2;
+          const baseY = (stickerAreaHeight) * (row / cols) + stickerAreaTop;
           
           // Add randomness to prevent perfect alignment
-          const jitterX = Math.random() * 100 - 50;
-          const jitterY = Math.random() * 100 - 50;
+          const jitterX = Math.random() * 80 - 40; // Reduced jitter
+          const jitterY = Math.random() * 80 - 40;
           
           resolve({
             src: file,
