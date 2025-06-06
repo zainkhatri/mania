@@ -1611,29 +1611,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               
               // Draw border and controls if sticker is active
               if (activeSticker !== null && stickers[activeSticker] === sticker) {
-                // Enhanced selection border - more visible
-                ctx.setLineDash([20, 15]); // Increased dash size
-                ctx.strokeStyle = '#3b82f6'; // Brighter blue
-                ctx.lineWidth = 8; // Thicker border
+                // iOS-optimized selection border - much more visible like GoodNotes
+                const borderWidth = isIOS() ? 12 : 8; // Thicker on iOS
+                const dashSize = isIOS() ? [30, 20] : [20, 15]; // Bigger dashes on iOS
+                
+                ctx.setLineDash(dashSize);
+                ctx.strokeStyle = '#3b82f6'; // Bright blue
+                ctx.lineWidth = borderWidth;
                 ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
                 ctx.setLineDash([]);
                 
-                // Add subtle background glow for better visibility
+                // Enhanced glow effect for better visibility on iOS
                 ctx.save();
                 ctx.shadowColor = '#3b82f6';
-                ctx.shadowBlur = 20;
-                ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
-                ctx.lineWidth = 12;
+                ctx.shadowBlur = isIOS() ? 30 : 20; // More glow on iOS
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+                ctx.lineWidth = isIOS() ? 16 : 12; // Thicker glow on iOS
                 ctx.strokeRect(-sticker.width/2, -sticker.height/2, sticker.width, sticker.height);
                 ctx.restore();
                 
-                const btnRadius = 50; // Increased from 44 for better touch targets
+                // iOS-optimized button sizes - much larger touch targets like GoodNotes
+                const btnRadius = isIOS() ? 80 : 60; // Much bigger on iOS for easy touch
+                
+                // iOS-optimized button positioning - further out for easier touch
+                const buttonOffset = isIOS() ? 60 : 35; // Much further on iOS
+                const topButtonOffset = isIOS() ? 120 : 80; // Even further for top button
                 
                 // Delete (bright red, white X) - top-left
                 drawSFSymbolButton(
                   ctx, 
-                  -sticker.width/2 - 35, // Moved further out
-                  -sticker.height/2 - 35, // Moved further out
+                  -sticker.width/2 - buttonOffset,
+                  -sticker.height/2 - buttonOffset,
                   '#ef4444', // Bright red
                   'delete', 
                   btnRadius,
@@ -1644,7 +1652,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 drawSFSymbolButton(
                   ctx, 
                   0, 
-                  -sticker.height/2 - 80, // Moved further out
+                  -sticker.height/2 - topButtonOffset,
                   '#3b82f6', // Brighter blue
                   'rotate', 
                   btnRadius,
@@ -1654,8 +1662,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 // Resize (bright green, white diagonal) - bottom-right
                 drawSFSymbolButton(
                   ctx, 
-                  sticker.width/2 + 35, // Moved further out
-                  sticker.height/2 + 35, // Moved further out
+                  sticker.width/2 + buttonOffset,
+                  sticker.height/2 + buttonOffset,
                   '#10b981', // Green for resize (more intuitive)
                   'resize', 
                   btnRadius,
@@ -1677,19 +1685,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const cos = Math.cos(angle);
           const sin = Math.sin(angle);
           
+          // iOS-optimized button positioning
+          const buttonOffset = isIOS() ? 60 : 35;
+          const topButtonOffset = isIOS() ? 120 : 80;
+          
           // Calculate rotation-adjusted button positions
-          const deleteOffsetX = -sticker.width/2 - 35;
-          const deleteOffsetY = -sticker.height/2 - 35;
+          const deleteOffsetX = -sticker.width/2 - buttonOffset;
+          const deleteOffsetY = -sticker.height/2 - buttonOffset;
           const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
           const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
           
           const rotateOffsetX = 0;
-          const rotateOffsetY = -sticker.height/2 - 80;
+          const rotateOffsetY = -sticker.height/2 - topButtonOffset;
           const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
           const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
           
-          const resizeOffsetX = sticker.width/2 + 35;
-          const resizeOffsetY = sticker.height/2 + 35;
+          const resizeOffsetX = sticker.width/2 + buttonOffset;
+          const resizeOffsetY = sticker.height/2 + buttonOffset;
           const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
           const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
           
@@ -2628,7 +2640,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button touches if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 44; // Doubled from 22
+      // iOS-optimized button radius and hit areas
+      const btnRadius = isIOS() ? 80 : 60;
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -2637,26 +2650,32 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       
+      // iOS-optimized button positioning
+      const buttonOffset = isIOS() ? 60 : 35;
+      const topButtonOffset = isIOS() ? 120 : 80;
+      
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
-      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
+      const deleteOffsetX = -sticker.width/2 - buttonOffset;
+      const deleteOffsetY = -sticker.height/2 - buttonOffset;
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
+      const rotateOffsetY = -sticker.height/2 - topButtonOffset;
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
-      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
+      const resizeOffsetX = sticker.width/2 + buttonOffset;
+      const resizeOffsetY = sticker.height/2 + buttonOffset;
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
-      // Use a larger hit area for easier button clicking (1.8x radius for touch)
-      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.8) {
+      // iOS-optimized hit areas - much larger for easier touch
+      const hitMultiplier = isIOS() ? 1.5 : 1.2; // Even bigger hit area on iOS
+      if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * hitMultiplier) {
+        console.log("iOS: Delete button tapped!");
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         updateStickersOptimized(newStickers);
@@ -2666,7 +2685,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       
       // Handle rotate button touch
-      if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * 1.8) {
+      if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * hitMultiplier) {
+        console.log("iOS: Rotate button tapped!");
         setStickerAction('rotate');
         setStickerDragOffset({x: 0, y: 0});
         setButtonClickHandling(true);
@@ -2674,7 +2694,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       
       // Handle resize button touch
-      if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * 1.8) {
+      if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * hitMultiplier) {
+        console.log("iOS: Resize button tapped!");
         setStickerAction('resize');
         setStickerDragOffset({x: 0, y: 0});
         setButtonClickHandling(true);
@@ -2701,13 +2722,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
         const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
         
-        // Use a slightly larger hit area (20% buffer) for touch
-        const hitWidthHalf = sticker.width/2 * 1.2;
-        const hitHeightHalf = sticker.height/2 * 1.2;
+        // iOS-optimized hit area - much more generous on iOS like GoodNotes
+        const hitBuffer = isIOS() ? 1.4 : 1.2; // 40% larger hit area on iOS
+        const hitWidthHalf = sticker.width/2 * hitBuffer;
+        const hitHeightHalf = sticker.height/2 * hitBuffer;
         
         if (Math.abs(localX) < hitWidthHalf && Math.abs(localY) < hitHeightHalf) {
+          console.log(`iOS: Sticker ${i} selected! Size: ${sticker.width}x${sticker.height}`);
           setActiveSticker(i);
           touchedOnSticker = true;
+          
+          // iOS haptic feedback when sticker is selected
+          if (isIOS() && 'vibrate' in navigator) {
+            navigator.vibrate(10); // Short vibration on selection
+          }
           
           // Bring to front
           const maxZ = getMaxStickerZ();
@@ -3064,8 +3092,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const originalWidth = img.naturalWidth || img.width;
           const originalHeight = img.naturalHeight || img.height;
           
-          // Set default sticker size to 200px for much better visibility
-          const defaultStickerSize = 800;
+          // Set default sticker size optimized for iOS touch interaction - GoodNotes style
+          const defaultStickerSize = isIOS() ? 1200 : 1000; // Bigger on iOS for easier touch
           let width = defaultStickerSize;
           let height = defaultStickerSize;
           
@@ -3087,10 +3115,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const col = index % cols;
           const row = Math.floor(index / cols);
           
-          // Position stickers BELOW location text for easier grabbing
+          // iOS-optimized positioning - avoid edges and make them easier to grab
           const locationAreaHeight = canvasHeight * 0.15; // Top 15% for location
-          const stickerAreaTop = locationAreaHeight + 50; // Start 50px below location
-          const stickerAreaHeight = canvasHeight * 0.4; // Use 40% of canvas for stickers
+          const stickerAreaTop = locationAreaHeight + (isIOS() ? 100 : 50); // More space on iOS
+          const stickerAreaHeight = canvasHeight * (isIOS() ? 0.5 : 0.4); // More area on iOS for easier access
           
           // Calculate base position in a grid BELOW the location
           const baseX = (canvasWidth * 0.6) * (col / cols) + canvasWidth * 0.2;
