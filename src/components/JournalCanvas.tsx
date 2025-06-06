@@ -6,6 +6,45 @@ import html2canvas from 'html2canvas';
 import html2pdf from 'html2pdf.js';
 import { jsPDF } from 'jspdf';
 
+// iOS Detection and Performance Utilities
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+         (navigator.userAgent.includes('Safari') && navigator.userAgent.includes('Mobile'));
+};
+
+const isIOSSafari = () => {
+  return isIOS() && /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS/.test(navigator.userAgent);
+};
+
+// iOS-specific performance configurations
+const getIOSOptimizedSettings = () => {
+  if (isIOS()) {
+    return {
+      // Reduce canvas resolution during dragging on iOS
+      dragCanvasScale: 0.5, // 50% resolution during drag
+      dragRenderThrottle: 33, // ~30fps during drag (vs 16ms = 60fps)
+      staticRenderThrottle: 16, // 60fps when static
+      maxStickerResolution: 1024, // Max sticker size for iOS
+      enableHardwareAcceleration: true,
+      useOffscreenCanvas: false, // Safari doesn't support it well
+      imageSmoothingEnabled: false, // Disable during drag for performance
+      highQualityExport: true // Only enable high quality during export
+    };
+  } else {
+    return {
+      dragCanvasScale: 0.8,
+      dragRenderThrottle: 16,
+      staticRenderThrottle: 16,
+      maxStickerResolution: 2048,
+      enableHardwareAcceleration: true,
+      useOffscreenCanvas: true,
+      imageSmoothingEnabled: true,
+      highQualityExport: true
+    };
+  }
+};
+
 // Define types for image positioning
 export interface ImagePosition {
   x: number;       // x coordinate percentage (0-100)
@@ -226,28 +265,34 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [debounceRender, setDebounceRender] = useState(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Performance optimization refs
+  // Performance optimization refs with iOS-specific settings
+  const iosSettings = getIOSOptimizedSettings();
   const animationFrameRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const isRenderingRef = useRef<boolean>(false);
   const dragAnimationFrameRef = useRef<number | null>(null);
   const lastDragUpdateRef = useRef<number>(0);
+  const [isDraggingSticker, setIsDraggingSticker] = useState(false);
+  const [isHighQualityMode, setIsHighQualityMode] = useState(true);
+  const previousCanvasDataRef = useRef<ImageData | null>(null);
   
   // Function to trigger a re-render when needed
   const renderJournal = useCallback(() => {
     setForceRender(prev => prev + 1); // Increment to trigger a re-render
   }, []);
 
-  // Optimized throttled render function for better performance
+  // iOS-optimized throttled render function
   const throttledRender = useCallback(() => {
     const now = Date.now();
-    if (now - lastUpdateTimeRef.current > 16) { // ~60fps
+    const throttleTime = isDraggingSticker ? iosSettings.dragRenderThrottle : iosSettings.staticRenderThrottle;
+    
+    if (now - lastUpdateTimeRef.current > throttleTime) {
       lastUpdateTimeRef.current = now;
       renderJournal();
     }
-  }, [renderJournal]);
+  }, [renderJournal, isDraggingSticker, iosSettings]);
 
-  // Optimized debounced render function for drag operations
+  // iOS-optimized debounced render function for drag operations
   const debouncedDragRender = useCallback(() => {
     if (dragAnimationFrameRef.current) {
       cancelAnimationFrame(dragAnimationFrameRef.current);
@@ -255,12 +300,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     dragAnimationFrameRef.current = requestAnimationFrame(() => {
       const now = Date.now();
-      if (now - lastDragUpdateRef.current > 8) { // ~120fps for smooth dragging
+      if (now - lastDragUpdateRef.current > iosSettings.dragRenderThrottle) {
         lastDragUpdateRef.current = now;
+        
+        // On iOS, temporarily reduce quality during drag
+        if (isIOS() && isDraggingSticker) {
+          setIsHighQualityMode(false);
+        }
+        
         renderJournal();
+        
+        // Restore quality after a short delay
+        if (isIOS() && isDraggingSticker) {
+          setTimeout(() => setIsHighQualityMode(true), 100);
+        }
       }
     });
-  }, [renderJournal]);
+  }, [renderJournal, isDraggingSticker, iosSettings]);
   
   // Font loading using FontFace API
   useEffect(() => {
@@ -1476,11 +1532,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           sortedStickers.forEach((sticker, i) => {
             let img = sticker.imageObj;
             
-            // If image is not loaded yet, load it
+            // If image is not loaded yet, load it with iOS optimizations
             if (!img && sticker.src) {
               img = new window.Image();
               img.crossOrigin = "anonymous";
-              img.decoding = 'sync'; // Synchronous decoding for best quality
+              
+              // iOS-specific optimizations
+              if (isIOS()) {
+                img.decoding = 'async'; // Async decoding for better performance on iOS
+                // Limit image resolution on iOS to prevent memory issues
+                if (isDraggingSticker && !isHighQualityMode) {
+                  img.loading = 'lazy'; // Lazy loading during drag
+                }
+              } else {
+                img.decoding = 'sync'; // Synchronous decoding for best quality on other platforms
+              }
               
               // Prevent browser from applying any quality reduction
               if (typeof sticker.src === 'string') {
@@ -1504,18 +1570,42 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
               ctx.rotate((sticker.rotation * Math.PI) / 180);
               
-              // Force absolute highest quality rendering settings
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
+              // iOS-optimized rendering settings
+              if (isHighQualityMode && !isDraggingSticker) {
+                // High quality mode for static rendering and export
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+              } else if (isIOS()) {
+                // Performance mode for iOS during dragging
+                ctx.imageSmoothingEnabled = false; // Disable smoothing for performance
+              } else {
+                // Standard quality for other platforms during drag
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'medium';
+              }
               
               // Use original image dimensions for source rectangle
               const sourceWidth = img.naturalWidth || img.width;
               const sourceHeight = img.naturalHeight || img.height;
               
-              // Draw the image at full resolution
+              // iOS-specific optimization: Limit source resolution during drag
+              let actualSourceWidth = sourceWidth;
+              let actualSourceHeight = sourceHeight;
+              
+              if (isIOS() && isDraggingSticker && !isHighQualityMode) {
+                // Reduce source resolution during drag on iOS
+                const maxDragResolution = iosSettings.maxStickerResolution;
+                if (sourceWidth > maxDragResolution || sourceHeight > maxDragResolution) {
+                  const ratio = Math.min(maxDragResolution / sourceWidth, maxDragResolution / sourceHeight);
+                  actualSourceWidth = sourceWidth * ratio;
+                  actualSourceHeight = sourceHeight * ratio;
+                }
+              }
+              
+              // Draw the image with optimized resolution
               ctx.drawImage(
                 img,
-                0, 0, sourceWidth, sourceHeight, // Source: Use full original dimensions
+                0, 0, actualSourceWidth, actualSourceHeight, // Source: Use potentially reduced dimensions during drag
                 -sticker.width/2, -sticker.height/2, sticker.width, sticker.height // Destination
               );
               
@@ -1634,11 +1724,32 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     renderCanvas();
   }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender]);
 
-  // Replace both export functions with a single ultra-high-quality export
+  // iOS-optimized ultra-high-quality export function
   const exportUltraHDPDF = () => {
     if (!canvasRef.current) return;
     
-    // Create a saving indicator
+    // Force high quality mode for export
+    const wasHighQuality = isHighQualityMode;
+    const wasDragging = isDraggingSticker;
+    
+    setIsHighQualityMode(true);
+    setIsDraggingSticker(false);
+    
+    // iOS-specific: Ensure we're not in any performance mode
+    if (isIOS()) {
+      // Force a high-quality re-render before export
+      setTimeout(() => {
+        renderJournal();
+        setTimeout(() => {
+          performExport();
+        }, 100); // Wait for render to complete
+      }, 50);
+    } else {
+      performExport();
+    }
+    
+         function performExport() {
+       // Create a saving indicator
     const savingToast = document.createElement('div');
     savingToast.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50';
     savingToast.innerHTML = `
@@ -1651,6 +1762,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     // Get the canvas for export
     const journalCanvas = canvasRef.current;
+    if (!journalCanvas) return;
     
     try {
       // Create a high quality PNG snapshot
@@ -1750,6 +1862,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       document.body.removeChild(savingToast);
       alert('Could not create export. Please try again.');
     }
+    
+    // Restore original quality settings after export
+    setIsHighQualityMode(wasHighQuality);
+    setIsDraggingSticker(wasDragging);
+  }
   };
 
   // Calculate the optimal font size to fit text in a given width
@@ -2465,8 +2582,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    // Prevent scrolling when interacting with canvas
+    // iOS-specific touch optimizations
     e.preventDefault();
+    e.stopPropagation();
+    
+    // iOS Safari: Prevent zoom and scrolling
+    if (isIOSSafari()) {
+      document.body.style.touchAction = 'none';
+      document.body.style.overflow = 'hidden';
+    }
     
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
@@ -2592,10 +2716,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             setStickers(newStickers);
           }
           
-          // Set up dragging
+          // Set up dragging with iOS optimizations
           setStickerAction('move');
           setStickerDragOffset({x: localX, y: localY});
           setIsDragging(true);
+          setIsDraggingSticker(true);
+          
+          // iOS-specific: Temporarily reduce quality for performance
+          if (isIOS()) {
+            setIsHighQualityMode(false);
+          }
           break;
         }
       }
@@ -2609,8 +2739,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    // Prevent scrolling when interacting with canvas
+    // iOS-specific touch optimizations
     e.preventDefault();
+    e.stopPropagation();
     
     // Handle two-finger rotation
     if (e.touches.length === 2 && 
@@ -2878,6 +3009,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setStickerAction(null);
     setStickerDragOffset(null);
     setIsDragging(false);
+    setIsDraggingSticker(false);
+    
+    // iOS-specific: Restore high quality mode and body settings after drag ends
+    if (isIOS()) {
+      // Restore body settings for iOS Safari
+      if (isIOSSafari()) {
+        document.body.style.touchAction = '';
+        document.body.style.overflow = '';
+      }
+      
+      setTimeout(() => {
+        setIsHighQualityMode(true);
+        renderJournal(); // Re-render with high quality
+      }, 50); // Small delay to ensure smooth drag end
+    }
   };
 
   // Clean up any timers and animation frames
@@ -3081,7 +3227,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               touchAction: 'none', // Prevent default touch behaviors for better performance
               WebkitTouchCallout: 'none',
               WebkitUserSelect: 'none',
-              userSelect: 'none'
+              userSelect: 'none',
+              // iOS-specific optimizations
+              WebkitTransform: 'translateZ(0)', // Force hardware acceleration
+              WebkitBackfaceVisibility: 'hidden', // Improve performance
+              WebkitPerspective: '1000', // Enable 3D acceleration
+              willChange: isDraggingSticker ? 'transform' : 'auto' // Optimize for dragging
             }}
             whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
             onMouseDown={handleCanvasMouseDown}
