@@ -1,10 +1,56 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva';
 import Konva from 'konva';
-import useImage from 'use-image';
 
 // Optimize Konva for mobile performance
 Konva.pixelRatio = window.devicePixelRatio > 2 ? 2 : window.devicePixelRatio;
+
+// Custom hook for loading images with hardware acceleration
+const useImageLoader = (src: string | File | null): [HTMLImageElement | null, boolean] => {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!src) {
+      setImage(null);
+      return;
+    }
+
+    setIsLoading(true);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    // Hardware acceleration hints
+    img.decoding = 'async';
+    
+    img.onload = () => {
+      setImage(img);
+      setIsLoading(false);
+    };
+    
+    img.onerror = () => {
+      console.error('Failed to load image:', src);
+      setImage(null);
+      setIsLoading(false);
+    };
+
+    // Load the image
+    if (typeof src === 'string') {
+      img.src = src;
+    } else {
+      img.src = URL.createObjectURL(src);
+    }
+
+    // Cleanup function
+    return () => {
+      if (typeof src !== 'string') {
+        URL.revokeObjectURL(img.src);
+      }
+    };
+  }, [src]);
+
+  return [image, isLoading];
+};
 
 interface StickerData {
   id: string;
@@ -51,12 +97,7 @@ const StickerItem: React.FC<{
   const transformerRef = useRef<Konva.Transformer>(null);
   
   // Load image with hardware-accelerated caching
-  const [image] = useImage(
-    typeof sticker.src === 'string' 
-      ? sticker.src 
-      : URL.createObjectURL(sticker.src),
-    'anonymous'
-  );
+  const [image, isImageLoading] = useImageLoader(sticker.src);
 
   // Apply transformer when selected
   useEffect(() => {
@@ -94,6 +135,11 @@ const StickerItem: React.FC<{
     node.width(newWidth);
     node.height(newHeight);
   }, [onTransform, sticker.originalWidth, sticker.originalHeight]);
+
+  // Don't render if image is not loaded yet
+  if (!image || isImageLoading) {
+    return null;
+  }
 
   return (
     <Group>
