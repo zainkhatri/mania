@@ -82,15 +82,18 @@ export interface ClickableTextArea {
 // 1. Sticker type and state additions
 interface StickerImage {
   src: string | Blob;
-  x: number; // px
-  y: number; // px
-  width: number; // px
-  height: number; // px
-  rotation: number; // degrees
+  x: number; // px - display position
+  y: number; // px - display position
+  width: number; // px - display size (transform applied)
+  height: number; // px - display size (transform applied)
+  rotation: number; // degrees - display rotation (transform applied)
   zIndex: number;
   imageObj?: HTMLImageElement; // for caching loaded image
-  originalWidth?: number; // store original width for high quality rendering
-  originalHeight?: number; // store original height for high quality rendering
+  originalWidth?: number; // CRITICAL: original pixel dimensions for export
+  originalHeight?: number; // CRITICAL: original pixel dimensions for export
+  scaleX?: number; // transform scale factor from original to display
+  scaleY?: number; // transform scale factor from original to display
+  originalUrl?: string; // reference to original object URL for cleanup
 }
 
 // Add this interface for drag and pinch operations
@@ -1566,47 +1569,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             if (img && img.complete) {
               ctx.save();
               
-              // Move to sticker center and apply rotation
+              // STEP 3: GOODNOTES-STYLE GPU TRANSFORMS
+              // Move to sticker center and apply rotation (pure CSS transform equivalent)
               ctx.translate(sticker.x + sticker.width/2, sticker.y + sticker.height/2);
               ctx.rotate((sticker.rotation * Math.PI) / 180);
               
-              // iOS-optimized rendering settings
-              if (isHighQualityMode && !isDraggingSticker) {
-                // High quality mode for static rendering and export
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-              } else if (isIOS()) {
-                // Performance mode for iOS during dragging
-                ctx.imageSmoothingEnabled = false; // Disable smoothing for performance
-              } else {
-                // Standard quality for other platforms during drag
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'medium';
-              }
-              
-              // Use original image dimensions for source rectangle
+              // STEP 4: GOODNOTES-STYLE IMAGE RENDERING
+              // Use original image dimensions ALWAYS - no quality reduction during drag
               const sourceWidth = img.naturalWidth || img.width;
               const sourceHeight = img.naturalHeight || img.height;
               
-              // iOS-specific optimization: Limit source resolution during drag
-              let actualSourceWidth = sourceWidth;
-              let actualSourceHeight = sourceHeight;
+              // Determine if sticker is shrunk (for pixelated rendering)
+              const displayScale = Math.min(sticker.width / sourceWidth, sticker.height / sourceHeight);
+              const isShrunken = displayScale < 0.5; // IMPROVED: Only pixelate when very small (< 50% of original)
               
-              if (isIOS() && isDraggingSticker && !isHighQualityMode) {
-                // Reduce source resolution during drag on iOS
-                const maxDragResolution = iosSettings.maxStickerResolution;
-                if (sourceWidth > maxDragResolution || sourceHeight > maxDragResolution) {
-                  const ratio = Math.min(maxDragResolution / sourceWidth, maxDragResolution / sourceHeight);
-                  actualSourceWidth = sourceWidth * ratio;
-                  actualSourceHeight = sourceHeight * ratio;
-                }
+              if (isHighQualityMode || !isDraggingSticker) {
+                // EXPORT MODE OR STATIC: Always use original quality
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+              } else if (isShrunken) {
+                // Only use pixelated rendering for VERY small stickers (< 50% of original)
+                // This makes the sticker much clearer when significantly shrunk
+                ctx.imageSmoothingEnabled = false; // Pixelated rendering
+              } else {
+                // NORMAL SIZE OR ENLARGED: Use smooth rendering with better performance
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'medium'; // Better performance while dragging
               }
               
-              // Draw the image with optimized resolution
+              // STEP 5: RENDER ORIGINAL IMAGE WITH TRANSFORMS
+              // Always use the full original source - never downsample
               ctx.drawImage(
                 img,
-                0, 0, actualSourceWidth, actualSourceHeight, // Source: Use potentially reduced dimensions during drag
-                -sticker.width/2, -sticker.height/2, sticker.width, sticker.height // Destination
+                0, 0, sourceWidth, sourceHeight, // Source: ALWAYS use original full resolution
+                -sticker.width/2, -sticker.height/2, sticker.width, sticker.height // Destination: Apply transforms here
               );
               
               // Draw border and controls if sticker is active
@@ -2217,12 +2213,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const newX = oldCenterX - newWidth/2;
         const newY = oldCenterY - newHeight/2;
         
+        // GOODNOTES-STYLE: Update scale factors for export quality
+        const newScaleX = newWidth / (activeStickObj.originalWidth || activeStickObj.width);
+        const newScaleY = newHeight / (activeStickObj.originalHeight || activeStickObj.height);
+        
         newStickers[activeSticker] = {
           ...activeStickObj,
           x: newX,
           y: newY,
           width: newWidth,
           height: newHeight,
+          scaleX: newScaleX, // Update scale factor for export
+          scaleY: newScaleY, // Update scale factor for export
         };
       } else if (stickerAction === 'rotate') {
         const angleRad = Math.atan2(y - centerY, x - centerX);
@@ -2293,73 +2295,77 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
     console.log("handleStickerFile called with:", file.name, file.size, file.type);
+    
+    // Create a revocable URL for the file IMMEDIATELY - no compression
+    const url = URL.createObjectURL(file);
+    
+    // Pre-load the image to get original dimensions
     const img = new window.Image();
     img.crossOrigin = "anonymous";
-    
-    // Create a revocable URL for the file
-    const url = URL.createObjectURL(file);
     
     img.onload = () => {
       console.log("Image loaded successfully for sticker:", file.name);
       
-      // Always use original dimensions at full resolution
+      // STEP 1: SAVE ORIGINAL AT FULL QUALITY - Never touch the original image
       const originalWidth = img.naturalWidth || img.width;
       const originalHeight = img.naturalHeight || img.height;
-      console.log("Original dimensions:", originalWidth, "x", originalHeight);
+      console.log("Original dimensions preserved:", originalWidth, "x", originalHeight);
       
-      // Set default sticker size to 400px for much better visibility like the user wants
+      // STEP 2: CALCULATE DISPLAY SIZE - This is just for initial preview, not permanent
       const defaultStickerSize = 400;
       let displayWidth = defaultStickerSize;
       let displayHeight = defaultStickerSize;
       
-      // Maintain aspect ratio while fitting in default size
+      // Maintain aspect ratio for initial display
       const aspectRatio = originalWidth / originalHeight;
       if (aspectRatio > 1) {
-        // Wide image: fit by width
         displayWidth = defaultStickerSize;
         displayHeight = defaultStickerSize / aspectRatio;
       } else {
-        // Tall image: fit by height
         displayHeight = defaultStickerSize;
         displayWidth = defaultStickerSize * aspectRatio;
       }
       
-      console.log("Display dimensions:", displayWidth, "x", displayHeight);
+      console.log("Initial display dimensions:", displayWidth, "x", displayHeight);
       
       // Position stickers BELOW the location text area for easier grabbing
       const canvasWidth = canvasRef.current?.width || 1240;
       const canvasHeight = canvasRef.current?.height || 1748;
       
       // Location text is typically at top 15% of canvas - position stickers below that
-      const locationAreaHeight = canvasHeight * 0.15; // Top 15% for location
-      const stickerAreaTop = locationAreaHeight + 50; // Start 50px below location
-      const stickerAreaHeight = canvasHeight * 0.4; // Use 40% of canvas for stickers
+      const locationAreaHeight = canvasHeight * 0.15;
+      const stickerAreaTop = locationAreaHeight + 50;
+      const stickerAreaHeight = canvasHeight * 0.4;
       
-      // Create a new sticker positioned below location text
+      // STEP 3: CREATE STICKER WITH ORIGINAL IMAGE + TRANSFORM DATA
       const newSticker = {
-        src: file,
-        x: Math.random() * (canvasWidth * 0.6) + (canvasWidth * 0.2), // Center 60% of width
-        y: Math.random() * stickerAreaHeight + stickerAreaTop, // Below location text
-        width: displayWidth,
-        height: displayHeight,
-        rotation: 0,
-        zIndex: 0, // Will be updated below
-        imageObj: img,
-        originalWidth: originalWidth,  // Store original dimensions
-        originalHeight: originalHeight // Store original dimensions
+        src: file, // Store the original File object - NEVER compress this
+        x: Math.random() * (canvasWidth * 0.6) + (canvasWidth * 0.2),
+        y: Math.random() * stickerAreaHeight + stickerAreaTop,
+        width: displayWidth,  // This is just the display transform
+        height: displayHeight, // This is just the display transform
+        rotation: 0,           // This is just the display transform
+        zIndex: 0,
+        imageObj: img, // Cache the loaded image object
+        originalWidth: originalWidth,   // CRITICAL: Store original for export
+        originalHeight: originalHeight, // CRITICAL: Store original for export
+        // NEW: Add transform factors for Goodnotes-style editing
+        scaleX: displayWidth / originalWidth,   // Scale factor from original to display
+        scaleY: displayHeight / originalHeight, // Scale factor from original to display
+        originalUrl: url // Keep reference to the original URL
       };
       
       setStickers(prevStickers => {
         const newZIndex = prevStickers.length + 10;
         const stickerWithZIndex = { ...newSticker, zIndex: newZIndex };
-        console.log("Adding sticker to state:", stickerWithZIndex);
+        console.log("Adding ORIGINAL QUALITY sticker to state:", stickerWithZIndex);
         return [...prevStickers, stickerWithZIndex];
       });
       
-      // Clean up the URL after successful loading
-      URL.revokeObjectURL(url);
+      // DON'T revoke URL yet - we need it for rendering
+      // URL will be revoked when sticker is removed
       
-      // Force a re-render to show the high-quality sticker
+      // Force a re-render to show the sticker
       throttledRender();
     };
     
@@ -2368,10 +2374,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       URL.revokeObjectURL(url);
     };
     
-    // Use synchronous decoding for best quality
-    img.decoding = 'sync';
-    
-    // Set the source to start loading
+    // STEP 4: USE BEST QUALITY SETTINGS
+    img.decoding = 'sync'; // Synchronous for best quality
     img.src = url;
   };
 
@@ -3012,12 +3016,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const newX = oldCenterX - newWidth/2;
         const newY = oldCenterY - newHeight/2;
         
+        // GOODNOTES-STYLE: Update scale factors for export quality
+        const newScaleX = newWidth / (activeStickObj.originalWidth || activeStickObj.width);
+        const newScaleY = newHeight / (activeStickObj.originalHeight || activeStickObj.height);
+        
         newStickers[activeSticker] = {
           ...activeStickObj,
           x: newX,
           y: newY,
           width: newWidth,
           height: newHeight,
+          scaleX: newScaleX, // Update scale factor for export
+          scaleY: newScaleY, // Update scale factor for export
         };
       } else if (stickerAction === 'rotate') {
         const angleRad = Math.atan2(y - centerY, x - centerX);
@@ -3138,7 +3148,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             zIndex: 100 + index, // Ensure proper stacking
             imageObj: img,
             originalWidth: originalWidth, // Store original dimensions
-            originalHeight: originalHeight // Store original dimensions
+            originalHeight: originalHeight, // Store original dimensions
+            scaleX: width / originalWidth, // Store scale factor for export
+            scaleY: height / originalHeight, // Store scale factor for export
+            originalUrl: URL.createObjectURL(file) // Keep reference to original URL
           });
         };
         

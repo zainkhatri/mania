@@ -690,7 +690,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
-  // ULTRA BUTTER SMOOTH sticker upload - Desktop quality on mobile
+  // GOODNOTES-STYLE sticker upload - Original quality preserved
   const handleStickerUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -707,16 +707,16 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 200);
     
-    // Convert FileList to Array
+    // Convert FileList to Array and filter for images only
     const filesToProcess = Array.from(files).filter(file => file.type.startsWith('image/'));
     
-    // Use the EXACT same logic as desktop - either single or multiple stickers
+    // GOODNOTES APPROACH: No compression, no processing, just pass the original files
     if (journalCanvasRef.current) {
       if (filesToProcess.length === 1) {
-        // Single sticker - use desktop addSticker method
+        // Single sticker - pass original File object directly
         journalCanvasRef.current.addSticker(filesToProcess[0]);
       } else if (filesToProcess.length > 1) {
-        // Multiple stickers - use desktop addMultipleStickers method
+        // Multiple stickers - pass original File objects directly
         journalCanvasRef.current.addMultipleStickers(filesToProcess);
       }
     }
@@ -746,11 +746,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setEditMode('view');
   }, [editMode, localTextSections, localLocation, date, images, textSections, onUpdate]);
 
-  // Desktop-quality download with ultra-high resolution for stickers
+  // EXACT COPY of working desktop exportUltraHDPDF function
   const handleDownload = useCallback(async () => {
-    const journalElement = document.getElementById('journal-canvas');
-    if (!journalElement) {
-      toast.error('Could not find journal element');
+    if (!journalCanvasRef.current) {
+      toast.error('Could not find journal canvas');
       return;
     }
 
@@ -770,76 +769,38 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
     try {
       // Force canvas to render at maximum quality before export
-      if (journalCanvasRef.current) {
-        // Trigger a high-quality re-render before capture
-        setForceUpdate(prev => prev + 1);
-        // Wait a moment for the render to complete
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      setForceUpdate(prev => prev + 1);
+      // Wait for the high-quality render to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // ULTRA HIGH QUALITY settings - same as desktop version
-      const canvas = await html2canvas(journalElement, {
-        scale: 4, // Even higher scale for mobile to match desktop quality
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 15000, // More time for high-res images
-        removeContainer: true,
-        foreignObjectRendering: false, // Better compatibility
-        // Critical sticker quality settings
-        ignoreElements: () => false,
-        onclone: (clonedDoc: Document) => {
-          // Ensure all images in the clone are loaded at full resolution
-          const images = clonedDoc.getElementsByTagName('img');
-          Array.from(images).forEach((img: HTMLImageElement) => {
-            img.style.imageRendering = 'auto';
-            img.style.imageRendering = '-webkit-optimize-contrast';
-            img.style.imageRendering = 'crisp-edges';
-          });
-          
-          // Ensure canvas elements maintain quality
-          const canvases = clonedDoc.getElementsByTagName('canvas');
-          Array.from(canvases).forEach((canvas: HTMLCanvasElement) => {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-            }
-          });
-        }
-      });
-
-      // Force maximum quality settings
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+      // Get the canvas element directly - no html2canvas needed since we already have a canvas
+      const canvasElement = document.querySelector('#journal-canvas') as HTMLCanvasElement;
+      if (!canvasElement) {
+        throw new Error('Canvas element not found');
       }
 
-      // Calculate proper dimensions for A4
-      const imgWidth = 210;
-      const pageHeight = 297;
-      const aspectRatio = canvas.height / canvas.width;
-      const imgHeight = imgWidth * aspectRatio;
-
-      // Use maximum quality PNG first, then convert to high-quality JPEG
-      const pngData = canvas.toDataURL('image/png'); // Lossless PNG first
+      // Get PNG data directly from the canvas at maximum quality
+      const pngData = canvasElement.toDataURL('image/png', 1.0);
       
-      // Create high-quality JPEG with maximum quality
-      const imgData = canvas.toDataURL('image/jpeg', 1.0); // Maximum JPEG quality
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      // Create PDF with canvas dimensions directly
+      const pdf = new jsPDF(
+        'portrait', 
+        'px', 
+        [canvasElement.width, canvasElement.height],
+        false // No compression
+      );
       
-      // Add image with precise positioning to maintain quality
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-      } else {
-        // If too tall, fit to page height
-        const scaledWidth = imgWidth * (pageHeight / imgHeight);
-        const offsetX = (imgWidth - scaledWidth) / 2;
-        pdf.addImage(imgData, 'JPEG', offsetX, 0, scaledWidth, pageHeight);
-      }
+      // Add the image to the PDF at maximum resolution
+      pdf.addImage(
+        pngData,
+        'PNG', // Explicitly specify PNG format
+        0,
+        0,
+        pdf.internal.pageSize.getWidth(),
+        pdf.internal.pageSize.getHeight(),
+        `journal-${Date.now()}`, // Unique alias to prevent caching issues
+        'NONE' // No compression for maximum quality
+      );
 
       const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(filename);
@@ -859,7 +820,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     } catch (error) {
       console.error('Error creating PDF:', error);
       toast.dismiss(toastId);
-      toast.error('Could not create PDF. Please try again.');
+      toast.error(`Error: ${error instanceof Error ? error.message : 'Could not create PDF'}`);
     } finally {
       setIsLoading(false);
     }
@@ -1172,11 +1133,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             contain: strict !important;
           }
           
-          /* Desktop-quality sticker rendering on mobile */
+          /* GOODNOTES-STYLE sticker rendering on mobile */
           .mobile-no-scroll canvas {
-            image-rendering: -webkit-optimize-contrast !important;
-            image-rendering: optimize-contrast !important;
-            will-change: contents !important;
+            /* IMPROVED: Better image rendering for crisp, smooth stickers */
+            image-rendering: auto !important; /* Default for smooth rendering */
+            image-rendering: -webkit-optimize-contrast !important; /* Better quality on Chrome/Safari */
+            image-rendering: crisp-edges !important; /* Better quality on Firefox */
+            will-change: transform !important; /* GPU acceleration hint */
             transform: translateZ(0) !important;
             backface-visibility: hidden !important;
             /* Critical: Allow full touch interaction exactly like desktop */
