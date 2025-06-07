@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from '
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import JournalCanvas, { JournalCanvasHandle } from './JournalCanvas';
 import JournalEnhancer from './JournalEnhancer';
+import KonvaStickers, { StickerData } from './KonvaStickers';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -565,6 +566,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [cursorBlink, setCursorBlink] = useState(true);
   const [forceUpdate, setForceUpdate] = useState(0);
 
+  // GOODNOTES-LEVEL STICKER SYSTEM: React Konva for hardware acceleration
+  const [konvaStickers, setKonvaStickers] = useState<StickerData[]>([]);
+  const [stickerIdCounter, setStickerIdCounter] = useState(0);
+
   // Cursor blinking effect
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -690,7 +695,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
-  // GOODNOTES-STYLE sticker upload - Original quality preserved
+  // GOODNOTES-LEVEL sticker upload with React Konva hardware acceleration
   const handleStickerUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -710,20 +715,56 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     // Convert FileList to Array and filter for images only
     const filesToProcess = Array.from(files).filter(file => file.type.startsWith('image/'));
     
-    // GOODNOTES APPROACH: No compression, no processing, just pass the original files
-    if (journalCanvasRef.current) {
-      if (filesToProcess.length === 1) {
-        // Single sticker - pass original File object directly
-        journalCanvasRef.current.addSticker(filesToProcess[0]);
-      } else if (filesToProcess.length > 1) {
-        // Multiple stickers - pass original File objects directly
-        journalCanvasRef.current.addMultipleStickers(filesToProcess);
-      }
-    }
+    // GOODNOTES APPROACH: Create stickers with original quality using React Konva
+    filesToProcess.forEach(file => {
+      // Create a temporary image to get dimensions
+      const img = new Image();
+      img.onload = () => {
+        const originalWidth = img.naturalWidth || img.width;
+        const originalHeight = img.naturalHeight || img.height;
+        
+        // Calculate initial display size (GoodNotes style)
+        const maxInitialSize = 300;
+        const aspectRatio = originalWidth / originalHeight;
+        let displayWidth = maxInitialSize;
+        let displayHeight = maxInitialSize;
+        
+        if (aspectRatio > 1) {
+          displayWidth = maxInitialSize;
+          displayHeight = maxInitialSize / aspectRatio;
+        } else {
+          displayHeight = maxInitialSize;
+          displayWidth = maxInitialSize * aspectRatio;
+        }
+        
+        // Create new sticker with unique ID
+        const newSticker: StickerData = {
+          id: `sticker-${stickerIdCounter}`,
+          src: file, // Store original File object - NO COMPRESSION
+          x: Math.random() * 200 + 100, // Random positioning
+          y: Math.random() * 200 + 200,
+          width: displayWidth,
+          height: displayHeight,
+          rotation: 0,
+          scaleX: displayWidth / originalWidth,
+          scaleY: displayHeight / originalHeight,
+          originalWidth: originalWidth,
+          originalHeight: originalHeight,
+          zIndex: konvaStickers.length + 1
+        };
+        
+        // Add to Konva stickers state
+        setKonvaStickers(prev => [...prev, newSticker]);
+        setStickerIdCounter(prev => prev + 1);
+      };
+      
+      // Load image to get dimensions - no quality loss
+      img.src = URL.createObjectURL(file);
+    });
     
     // IMMEDIATE cleanup
     event.target.value = '';
-  }, [hapticFeedback]);
+  }, [hapticFeedback, stickerIdCounter, konvaStickers.length]);
 
   // Initialize local states when entering edit mode
   useEffect(() => {
@@ -746,7 +787,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setEditMode('view');
   }, [editMode, localTextSections, localLocation, date, images, textSections, onUpdate]);
 
-  // EXACT COPY of working desktop exportUltraHDPDF function
+  // GOODNOTES-LEVEL PDF export with React Konva stickers included
   const handleDownload = useCallback(async () => {
     if (!journalCanvasRef.current) {
       toast.error('Could not find journal canvas');
@@ -756,7 +797,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setIsLoading(true);
     hapticFeedback('heavy');
     
-    const toastId = toast.loading('Creating Ultra-HD PDF...', {
+    const toastId = toast.loading('Creating Ultra-HD PDF with stickers...', {
       position: 'bottom-center',
       style: { 
         background: '#1a1a1a',
@@ -773,24 +814,82 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       // Wait for the high-quality render to complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Get the canvas element directly - no html2canvas needed since we already have a canvas
+      // Get the main journal canvas
       const canvasElement = document.querySelector('#journal-canvas') as HTMLCanvasElement;
       if (!canvasElement) {
         throw new Error('Canvas element not found');
       }
 
-      // Get PNG data directly from the canvas at maximum quality
-      const pngData = canvasElement.toDataURL('image/png', 1.0);
+      // Create a composite canvas that includes both journal and stickers
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = canvasElement.width;
+      compositeCanvas.height = canvasElement.height;
+      const ctx = compositeCanvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
+
+      // Draw the journal background first
+      ctx.drawImage(canvasElement, 0, 0);
+
+      // Draw each Konva sticker at original quality on top
+      for (const sticker of konvaStickers) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => {
+            // Save current transform
+            ctx.save();
+            
+            // Apply sticker transform
+            const centerX = sticker.x + sticker.width / 2;
+            const centerY = sticker.y + sticker.height / 2;
+            
+            ctx.translate(centerX, centerY);
+            ctx.rotate(sticker.rotation * Math.PI / 180);
+            
+            // Use ORIGINAL quality - no scaling artifacts
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Draw at original resolution with current display transform
+            ctx.drawImage(
+              img,
+              -sticker.width / 2,
+              -sticker.height / 2,
+              sticker.width,
+              sticker.height
+            );
+            
+            // Restore transform
+            ctx.restore();
+            resolve();
+          };
+          img.onerror = () => reject(new Error(`Failed to load sticker: ${sticker.id}`));
+          
+          // Load original image
+          if (typeof sticker.src === 'string') {
+            img.src = sticker.src;
+          } else {
+            img.src = URL.createObjectURL(sticker.src);
+          }
+        });
+      }
+
+      // Get ultra-high quality PNG data from composite canvas
+      const pngData = compositeCanvas.toDataURL('image/png', 1.0);
       
       // Create PDF with canvas dimensions directly
       const pdf = new jsPDF(
         'portrait', 
         'px', 
-        [canvasElement.width, canvasElement.height],
+        [compositeCanvas.width, compositeCanvas.height],
         false // No compression
       );
       
-      // Add the image to the PDF at maximum resolution
+      // Add the composite image to the PDF at maximum resolution
       pdf.addImage(
         pngData,
         'PNG', // Explicitly specify PNG format
@@ -806,7 +905,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       pdf.save(filename);
 
       toast.dismiss(toastId);
-      toast.success('Ultra-HD Journal saved successfully', {
+      toast.success('Ultra-HD Journal with stickers saved successfully', {
         position: 'bottom-center',
         style: { 
           background: '#1a1a1a',
@@ -824,7 +923,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     } finally {
       setIsLoading(false);
     }
-  }, [hapticFeedback]);
+  }, [hapticFeedback, konvaStickers]);
 
   // Gesture handlers for image reordering
   const handleImageDrag = useCallback((index: number, info: PanInfo) => {
@@ -1133,8 +1232,51 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             contain: strict !important;
           }
           
-          /* GOODNOTES-STYLE sticker rendering on mobile */
-          .mobile-no-scroll canvas {
+          /* GOODNOTES-LEVEL STICKER PERFORMANCE: React Konva hardware acceleration */
+          .konva-stage {
+            /* Ultra-smooth hardware acceleration like GoodNotes */
+            will-change: transform !important;
+            transform: translate3d(0, 0, 0) !important;
+            backface-visibility: hidden !important;
+            -webkit-backface-visibility: hidden !important;
+            perspective: 1000px !important;
+            -webkit-perspective: 1000px !important;
+            /* GPU layer promotion */
+            isolation: isolate !important;
+            contain: layout style paint !important;
+            /* Disable text selection and context menus */
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+            /* Optimize for touch */
+            touch-action: manipulation !important;
+            -webkit-user-drag: none !important;
+            /* Perfect anti-aliasing */
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+          }
+          
+          .konva-stage canvas {
+            /* Hardware-accelerated canvas rendering */
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+            image-rendering: pixelated !important;
+            /* GPU acceleration */
+            will-change: transform !important;
+            transform: translateZ(0) !important;
+            backface-visibility: hidden !important;
+            /* Disable context menus */
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            /* High-performance touch handling */
+            touch-action: manipulation !important;
+            pointer-events: auto !important;
+          }
+
+          /* FALLBACK: Original canvas sticker rendering on mobile */
+          .mobile-no-scroll canvas:not(.konva-stage canvas) {
             /* IMPROVED: Better image rendering for crisp, smooth stickers */
             image-rendering: auto !important; /* Default for smooth rendering */
             image-rendering: -webkit-optimize-contrast !important; /* Better quality on Chrome/Safari */
@@ -1297,6 +1439,15 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                   : { textAreaIndex: 0, characterIndex: cursorPosition }
                 }
                 forceUpdate={forceUpdate}
+              />
+              
+              {/* GOODNOTES-LEVEL STICKER LAYER: React Konva with hardware acceleration */}
+              <KonvaStickers
+                width={1240}
+                height={1748}
+                stickers={konvaStickers}
+                onStickersChange={setKonvaStickers}
+                isEditing={!isWriting && !isEditingLocation}
               />
               
               {/* Interactive overlay */}
