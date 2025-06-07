@@ -550,13 +550,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   // Add state for which edit tab is open - default to date tab
   const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format' | 'date' | 'stickers'>('date');
   
-  // Zoom state for precise sticker placement
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-  const [isPanning, setIsPanning] = useState(false);
-  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
-  
   // Simple state for writing mode
   const [isWriting, setIsWriting] = useState(false);
   const hiddenTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -967,67 +960,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, []);
 
-  // Zoom and pan handlers for precise sticker placement
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY * -0.01;
-    const newZoom = Math.min(Math.max(0.5, zoomLevel + delta), 3);
-    setZoomLevel(newZoom);
-  }, [zoomLevel]);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      // Pinch to zoom
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.sqrt(
-        Math.pow(touch2.clientX - touch1.clientX, 2) + 
-        Math.pow(touch2.clientY - touch1.clientY, 2)
-      );
-      setLastPanPoint({ x: distance, y: 0 });
-    } else if (e.touches.length === 1 && zoomLevel > 1) {
-      // Single finger pan when zoomed
-      setIsPanning(true);
-      setLastPanPoint({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-    }
-  }, [zoomLevel]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    
-    if (e.touches.length === 2) {
-      // Pinch to zoom
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.sqrt(
-        Math.pow(touch2.clientX - touch1.clientX, 2) + 
-        Math.pow(touch2.clientY - touch1.clientY, 2)
-      );
-      const scale = distance / lastPanPoint.x;
-      const newZoom = Math.min(Math.max(0.5, zoomLevel * scale), 3);
-      setZoomLevel(newZoom);
-      setLastPanPoint({ x: distance, y: 0 });
-    } else if (e.touches.length === 1 && isPanning && zoomLevel > 1) {
-      // Pan when zoomed
-      const deltaX = e.touches[0].clientX - lastPanPoint.x;
-      const deltaY = e.touches[0].clientY - lastPanPoint.y;
-      setPanX(prev => prev + deltaX);
-      setPanY(prev => prev + deltaY);
-      setLastPanPoint({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-    }
-  }, [isPanning, lastPanPoint, zoomLevel]);
-
-  const handleTouchEnd = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  // Reset zoom function
-  const resetZoom = useCallback(() => {
-    setZoomLevel(1);
-    setPanX(0);
-    setPanY(0);
-  }, []);
-
   return (
     <div className="bg-gray-100 overflow-hidden flex flex-col ios-container mobile-no-scroll">
       {/* Global CSS fix for backwards text */}
@@ -1165,54 +1097,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             }
           }
           
-          /* PERFORMANCE FIX: Prevent copy/selection on all UI elements */
-          .mobile-no-scroll * {
-            -webkit-user-select: none !important;
-            -webkit-touch-callout: none !important;
-            -webkit-tap-highlight-color: transparent !important;
-            user-select: none !important;
-            -webkit-user-drag: none !important;
-            -webkit-appearance: none !important;
-          }
-          
-          /* Allow text input in textareas only */
-          .mobile-no-scroll textarea,
-          .mobile-no-scroll input[type="text"] {
-            -webkit-user-select: text !important;
-            user-select: text !important;
-          }
-          
-          /* ZOOM CONTAINER: Isolate zoom from sticker interactions */
-          .zoom-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-          }
-          
-          /* HIGH PERFORMANCE: Separate static from dynamic content layers */
-          .static-content-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* Allow stickers to be interactive above this */
-            will-change: transform;
-            contain: layout style paint;
-          }
-          
-          .dynamic-sticker-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: auto; /* Interactive stickers */
-            will-change: transform;
-            contain: layout style paint;
-          }
-          
           /* ULTRA SMOOTH mobile performance optimizations */
           .sticker-button {
             will-change: transform !important;
@@ -1264,6 +1148,16 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-tap-highlight-color: transparent !important;
+            /* AGGRESSIVE iOS context menu prevention */
+            -webkit-touch-callout: none !important;
+            -webkit-user-drag: none !important;
+            -webkit-text-size-adjust: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            pointer-events: auto !important;
+            /* Prevent long press context menu */
+            -webkit-context-menu: none !important;
+            context-menu: none !important;
           }
           
           /* Prevent mobile scrolling interference but preserve sticker touch */
@@ -1274,6 +1168,24 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               -webkit-overflow-scrolling: none !important;
               overscroll-behavior: none !important;
               touch-action: none !important; /* Let canvas handle all touch */
+            }
+            
+            /* GLOBAL iOS context menu prevention */
+            .mobile-no-scroll * {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: none !important;
+              -webkit-tap-highlight-color: transparent !important;
+              -webkit-user-drag: none !important;
+              user-select: none !important;
+              -moz-user-select: none !important;
+              -ms-user-select: none !important;
+            }
+            
+            /* Force disable context menus globally on iOS */
+            body {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: none !important;
+              user-select: none !important;
             }
           }
           
@@ -1337,37 +1249,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
 
       {/* Ultra-Compact Header */}
       <div className="bg-white py-0 px-3 flex-shrink-0 border-b border-gray-200" style={{ minHeight: '24px' }}>
-        <div className="flex items-center justify-between h-6">
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-1">
-            {zoomLevel !== 1 && (
-              <button
-                onClick={resetZoom}
-                className="text-xs text-blue-600 bg-blue-50 px-1 py-0.5 rounded"
-                style={{
-                  WebkitUserSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  WebkitTapHighlightColor: 'transparent',
-                  userSelect: 'none',
-                  touchAction: 'manipulation'
-                }}
-              >
-                {Math.round(zoomLevel * 100)}%
-              </button>
-            )}
-          </div>
-          
+        <div className="flex items-center justify-end h-6">
           <button
             onClick={handleDownload}
             disabled={isLoading}
             className="text-gray-700 p-0.5 rounded-lg hover:bg-gray-100 transition-colors"
-            style={{
-              WebkitUserSelect: 'none',
-              WebkitTouchCallout: 'none',
-              WebkitTapHighlightColor: 'transparent',
-              userSelect: 'none',
-              touchAction: 'manipulation'
-            }}
           >
             {isLoading ? (
               <motion.div
@@ -1387,43 +1273,31 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         {/* Journal Section - Always visible with default content */}
         <div className="full-journal" style={{ height: '68vh' }}>
           <div className="h-full p-2">
-            <div 
-              className="zoom-container bg-white rounded-xl shadow-md border border-gray-200"
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative bg-white rounded-xl shadow-md overflow-hidden h-full border border-gray-200"
               style={{ aspectRatio: '1240/1748' }}
-              onWheel={handleWheel}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="relative w-full h-full overflow-hidden"
-                style={{ 
-                  transform: `scale(${zoomLevel}) translate(${panX / zoomLevel}px, ${panY / zoomLevel}px)`,
-                  transformOrigin: 'center center',
-                  transition: isPanning ? 'none' : 'transform 0.2s ease-out'
-                }}
-              >
-                <JournalCanvas
-                  ref={journalCanvasRef}
-                  date={date}
-                  location={location}
-                  images={images}
-                  textSections={textSections}
-                  editMode={true}
-                  templateUrl="/templates/goodnotes-a6-yellow.jpg"
-                  textColors={textColors}
-                  layoutMode={layoutMode}
-                  onNewEntry={() => {}}
-                  showCursor={showCursor}
-                  cursorVisible={cursorBlink && (isWriting || isEditingLocation)}
-                  cursorPosition={isEditingLocation 
-                    ? { isLocation: true, characterIndex: locationCursorPosition }
-                    : { textAreaIndex: 0, characterIndex: cursorPosition }
-                  }
-                  forceUpdate={forceUpdate}
-                />
+              <JournalCanvas
+                ref={journalCanvasRef}
+                date={date}
+                location={location}
+                images={images}
+                textSections={textSections}
+                editMode={true}
+                templateUrl="/templates/goodnotes-a6-yellow.jpg"
+                textColors={textColors}
+                layoutMode={layoutMode}
+                onNewEntry={() => {}}
+                showCursor={showCursor}
+                cursorVisible={cursorBlink && (isWriting || isEditingLocation)}
+                cursorPosition={isEditingLocation 
+                  ? { isLocation: true, characterIndex: locationCursorPosition }
+                  : { textAreaIndex: 0, characterIndex: cursorPosition }
+                }
+                forceUpdate={forceUpdate}
+              />
               
               {/* Interactive overlay */}
               <div className="absolute inset-0 pointer-events-none">
@@ -1530,7 +1404,6 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             </motion.div>
           </div>
         </div>
-      </div>
 
         {/* Integrated Control Panel - Smaller height */}
         <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>

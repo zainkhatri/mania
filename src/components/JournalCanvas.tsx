@@ -17,35 +17,30 @@ const isIOSSafari = () => {
   return isIOS() && /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS/.test(navigator.userAgent);
 };
 
-// ULTRA-AGGRESSIVE performance configurations for sticker movement
+// iOS-specific performance configurations
 const getIOSOptimizedSettings = () => {
   if (isIOS()) {
     return {
-      // ULTRA-AGGRESSIVE: Much lower resolution during drag for butter-smooth movement
-      dragCanvasScale: 0.25, // 25% resolution during drag (was 50%)
-      dragRenderThrottle: 50, // ~20fps during drag for ultra-smooth feel (was 33ms)
+      // Reduce canvas resolution during dragging on iOS
+      dragCanvasScale: 0.5, // 50% resolution during drag
+      dragRenderThrottle: 33, // ~30fps during drag (vs 16ms = 60fps)
       staticRenderThrottle: 16, // 60fps when static
-      maxStickerResolution: 512, // Much smaller stickers for iOS performance (was 1024)
+      maxStickerResolution: 1024, // Max sticker size for iOS
       enableHardwareAcceleration: true,
       useOffscreenCanvas: false, // Safari doesn't support it well
       imageSmoothingEnabled: false, // Disable during drag for performance
-      highQualityExport: true, // Only enable high quality during export
-      skipMainImagesDuringDrag: true, // NEW: Skip drawing main images during sticker drag
-      minimalRenderMode: true // NEW: Only render essential elements during drag
+      highQualityExport: true // Only enable high quality during export
     };
   } else {
     return {
-      // DESKTOP: Also more aggressive for consistency
-      dragCanvasScale: 0.4, // Lower resolution during drag (was 0.8)
-      dragRenderThrottle: 33, // ~30fps during drag (was 16ms)
+      dragCanvasScale: 0.8,
+      dragRenderThrottle: 16,
       staticRenderThrottle: 16,
-      maxStickerResolution: 1024, // Smaller stickers (was 2048)
+      maxStickerResolution: 2048,
       enableHardwareAcceleration: true,
       useOffscreenCanvas: true,
-      imageSmoothingEnabled: false, // Disable smoothing during drag for speed
-      highQualityExport: true,
-      skipMainImagesDuringDrag: true, // NEW: Skip drawing main images during sticker drag
-      minimalRenderMode: true // NEW: Only render essential elements during drag
+      imageSmoothingEnabled: true,
+      highQualityExport: true
     };
   }
 };
@@ -300,27 +295,30 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }, [renderJournal, isDraggingSticker, iosSettings]);
 
-  // ULTRA-AGGRESSIVE debounced render function for sticker drag operations
+  // iOS-optimized debounced render function for drag operations
   const debouncedDragRender = useCallback(() => {
     if (dragAnimationFrameRef.current) {
       cancelAnimationFrame(dragAnimationFrameRef.current);
     }
     
-    if (isDraggingSticker) {
-      // IMMEDIATE render for sticker movement - no throttling for responsive feel
-      setIsHighQualityMode(false); // Always use low quality during drag
-      renderJournal();
-    } else {
-      // Normal throttling for non-drag operations
-      dragAnimationFrameRef.current = requestAnimationFrame(() => {
-        const now = Date.now();
-        if (now - lastDragUpdateRef.current > iosSettings.dragRenderThrottle) {
-          lastDragUpdateRef.current = now;
-          setIsHighQualityMode(true); // Restore quality when not dragging
-          renderJournal();
+    dragAnimationFrameRef.current = requestAnimationFrame(() => {
+      const now = Date.now();
+      if (now - lastDragUpdateRef.current > iosSettings.dragRenderThrottle) {
+        lastDragUpdateRef.current = now;
+        
+        // On iOS, temporarily reduce quality during drag
+        if (isIOS() && isDraggingSticker) {
+          setIsHighQualityMode(false);
         }
-      });
-    }
+        
+        renderJournal();
+        
+        // Restore quality after a short delay
+        if (isIOS() && isDraggingSticker) {
+          setTimeout(() => setIsHighQualityMode(true), 100);
+        }
+      }
+    });
   }, [renderJournal, isDraggingSticker, iosSettings]);
   
   // Font loading using FontFace API
@@ -711,22 +709,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const dpr = window.devicePixelRatio || 1;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
     
-    // PERFORMANCE OPTIMIZATION: Dynamic canvas resolution based on drag state
+    // Use identical high-resolution settings for both mobile and desktop
+    // This ensures journals look exactly the same on all devices
     let canvasWidth, canvasHeight;
-    
-    if (isDraggingSticker && iosSettings.minimalRenderMode) {
-      // ULTRA-AGGRESSIVE: Much lower resolution during sticker drag for butter-smooth movement
-      const baseWidth = 1240;
-      const baseHeight = 1748;
-      const dragScale = iosSettings.dragCanvasScale;
-      canvasWidth = Math.floor(baseWidth * dragScale * 2); // Still 2x for readability
-      canvasHeight = Math.floor(baseHeight * dragScale * 2);
-      console.log(`DRAG MODE: Using reduced canvas resolution: ${canvasWidth}x${canvasHeight} (scale: ${dragScale})`);
-    } else {
-      // HIGH QUALITY: Full resolution when static
-      canvasWidth = 3100; // 2.5x from 1240 - same for mobile and desktop
-      canvasHeight = 4370; // 2.5x from 1748 - same for mobile and desktop
-    }
+    // Always use high resolution for consistent quality across all devices
+    canvasWidth = 3100; // 2.5x from 1240 - same for mobile and desktop
+    canvasHeight = 4370; // 2.5x from 1748 - same for mobile and desktop
           
           // Create an optimized rendering context with identical settings for all devices
     const ctx = canvas.getContext('2d', { 
@@ -1369,18 +1357,30 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         }
       }
       
-      // PERFORMANCE OPTIMIZATION: Skip main images during sticker drag for ultra-smooth movement
-      const shouldSkipMainImages = isDraggingSticker && iosSettings.skipMainImagesDuringDrag;
-      
-      if (!shouldSkipMainImages) {
-        // Draw each image with its position, with proper borders and padding
-        try {
-          const maxImages = Math.min(imageObjects.length, imagePositions.length);
-          for (let i = 0; i < maxImages; i++) {
-            const img = imageObjects[i];
-            const position = imagePositions[i];
-            
-            // Use the high-quality drawing function for all images with enhanced quality
+      // Draw each image with its position, with proper borders and padding
+      try {
+        const maxImages = Math.min(imageObjects.length, imagePositions.length);
+        for (let i = 0; i < maxImages; i++) {
+          const img = imageObjects[i];
+          const position = imagePositions[i];
+          
+          // PERFORMANCE OPTIMIZATION: Use lower quality for main images during sticker dragging
+          const isDragOptimized = isDraggingSticker && !isHighQualityMode;
+          
+          if (isDragOptimized) {
+            // FAST rendering during sticker drag - simplified drawing
+            ctx.save();
+            ctx.imageSmoothingEnabled = false; // Disable smoothing for speed
+            ctx.drawImage(
+              img,
+              position.x, 
+              position.y, 
+              position.width, 
+              position.height
+            );
+            ctx.restore();
+          } else {
+            // Use the high-quality drawing function for static or export mode
             drawImagePreservingAspectRatio(
               img,
               position.x, 
@@ -1392,41 +1392,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               position.flipH,
               position.flipV
             );
-            
-            // Add image to clickable areas for eyedropper functionality
-            newClickableAreas.push({
-              type: 'image',
-              x: position.x,
-              y: position.y,
-              width: position.width,
-              height: position.height,
-              text: '',
-              index: i
-            });
           }
-        } catch (err) {
-          console.error('Error drawing images:', err);
+          
+          // Add image to clickable areas for eyedropper functionality
+          newClickableAreas.push({
+            type: 'image',
+            x: position.x,
+            y: position.y,
+            width: position.width,
+            height: position.height,
+            text: '',
+            index: i
+          });
         }
-      } else {
-        console.log('Skipping main images during sticker drag for performance');
-        // Still add clickable areas even when not drawing for functionality
-        try {
-          const maxImages = Math.min(imageObjects.length, imagePositions.length);
-          for (let i = 0; i < maxImages; i++) {
-            const position = imagePositions[i];
-            newClickableAreas.push({
-              type: 'image',
-              x: position.x,
-              y: position.y,
-              width: position.width,
-              height: position.height,
-              text: '',
-              index: i
-            });
-          }
-        } catch (err) {
-          console.error('Error adding image clickable areas:', err);
-        }
+      } catch (err) {
+        console.error('Error drawing images:', err);
       }
       
       // Draw location LAST (after all other elements) to ensure it's on top of everything
