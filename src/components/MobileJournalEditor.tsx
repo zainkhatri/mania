@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import JournalCanvas from './JournalCanvas';
+import JournalCanvas, { JournalCanvasHandle } from './JournalCanvas';
 import JournalEnhancer from './JournalEnhancer';
 import 'react-datepicker/dist/react-datepicker.css';
 import DatePicker from 'react-datepicker';
@@ -540,7 +540,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   
   // Refs
-  const journalCanvasRef = useRef(null);
+  const journalCanvasRef = useRef<JournalCanvasHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stickerInputRef = useRef<HTMLInputElement>(null);
   
@@ -690,56 +690,35 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
-      // ULTRA BUTTER SMOOTH sticker upload - Zero-lag mobile optimized
+  // ULTRA BUTTER SMOOTH sticker upload - Desktop quality on mobile
   const handleStickerUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
-    // INSTANT haptic feedback using strongest available method
+    // INSTANT haptic feedback
     try {
-      // Use native vibration API for instant response
       if ('vibrate' in navigator) {
-        navigator.vibrate(5); // Ultra-short vibration
+        navigator.vibrate(5);
       }
       hapticFeedback('light');
     } catch { /* Silent fail */ }
     
     // INSTANT visual feedback
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 200); // Even shorter for speed
+    setTimeout(() => setShowSuccess(false), 200);
     
-    // Use Web Worker for background processing if available
-    const filesToProcess = Array.from(files).slice(0, 8); // Optimized for mobile
+    // Convert FileList to Array
+    const filesToProcess = Array.from(files).filter(file => file.type.startsWith('image/'));
     
-    // Use requestIdleCallback for non-blocking processing
-    const processStickers = () => {
-      if (journalCanvasRef.current && 'addSticker' in journalCanvasRef.current) {
-        filesToProcess.forEach((file, index) => {
-          if (file.type.startsWith('image/')) {
-            // Stagger additions using requestAnimationFrame for smooth UI
-            const addSticker = () => {
-              try {
-                (journalCanvasRef.current as any).addSticker(file);
-              } catch { /* Silent fail for speed */ }
-            };
-            
-            if (index === 0) {
-              // First sticker immediately
-              addSticker();
-            } else {
-              // Subsequent stickers with minimal delay for smoothness
-              setTimeout(addSticker, index * 5); // 5ms intervals
-            }
-          }
-        });
+    // Use the EXACT same logic as desktop - either single or multiple stickers
+    if (journalCanvasRef.current) {
+      if (filesToProcess.length === 1) {
+        // Single sticker - use desktop addSticker method
+        journalCanvasRef.current.addSticker(filesToProcess[0]);
+      } else if (filesToProcess.length > 1) {
+        // Multiple stickers - use desktop addMultipleStickers method
+        journalCanvasRef.current.addMultipleStickers(filesToProcess);
       }
-    };
-    
-    // Use requestIdleCallback if available, otherwise immediate
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(processStickers, { timeout: 50 });
-    } else {
-      processStickers();
     }
     
     // IMMEDIATE cleanup
@@ -767,7 +746,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setEditMode('view');
   }, [editMode, localTextSections, localLocation, date, images, textSections, onUpdate]);
 
-  // Enhanced download with progress
+  // Desktop-quality download with ultra-high resolution for stickers
   const handleDownload = useCallback(async () => {
     const journalElement = document.getElementById('journal-canvas');
     if (!journalElement) {
@@ -778,7 +757,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setIsLoading(true);
     hapticFeedback('heavy');
     
-    const toastId = toast.loading('Creating PDF...', {
+    const toastId = toast.loading('Creating Ultra-HD PDF...', {
       position: 'bottom-center',
       style: { 
         background: '#1a1a1a',
@@ -790,28 +769,83 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     });
 
     try {
+      // Force canvas to render at maximum quality before export
+      if (journalCanvasRef.current) {
+        // Trigger a high-quality re-render before capture
+        setForceUpdate(prev => prev + 1);
+        // Wait a moment for the render to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      // ULTRA HIGH QUALITY settings - same as desktop version
       const canvas = await html2canvas(journalElement, {
-        scale: 3,
+        scale: 4, // Even higher scale for mobile to match desktop quality
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 0,
+        imageTimeout: 15000, // More time for high-res images
+        removeContainer: true,
+        foreignObjectRendering: false, // Better compatibility
+        // Critical sticker quality settings
+        ignoreElements: () => false,
+        onclone: (clonedDoc: Document) => {
+          // Ensure all images in the clone are loaded at full resolution
+          const images = clonedDoc.getElementsByTagName('img');
+          Array.from(images).forEach((img: HTMLImageElement) => {
+            img.style.imageRendering = 'auto';
+            img.style.imageRendering = '-webkit-optimize-contrast';
+            img.style.imageRendering = 'crisp-edges';
+          });
+          
+          // Ensure canvas elements maintain quality
+          const canvases = clonedDoc.getElementsByTagName('canvas');
+          Array.from(canvases).forEach((canvas: HTMLCanvasElement) => {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+            }
+          });
+        }
       });
 
+      // Force maximum quality settings
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+      }
+
+      // Calculate proper dimensions for A4
       const imgWidth = 210;
       const pageHeight = 297;
-      const imgHeight = (pageHeight * canvas.width) / canvas.width;
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const aspectRatio = canvas.height / canvas.width;
+      const imgHeight = imgWidth * aspectRatio;
+
+      // Use maximum quality PNG first, then convert to high-quality JPEG
+      const pngData = canvas.toDataURL('image/png'); // Lossless PNG first
+      
+      // Create high-quality JPEG with maximum quality
+      const imgData = canvas.toDataURL('image/jpeg', 1.0); // Maximum JPEG quality
 
       const pdf = new jsPDF('p', 'mm', 'a4');
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      
+      // Add image with precise positioning to maintain quality
+      if (imgHeight <= pageHeight) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      } else {
+        // If too tall, fit to page height
+        const scaledWidth = imgWidth * (pageHeight / imgHeight);
+        const offsetX = (imgWidth - scaledWidth) / 2;
+        pdf.addImage(imgData, 'JPEG', offsetX, 0, scaledWidth, pageHeight);
+      }
 
       const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(filename);
 
       toast.dismiss(toastId);
-      toast.success('Journal saved successfully', {
+      toast.success('Ultra-HD Journal saved successfully', {
         position: 'bottom-center',
         style: { 
           background: '#1a1a1a',
@@ -1037,7 +1071,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             text-align: center !important;
           }
           
-          /* DISABLE MOBILE SCROLLING - Critical for sticker manipulation */
+          /* STICKER-OPTIMIZED MOBILE CONTAINER - Exact desktop behavior */
           .mobile-no-scroll {
             position: fixed !important;
             top: 0 !important;
@@ -1047,10 +1081,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             overflow: hidden !important;
             -webkit-overflow-scrolling: none !important;
             overscroll-behavior: none !important;
-            touch-action: pan-x pan-y !important;
+            touch-action: pan-x pan-y pinch-zoom !important; /* Allow pinch for sticker resize */
           }
           
-          /* Disable body scrolling on mobile */
+          /* Disable body scrolling on mobile but preserve sticker interactions */
           @media (max-width: 768px) {
             body {
               overflow: hidden !important;
@@ -1138,23 +1172,29 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             contain: strict !important;
           }
           
-          /* Mobile sticker performance optimizations */
+          /* Desktop-quality sticker rendering on mobile */
           .mobile-no-scroll canvas {
             image-rendering: -webkit-optimize-contrast !important;
             image-rendering: optimize-contrast !important;
             will-change: contents !important;
             transform: translateZ(0) !important;
             backface-visibility: hidden !important;
+            /* Critical: Allow full touch interaction exactly like desktop */
+            touch-action: none !important;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-tap-highlight-color: transparent !important;
           }
           
-          /* Prevent mobile scrolling interference */
+          /* Prevent mobile scrolling interference but preserve sticker touch */
           @media (max-width: 768px) {
             .mobile-no-scroll {
               position: fixed !important;
               overflow: hidden !important;
               -webkit-overflow-scrolling: none !important;
               overscroll-behavior: none !important;
-              touch-action: pan-x pan-y pinch-zoom !important;
+              touch-action: none !important; /* Let canvas handle all touch */
             }
           }
           
@@ -1400,9 +1440,9 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
                 <FontAwesomeIcon icon={faLocationDot} className="text-sm" />
               </button>
               <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100`}
+                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100 sticker-button`}
                 onClick={() => {
-                  // Direct camera roll access like photos tab
+                  // Direct camera roll access with desktop-quality processing
                   hapticFeedback('light');
                   if (stickerInputRef.current) {
                     stickerInputRef.current.click();
@@ -1551,7 +1591,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         multiple
       />
       
-      {/* Ultra-fast hidden sticker input */}
+      {/* Desktop-quality sticker input */}
       <input
         ref={stickerInputRef}
         type="file"
@@ -1560,6 +1600,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         onChange={handleStickerUpload}
         multiple
         tabIndex={-1}
+        style={{ display: 'none' }}
       />
       
       {/* Clean DatePicker Styles */}
