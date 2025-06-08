@@ -165,8 +165,8 @@ const StickerItem: React.FC<{
         // Hardware acceleration hints
         transformsEnabled="all"
         listening={true}
-        // High-quality rendering during static state
-        imageSmoothingEnabled={!isDragging}
+        // GOODNOTES-QUALITY: Always use high-quality smooth rendering
+        imageSmoothingEnabled={true}
         // Mobile-optimized touch handling
         {...(window.innerWidth <= 768 && {
           hitFunc: function(context: any, shape: any) {

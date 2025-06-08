@@ -21,19 +21,19 @@ const isIOSSafari = () => {
 const getIOSOptimizedSettings = () => {
   if (isIOS()) {
     return {
-      // Reduce canvas resolution during dragging on iOS
-      dragCanvasScale: 0.5, // 50% resolution during drag
-      dragRenderThrottle: 33, // ~30fps during drag (vs 16ms = 60fps)
+      // GOODNOTES-QUALITY: Maintain quality on iOS while keeping performance
+      dragCanvasScale: 0.9, // Higher resolution during drag (90% vs 50%)
+      dragRenderThrottle: 16, // Keep 60fps for smooth dragging
       staticRenderThrottle: 16, // 60fps when static
-      maxStickerResolution: 1024, // Max sticker size for iOS
+      maxStickerResolution: 2048, // Higher resolution limit for iOS (same as desktop)
       enableHardwareAcceleration: true,
       useOffscreenCanvas: false, // Safari doesn't support it well
-      imageSmoothingEnabled: false, // Disable during drag for performance
-      highQualityExport: true // Only enable high quality during export
+      imageSmoothingEnabled: true, // ALWAYS enable smoothing for quality
+      highQualityExport: true // Enable high quality during export
     };
   } else {
     return {
-      dragCanvasScale: 0.8,
+      dragCanvasScale: 0.9, // Consistent quality across platforms
       dragRenderThrottle: 16,
       staticRenderThrottle: 16,
       maxStickerResolution: 2048,
@@ -1368,9 +1368,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const isDragOptimized = isDraggingSticker && !isHighQualityMode;
           
           if (isDragOptimized) {
-            // FAST rendering during sticker drag - simplified drawing
+            // OPTIMIZED rendering during sticker drag - maintain quality
             ctx.save();
-            ctx.imageSmoothingEnabled = false; // Disable smoothing for speed
+            ctx.imageSmoothingEnabled = true; // KEEP smoothing for quality
+            ctx.imageSmoothingQuality = 'high'; // Maintain high quality
             ctx.drawImage(
               img,
               position.x, 
@@ -1596,22 +1597,19 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               const sourceWidth = img.naturalWidth || img.width;
               const sourceHeight = img.naturalHeight || img.height;
               
-              // Determine if sticker is shrunk (for pixelated rendering)
+              // GOODNOTES-QUALITY: Always use smooth high-quality rendering
+              // Calculate display scale for potential optimizations
               const displayScale = Math.min(sticker.width / sourceWidth, sticker.height / sourceHeight);
-              const isShrunken = displayScale < 0.5; // IMPROVED: Only pixelate when very small (< 50% of original)
+              
+              // ALWAYS use high-quality smooth rendering like GoodNotes
+              ctx.imageSmoothingEnabled = true;
               
               if (isHighQualityMode || !isDraggingSticker) {
-                // EXPORT MODE OR STATIC: Always use original quality
-                ctx.imageSmoothingEnabled = true;
+                // STATIC OR EXPORT: Maximum quality
                 ctx.imageSmoothingQuality = 'high';
-              } else if (isShrunken) {
-                // Only use pixelated rendering for VERY small stickers (< 50% of original)
-                // This makes the sticker much clearer when significantly shrunk
-                ctx.imageSmoothingEnabled = false; // Pixelated rendering
               } else {
-                // NORMAL SIZE OR ENLARGED: Use smooth rendering with better performance
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'medium'; // Better performance while dragging
+                // DRAGGING: Still use good quality but optimize for performance
+                ctx.imageSmoothingQuality = 'high'; // Keep high quality even during drag
               }
               
               // STEP 5: RENDER ORIGINAL IMAGE WITH TRANSFORMS
@@ -3286,11 +3284,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               WebkitTouchCallout: 'none',
               WebkitUserSelect: 'none',
               userSelect: 'none',
-              // iOS-specific optimizations
-              WebkitTransform: 'translateZ(0)', // Force hardware acceleration
-              WebkitBackfaceVisibility: 'hidden', // Improve performance
-              WebkitPerspective: '1000', // Enable 3D acceleration
-              willChange: isDraggingSticker ? 'transform' : 'auto' // Optimize for dragging
+              // GOODNOTES-QUALITY: Maximum image rendering quality
+              imageRendering: 'auto', // Force high quality scaling
+              // Remove any transforms that could degrade quality
+              transform: 'none', // No transform to preserve quality
+              // Disable filters that could affect quality
+              filter: 'none',
+              willChange: 'auto' // Don't hint for transforms
             }}
             whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
             onMouseDown={handleCanvasMouseDown}

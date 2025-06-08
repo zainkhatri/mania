@@ -323,14 +323,14 @@ async function compressImage(
         canvas.width = width;
         canvas.height = height;
 
-        // Optimize rendering for both speed and quality
+        // GOODNOTES-QUALITY: Always use maximum quality for smooth scaling
         ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high'; // Always use highest quality
+        
+        // Additional quality settings for photo stickers
         if (maxWidth <= 800 && maxHeight <= 800 && format === 'png') {
-          // For stickers, use high quality since we're optimizing elsewhere
-          ctx.imageSmoothingQuality = 'high';
-        } else {
-          // For large photos, use high quality
-          ctx.imageSmoothingQuality = 'high';
+          // For stickers: preserve maximum detail and smoothness
+          ctx.filter = 'none'; // No filters that could degrade quality
         }
 
         // Draw image
@@ -737,9 +737,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           displayWidth = maxInitialSize * aspectRatio;
         }
         
-        // Create new sticker with unique ID
+        // Create new sticker with TRULY unique ID using timestamp + random
+        const uniqueId = `sticker-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
         const newSticker: StickerData = {
-          id: `sticker-${stickerIdCounter}`,
+          id: uniqueId,
           src: file, // Store original File object - NO COMPRESSION
           x: Math.random() * 200 + 100, // Random positioning
           y: Math.random() * 200 + 200,
@@ -752,6 +754,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           originalHeight: originalHeight,
           zIndex: konvaStickers.length + 1
         };
+        
+        console.log('🎯 Created sticker with unique ID:', uniqueId, 'at position:', { x: newSticker.x, y: newSticker.y });
         
         // Add to Konva stickers state
         setKonvaStickers(prev => [...prev, newSticker]);
@@ -787,13 +791,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setEditMode('view');
   }, [editMode, localTextSections, localLocation, date, images, textSections, onUpdate]);
 
-  // GOODNOTES-LEVEL PDF export with React Konva stickers included
+  // SIMPLIFIED APPROACH: Use html2canvas for perfect visual capture
   const handleDownload = useCallback(async () => {
-    if (!journalCanvasRef.current) {
-      toast.error('Could not find journal canvas');
-      return;
-    }
-
     setIsLoading(true);
     hapticFeedback('heavy');
     
@@ -809,96 +808,63 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     });
 
     try {
-      // Force canvas to render at maximum quality before export
+      // Force high-quality render
       setForceUpdate(prev => prev + 1);
-      // Wait for the high-quality render to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Get the main journal canvas
-      const canvasElement = document.querySelector('#journal-canvas') as HTMLCanvasElement;
-      if (!canvasElement) {
-        throw new Error('Canvas element not found');
+      // Find the journal container with both canvas and stickers
+      const journalContainer = document.querySelector('.relative.bg-white.rounded-xl.shadow-md.overflow-hidden.h-full.border.border-gray-200') as HTMLElement;
+      
+      if (!journalContainer) {
+        throw new Error('Journal container not found');
       }
 
-      // Create a composite canvas that includes both journal and stickers
-      const compositeCanvas = document.createElement('canvas');
-      compositeCanvas.width = canvasElement.width;
-      compositeCanvas.height = canvasElement.height;
-      const ctx = compositeCanvas.getContext('2d');
+      console.log('🎯 CAPTURING VISUAL JOURNAL with html2canvas...');
       
-      if (!ctx) {
-        throw new Error('Could not get canvas context');
-      }
+      // Use html2canvas to capture the visual combination of journal + stickers
+      const canvas = await html2canvas(journalContainer, {
+        scale: 4, // Ultra-high quality 4x scaling
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: null,
+        logging: false,
+        width: journalContainer.offsetWidth,
+        height: journalContainer.offsetHeight,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        scrollX: 0,
+        scrollY: 0,
+                 ignoreElements: (element: Element) => {
+           // Ignore any overlay UI elements, keep only journal content
+           return element.classList.contains('absolute') && 
+                  !element.classList.contains('konva-stage') &&
+                  !element.classList.contains('konva-content');
+         }
+             });
 
-      // Draw the journal background first
-      ctx.drawImage(canvasElement, 0, 0);
-
-      // Draw each Konva sticker at original quality on top
-      for (const sticker of konvaStickers) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => {
-            // Save current transform
-            ctx.save();
-            
-            // Apply sticker transform
-            const centerX = sticker.x + sticker.width / 2;
-            const centerY = sticker.y + sticker.height / 2;
-            
-            ctx.translate(centerX, centerY);
-            ctx.rotate(sticker.rotation * Math.PI / 180);
-            
-            // Use ORIGINAL quality - no scaling artifacts
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            // Draw at original resolution with current display transform
-            ctx.drawImage(
-              img,
-              -sticker.width / 2,
-              -sticker.height / 2,
-              sticker.width,
-              sticker.height
-            );
-            
-            // Restore transform
-            ctx.restore();
-            resolve();
-          };
-          img.onerror = () => reject(new Error(`Failed to load sticker: ${sticker.id}`));
-          
-          // Load original image
-          if (typeof sticker.src === 'string') {
-            img.src = sticker.src;
-          } else {
-            img.src = URL.createObjectURL(sticker.src);
-          }
-        });
-      }
-
-      // Get ultra-high quality PNG data from composite canvas
-      const pngData = compositeCanvas.toDataURL('image/png', 1.0);
+      console.log('✅ CAPTURED JOURNAL + STICKERS at 4x quality');
       
-      // Create PDF with canvas dimensions directly
+      // Get ultra-high quality PNG data from html2canvas
+      const pngData = canvas.toDataURL('image/png', 1.0);
+      
+      // Create PDF with canvas dimensions
       const pdf = new jsPDF(
         'portrait', 
         'px', 
-        [compositeCanvas.width, compositeCanvas.height],
+        [canvas.width, canvas.height],
         false // No compression
       );
       
-      // Add the composite image to the PDF at maximum resolution
+      // Add the captured image to the PDF at maximum resolution
       pdf.addImage(
         pngData,
-        'PNG', // Explicitly specify PNG format
+        'PNG',
         0,
         0,
         pdf.internal.pageSize.getWidth(),
         pdf.internal.pageSize.getHeight(),
-        `journal-${Date.now()}`, // Unique alias to prevent caching issues
-        'NONE' // No compression for maximum quality
+        `journal-${Date.now()}`,
+        'NONE'
       );
 
       const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
@@ -1258,10 +1224,11 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           .konva-stage canvas {
-            /* Hardware-accelerated canvas rendering */
-            image-rendering: -webkit-optimize-contrast !important;
-            image-rendering: crisp-edges !important;
-            image-rendering: pixelated !important;
+            /* GOODNOTES-QUALITY: Ultra-smooth photo rendering */
+            image-rendering: high-quality !important; /* Maximum quality for photo stickers */
+            image-rendering: -webkit-optimize-contrast !important; /* Safari photo optimization */
+            image-rendering: smooth !important; /* Chrome smooth photo scaling */
+            /* Remove pixelated - only good for pixel art, terrible for photos */
             /* GPU acceleration */
             will-change: transform !important;
             transform: translateZ(0) !important;
@@ -1275,15 +1242,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             pointer-events: auto !important;
           }
 
-          /* FALLBACK: Original canvas sticker rendering on mobile */
-          .mobile-no-scroll canvas:not(.konva-stage canvas) {
-            /* IMPROVED: Better image rendering for crisp, smooth stickers */
-            image-rendering: auto !important; /* Default for smooth rendering */
-            image-rendering: -webkit-optimize-contrast !important; /* Better quality on Chrome/Safari */
-            image-rendering: crisp-edges !important; /* Better quality on Firefox */
-            will-change: transform !important; /* GPU acceleration hint */
-            transform: translateZ(0) !important;
-            backface-visibility: hidden !important;
+          /* ULTRA-HIGH-QUALITY: ALL canvas elements get maximum quality rendering */
+          canvas, .mobile-no-scroll canvas, #journal-canvas {
+            /* GOODNOTES-QUALITY: Ultra-smooth high-quality image rendering */
+            image-rendering: -webkit-optimize-contrast !important; /* Safari optimization */
+            image-rendering: smooth !important; /* Chrome/Edge smooth scaling */
+            image-rendering: high-quality !important; /* Firefox high quality */
+            /* Disable ANY pixelated rendering - destroys photo quality */
             /* Critical: Allow full touch interaction exactly like desktop */
             touch-action: none !important;
             -webkit-touch-callout: none !important;
@@ -1300,6 +1265,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             /* Prevent long press context menu */
             -webkit-context-menu: none !important;
             context-menu: none !important;
+            /* CRITICAL: Remove all transforms that could degrade quality */
+            transform: none !important;
+            -webkit-transform: none !important;
+            filter: none !important;
+            -webkit-filter: none !important;
+            /* Force canvas to render at maximum quality */
+            will-change: auto !important;
           }
           
           /* Prevent mobile scrolling interference but preserve sticker touch */
