@@ -565,12 +565,12 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
     }
 
     return (
-      <div className="w-full flex justify-center items-center py-2 px-1">
-        <div className="flex flex-row items-center gap-1 w-full justify-between">
+      <div className="w-full py-2 px-1">
+        <div className="grid grid-cols-3 gap-2 w-full">
           {palette.map((color, i) => (
             <button
               key={`color-${i}`}
-              className={`flex-1 aspect-square rounded transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm
+              className={`aspect-square rounded-lg transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm
                 ${colors.locationColor === color ? 'ring-2 ring-blue-500 scale-105' : 'hover:scale-105'}`}
               style={{ backgroundColor: color }}
               onClick={() => selectColor(color)}

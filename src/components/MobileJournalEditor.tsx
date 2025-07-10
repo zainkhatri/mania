@@ -532,6 +532,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   // Animation states
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
   // Color and layout states
   const [textColors, setTextColors] = useState({
@@ -549,7 +550,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
   const [lastScrollY, setLastScrollY] = useState(0);
   
   // Add state for which edit tab is open - default to date tab
-  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'format' | 'date' | 'stickers'>('date');
+  const [activeEditTab, setActiveEditTab] = useState<'none' | 'write' | 'location' | 'date' | 'stickers'>('date');
   
   // Simple state for writing mode
   const [isWriting, setIsWriting] = useState(false);
@@ -617,12 +618,14 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     }
   }, []);
 
-  // Clean image upload without toast notifications
+  // Premium image upload with smooth animations
   const handleImageUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
+    // Immediate haptic feedback and loading state
     hapticFeedback('medium');
+    setIsUploading(true);
     
     try {
       const currentImages = [...images];
@@ -672,22 +675,34 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         setImages(newImages);
         onUpdate({ date, location, images: newImages, textSections });
         
-        // Show brief success animation only
+        // Smooth transition from uploading to success
+        await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for better UX
+        setIsUploading(false);
+        
+        // Show elegant success animation
         setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 800);
+        setTimeout(() => setShowSuccess(false), 1200); // Longer display for better experience
+        
+        // Success haptic feedback
+        hapticFeedback('heavy');
+      } else {
+        setIsUploading(false);
       }
       
     } catch (error) {
       console.error('Error uploading images:', error);
-      // Only show error toast for critical failures
-      toast.error('Failed to add photos', {
+      setIsUploading(false);
+      
+      // Elegant error feedback
+      toast.error('Upload failed', {
         autoClose: 2000,
         style: { 
-          background: '#dc2626',
+          background: '#1a1a1a',
           color: 'white',
-          borderRadius: '8px',
-          fontSize: '12px',
-          padding: '8px 12px'
+          borderRadius: '12px',
+          fontSize: '14px',
+          padding: '12px 20px',
+          border: '1px solid #dc2626'
         }
       });
     } finally {
@@ -834,13 +849,13 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
         windowHeight: window.innerHeight,
         scrollX: 0,
         scrollY: 0,
-                 ignoreElements: (element: Element) => {
-           // Ignore any overlay UI elements, keep only journal content
-           return element.classList.contains('absolute') && 
-                  !element.classList.contains('konva-stage') &&
-                  !element.classList.contains('konva-content');
-         }
-             });
+        ignoreElements: (element: Element) => {
+          // Ignore any overlay UI elements, keep only journal content
+          return element.classList.contains('absolute') && 
+                 !element.classList.contains('konva-stage') &&
+                 !element.classList.contains('konva-content');
+        }
+      });
 
       console.log('✅ CAPTURED JOURNAL + STICKERS at 4x quality');
       
@@ -921,7 +936,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     setDraggedImageIndex(null);
   }, [images, date, location, textSections, onUpdate, hapticFeedback]);
 
-  // Add function to handle pencil button click
+  // Enhanced pencil button click with clear typing indicators
   const handlePencilClick = useCallback(() => {
     // Set all states immediately for instant cursor visibility
     const currentText = textSections[0] || '';
@@ -935,7 +950,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
     // Force immediate re-render of the canvas to show cursor
     setForceUpdate(prev => prev + 1);
     
-    // Focus the hidden textarea - but cursor should already be visible
+    // Focus the hidden textarea with enhanced feedback
     setTimeout(() => {
       if (hiddenTextareaRef.current) {
         hiddenTextareaRef.current.focus();
@@ -948,9 +963,10 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           hiddenTextareaRef.current.click();
         }
       }
-    }, 50); // Reduced timeout for faster response
+    }, 50);
     
-    hapticFeedback('light');
+    // Strong haptic feedback to indicate typing mode
+    hapticFeedback('heavy');
   }, [hapticFeedback, textSections]);
 
   // Handle text input changes
@@ -1385,12 +1401,12 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
       {/* Journal View with iOS Keyboard Optimization */}
       <div className={`flex-1 flex flex-col min-h-0 bg-white`}>
         {/* Journal Section - Always visible with default content */}
-        <div className="full-journal" style={{ height: '68vh' }}>
-          <div className="h-full p-2">
+        <div className="full-journal" style={{ height: '65vh' }}>
+          <div className="h-full p-3">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="relative bg-white rounded-xl shadow-md overflow-hidden h-full border border-gray-200"
+              className="relative bg-white rounded-2xl shadow-lg overflow-hidden h-full border border-gray-200"
               style={{ aspectRatio: '1240/1748' }}
             >
               <JournalCanvas
@@ -1423,274 +1439,272 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
               />
               
               {/* Interactive overlay */}
-              <div className="absolute inset-0 pointer-events-none">
-                {/* Location tap area */}
-                <div
-                  className="absolute top-[5%] left-0 right-0 h-[6%] pointer-events-auto cursor-pointer"
-                  onClick={handleLocationClick}
-                />
-              </div>
-              
-              {/* Hidden textarea for writing mode */}
-              {isWriting && (
-                <textarea
-                  ref={hiddenTextareaRef}
-                  value={textSections[0] || ''}
-                  onChange={(e) => handleTextChange(e.target.value)}
-                  onBlur={closeWriting}
-                  onKeyUp={(e) => {
-                    // Update cursor position on key events
-                    setCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  onMouseUp={(e) => {
-                    // Update cursor position on mouse clicks
-                    setCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  onSelect={(e) => {
-                    // Update cursor position on text selection
-                    setCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto resize-none bg-transparent"
-                  style={{
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '16px', // Prevent zoom on iOS
-                    direction: 'ltr',
-                    textAlign: 'left',
-                    unicodeBidi: 'normal',
-                    writingMode: 'horizontal-tb',
-                    transform: 'translateZ(0)', // Hardware acceleration
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                    WebkitTransform: 'translateZ(0)',
-                  }}
-                  placeholder="Start writing..."
-                  autoFocus
-                  dir="ltr"
-                  lang="en"
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="sentences"
-                  inputMode="text"
-                  enterKeyHint="enter"
-                  data-gramm="false" // Disable Grammarly
-                  data-enable-grammarly="false"
-                />
-              )}
-              
-              {/* Hidden textarea for location editing */}
-              {isEditingLocation && (
-                <textarea
-                  ref={locationTextareaRef}
-                  value={location}
-                  onChange={(e) => handleLocationChange(e.target.value)}
-                  onBlur={closeLocationEditing}
-                  onKeyUp={(e) => {
-                    // Update location cursor position on key events
-                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  onMouseUp={(e) => {
-                    // Update location cursor position on mouse clicks
-                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  onSelect={(e) => {
-                    // Update location cursor position on text selection
-                    setLocationCursorPosition(e.currentTarget.selectionStart || 0);
-                  }}
-                  className="absolute top-[5%] left-0 right-0 h-[6%] opacity-0 pointer-events-auto resize-none bg-transparent text-center"
-                  style={{
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: '16px', // Prevent zoom on iOS
-                    direction: 'ltr',
-                    textAlign: 'center',
-                    unicodeBidi: 'normal',
-                    writingMode: 'horizontal-tb',
-                    transform: 'translateZ(0)', // Hardware acceleration
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                    WebkitTransform: 'translateZ(0)',
-                  }}
-                  placeholder="Location..."
-                  autoFocus
-                  dir="ltr"
-                  lang="en"
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="characters"
-                  inputMode="text"
-                  enterKeyHint="done"
-                  data-gramm="false"
-                  data-enable-grammarly="false"
-                />
-              )}
+                             {!isWriting && !isEditingLocation && (
+                 <div 
+                   className="absolute inset-0 bg-transparent"
+                   style={{ touchAction: 'none' }}
+                 />
+               )}
             </motion.div>
           </div>
         </div>
 
-        {/* Integrated Control Panel - Smaller height */}
-        <div className={`compact-edit-panel bg-white flex-shrink-0 ${isWriting ? 'keyboard-aware' : ''}`} style={{ height: '32vh' }}>
-          {/* Ultra-Compact Tab Bar */}
-          <div className={`flex items-center h-8 px-2 border-b border-gray-100 ${isWriting ? 'sticky-tabs' : ''}`}>
-            <div className="flex w-full bg-white rounded-lg p-0.5">
-              <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'date' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
-                onClick={() => setActiveEditTab('date')}
-              >
-                <FontAwesomeIcon icon={faCalendarAlt} className="text-sm" />
-              </button>
-              <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100`}
-                onClick={() => {
-                  if (fileInputRef.current) fileInputRef.current.click();
-                }}
-              >
-                <FontAwesomeIcon icon={faCamera} className="text-sm" />
-              </button>
-              <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'location' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
-                onClick={handleLocationClick}
-              >
-                <FontAwesomeIcon icon={faLocationDot} className="text-sm" />
-              </button>
-              <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 text-black hover:bg-gray-100 sticker-button`}
-                onClick={() => {
-                  // Direct camera roll access with desktop-quality processing
-                  hapticFeedback('light');
-                  if (stickerInputRef.current) {
-                    stickerInputRef.current.click();
-                  }
-                }}
-              >
-                <FontAwesomeIcon icon={faGift} className="text-sm" />
-              </button>
-              <button
-                className={`flex-1 h-6 flex items-center justify-center font-medium text-xs rounded-md transition-all duration-200 ${activeEditTab === 'write' ? 'bg-gray-300 text-black' : 'text-black hover:bg-gray-100'}`}
-                onClick={handlePencilClick}
-              >
-                <FontAwesomeIcon icon={faPencil} className="text-sm" />
-              </button>
+        {/* Editing Panel - Compact tabs */}
+        <div className="compact-edit-panel bg-gray-50 border-t border-gray-200" style={{ height: '35vh' }}>
+          {/* Sticky Tab Navigation */}
+          <div className="sticky-tabs bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
+            <div className="flex space-x-1">
+                             {[
+                 { id: 'date' as const, label: 'Date', icon: '📅' },
+                 { id: 'location' as const, label: 'Location', icon: '📍' },
+                 { id: 'write' as const, label: 'Text', icon: '✍️' },
+                 { id: 'stickers' as const, label: 'Photos', icon: '📸' }
+               ].map((tab) => (
+                 <button
+                   key={tab.id}
+                   onClick={() => setActiveEditTab(tab.id)}
+                   className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                     activeEditTab === tab.id
+                       ? 'bg-blue-100 text-blue-700 shadow-sm'
+                       : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                   }`}
+                 >
+                   <span className="text-base mr-1">{tab.icon}</span>
+                   <span className="text-xs">{tab.label}</span>
+                 </button>
+               ))}
             </div>
-          </div>
-
-          {/* Control Content */}
-          <div className="flex-1 overflow-hidden">
-            {activeEditTab === 'date' && (
-              <div className="h-full w-full flex items-start justify-center p-0 overflow-y-auto overflow-x-hidden">
-                <div className="w-full h-auto max-w-full mt-1 overflow-hidden">
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden relative">
-                    {/* Calendar header video background */}
-                    <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden rounded-t-lg z-0">
-                      <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover opacity-20"
-                        style={{ filter: 'contrast(3) brightness(0.3) grayscale(1)' }}
-                      >
-                        <source src="/background/static.webm" type="video/webm" />
-                      </video>
-                    </div>
-                    <DatePicker
-                      selected={date}
-                      onChange={(newDate: Date | null) => {
-                        if (newDate) {
-                          setDate(newDate);
-                          onUpdate({ date: newDate, location, images, textSections });
-                          // Auto-close after selection
-                          setActiveEditTab('none');
-                          hapticFeedback('medium');
-                        }
-                      }}
-                      inline
-                      showPopperArrow={false}
-                      calendarClassName="compact-calendar"
-                      fixedHeight={true}
-                      showWeekNumbers={false}
-                      monthsShown={1}
-                      peekNextMonth={true}
-                      openToDate={date}
-                      todayButton="Today"
-                      disabledKeyboardNavigation={true}
-                      shouldCloseOnSelect={false}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {activeEditTab === 'location' && (
-              <div className="h-full flex flex-col justify-center items-center gap-8 overflow-hidden p-6">
-                <h3 className="text-lg font-semibold text-gray-900 text-center">Title Color</h3>
-                
-                {/* Color Picker - Much more space */}
-                <div className="w-full bg-gray-50 rounded-lg p-4 overflow-y-auto">
-                  <SimpleColorPicker
-                    colors={textColors}
-                    onChange={newColors => {
-                      setTextColors(newColors);
-                      onUpdate({ date, location, images, textSections });
-                    }}
-                    images={images}
-                    compact={true}
-                  />
-                </div>
-              </div>
-            )}
-            
-
-            {activeEditTab === 'write' && (
-              <div className="h-full flex items-center justify-center p-3 bg-white">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mb-4 mx-auto">
-                    <FontAwesomeIcon icon={faPencil} className="text-white text-xl" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-black mb-2">Writing Mode</h3>
-                  <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                    Type and watch your words appear on the journal
-                  </p>
-                  <button
-                    onClick={closeWriting}
-                    className="px-6 py-2 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {/* Default state */}
-            {activeEditTab === 'none' && (
-              <div className="h-full flex items-center justify-center bg-white px-6">
-                <div className="text-center max-w-sm mx-auto">
-                  <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mb-6 mx-auto shadow-lg">
-                    <FontAwesomeIcon icon={faBook} className="text-white text-2xl" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-black mb-3 tracking-tight">Your Journal</h2>
-                  <p className="text-base text-gray-500 leading-relaxed">
-                    Use the tabs above to add content
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Success Animation */}
+      {/* Premium Upload Success Animation */}
       <AnimatePresence>
         {showSuccess && (
           <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
           >
-            <div className="bg-green-500 text-white p-3 rounded-full shadow-lg">
-              <FontAwesomeIcon icon={faCheck} className="text-lg" />
-            </div>
+            {/* Backdrop blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            />
+            
+            {/* Main success container */}
+            <motion.div
+              initial={{ scale: 0.3, opacity: 0, y: 50 }}
+              animate={{ 
+                scale: [0.3, 1.1, 1], 
+                opacity: 1, 
+                y: 0,
+                rotate: [0, -5, 5, 0]
+              }}
+              exit={{ 
+                scale: 0.8, 
+                opacity: 0, 
+                y: -30,
+                transition: { duration: 0.2 }
+              }}
+              transition={{ 
+                duration: 0.6, 
+                ease: "easeOut",
+                times: [0, 0.6, 1]
+              }}
+              className="relative bg-gradient-to-br from-white to-gray-100 rounded-3xl p-8 shadow-2xl border-4 border-black/10"
+            >
+              {/* Animated rings */}
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ 
+                  scale: [0, 1.2, 1], 
+                  opacity: [0, 0.8, 0] 
+                }}
+                transition={{ 
+                  duration: 0.8, 
+                  delay: 0.1,
+                  ease: "easeOut"
+                }}
+                className="absolute inset-0 rounded-3xl border-4 border-black/20"
+              />
+              
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ 
+                  scale: [0, 1.4, 1.2], 
+                  opacity: [0, 0.6, 0] 
+                }}
+                transition={{ 
+                  duration: 1, 
+                  delay: 0.2,
+                  ease: "easeOut"
+                }}
+                className="absolute inset-0 rounded-3xl border-2 border-black/10"
+              />
+              
+              {/* Icon container */}
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ 
+                  scale: 1, 
+                  rotate: 0,
+                }}
+                transition={{ 
+                  duration: 0.5, 
+                  delay: 0.1,
+                  type: "spring",
+                  stiffness: 200
+                }}
+                className="relative w-16 h-16 bg-black rounded-full flex items-center justify-center mx-auto mb-4"
+              >
+                {/* Sparkle particles */}
+                {[...Array(6)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ scale: 0, opacity: 0, x: 0, y: 0 }}
+                    animate={{ 
+                      scale: [0, 1, 0],
+                      opacity: [0, 1, 0],
+                      x: [0, (Math.cos(i * 60 * Math.PI / 180)) * 30],
+                      y: [0, (Math.sin(i * 60 * Math.PI / 180)) * 30]
+                    }}
+                    transition={{ 
+                      duration: 0.8, 
+                      delay: 0.3 + i * 0.1,
+                      ease: "easeOut"
+                    }}
+                    className="absolute w-2 h-2 bg-white rounded-full"
+                  />
+                ))}
+                
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.3, type: "spring", stiffness: 300 }}
+                >
+                  <FontAwesomeIcon icon={faCheck} className="text-white text-2xl" />
+                </motion.div>
+              </motion.div>
+              
+              {/* Text */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.3 }}
+                className="text-center"
+              >
+                <h3 className="text-xl font-bold text-black mb-1">Upload Complete!</h3>
+                <p className="text-sm text-gray-600">Images added to your journal</p>
+              </motion.div>
+              
+              {/* Bottom shine effect */}
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: "100%" }}
+                transition={{ 
+                  duration: 1, 
+                  delay: 0.2,
+                  ease: "easeInOut"
+                }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-3xl transform -skew-x-12"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium Upload Loading Animation */}
+      <AnimatePresence>
+        {isUploading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
+          >
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            />
+            
+            {/* Loading container */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: -10 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative bg-gradient-to-br from-white to-gray-100 rounded-3xl p-8 shadow-2xl border-2 border-black/5"
+            >
+              {/* Animated upload icon */}
+              <motion.div
+                animate={{ 
+                  rotate: 360,
+                  scale: [1, 1.1, 1]
+                }}
+                transition={{ 
+                  rotate: { duration: 2, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 1, repeat: Infinity, ease: "easeInOut" }
+                }}
+                className="w-16 h-16 bg-black rounded-full flex items-center justify-center mx-auto mb-4 relative overflow-hidden"
+              >
+                {/* Inner rotating element */}
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-2 border-2 border-white/30 border-t-white rounded-full"
+                />
+                <FontAwesomeIcon icon={faCamera} className="text-white text-xl z-10" />
+              </motion.div>
+              
+              {/* Animated text */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-center"
+              >
+                <motion.h3 
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="text-lg font-bold text-black mb-1"
+                >
+                  Processing Images...
+                </motion.h3>
+                <p className="text-sm text-gray-600">Optimizing for your journal</p>
+              </motion.div>
+              
+              {/* Progress dots */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="flex justify-center space-x-2 mt-4"
+              >
+                {[0, 1, 2].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="w-2 h-2 bg-black rounded-full"
+                    animate={{ 
+                      scale: [1, 1.3, 1],
+                      opacity: [0.3, 1, 0.3]
+                    }}
+                    transition={{
+                      duration: 1.2,
+                      repeat: Infinity,
+                      delay: i * 0.2,
+                      ease: "easeInOut"
+                    }}
+                  />
+                ))}
+              </motion.div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1821,8 +1835,8 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             right: 12px;
           }
           
-                    /* Ultra-clean, perfectly fitted calendar - NO HORIZONTAL SCROLL */
-          .compact-calendar {
+                    /* Premium modern calendar */
+          .premium-calendar {
             border: none !important;
             box-shadow: none !important;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1837,7 +1851,7 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
           }
           
           /* Force all weeks to show - increased height for 6 weeks */
-          .compact-calendar .react-datepicker__month-container {
+          .premium-calendar .react-datepicker__month-container {
             height: auto !important;
             max-height: 340px !important;
             width: 100% !important;
@@ -1845,90 +1859,94 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             overflow: hidden !important;
           }
           
-          .compact-calendar .react-datepicker__header {
-            background: #000000;
+          .premium-calendar .react-datepicker__header {
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
             border: none;
-            border-radius: 8px 8px 0 0;
-            padding: 8px 0;
+            border-radius: 16px 16px 0 0;
+            padding: 12px 0;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
           }
           
-          .compact-calendar .react-datepicker__current-month {
-            font-weight: 700;
-            font-size: 14px;
+          .premium-calendar .react-datepicker__current-month {
+            font-weight: 800;
+            font-size: 16px;
             color: white;
             margin-bottom: 0;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            letter-spacing: 1px;
           }
           
-          .compact-calendar .react-datepicker__day-names {
+          .premium-calendar .react-datepicker__day-names {
             display: flex;
             justify-content: space-around;
             margin-bottom: 0;
-            padding: 4px 8px 2px 8px; /* More horizontal padding to match month */
-            background: #000000;
-            border-bottom: 1px solid #000000;
+            padding: 8px 12px 6px 12px;
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
+            border-bottom: 1px solid #333333;
           }
           
-          .compact-calendar .react-datepicker__day-name {
+          .premium-calendar .react-datepicker__day-name {
             color: #ffffff;
-            font-weight: 600;
-            font-size: 9px;
+            font-weight: 700;
+            font-size: 10px;
             flex: 1;
-            line-height: 14px;
+            line-height: 16px;
             text-align: center;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             justify-content: center;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
           }
           
-          .compact-calendar .react-datepicker__month {
-            padding: 2px 4px; /* Reduced padding to prevent overflow */
-            background: white;
-            height: 280px !important; /* Increased height to fit all 6 weeks properly */
-            min-height: 280px !important;
-            max-height: 280px !important;
+          .premium-calendar .react-datepicker__month {
+            padding: 8px 12px;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+            height: 300px !important;
+            min-height: 300px !important;
+            max-height: 300px !important;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            margin: 0 auto; /* Center instead of side margins */
+            margin: 0 auto;
             width: 100% !important;
             max-width: 100% !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
+            border-radius: 0 0 16px 16px;
           }
           
-          .compact-calendar .react-datepicker__month-container {
+          .premium-calendar .react-datepicker__month-container {
             width: 100%;
           }
           
-          .compact-calendar .react-datepicker__week {
+          .premium-calendar .react-datepicker__week {
             display: flex;
             justify-content: space-around;
             margin: 0;
-            height: 40px !important; /* Increased height for each week row to show all dates */
-            min-height: 40px !important;
-            max-height: 40px !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            max-height: 42px !important;
             flex: 1;
             align-items: center;
             width: 100%;
           }
           
-          .compact-calendar .react-datepicker__day {
-            border-radius: 4px;
-            margin: 0 0.5px;
+          .premium-calendar .react-datepicker__day {
+            border-radius: 12px;
+            margin: 0 1px;
             flex: 1;
-            height: 36px !important;
-            min-height: 36px !important;
-            max-height: 36px !important;
-            line-height: 36px;
-            color: #374151;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.15s ease;
+            height: 38px !important;
+            min-height: 38px !important;
+            max-height: 38px !important;
+            line-height: 38px;
+            color: #1f2937;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
             text-align: center;
             cursor: pointer;
             border: none;
@@ -1936,15 +1954,17 @@ const MobileJournalEditor: React.FC<MobileJournalEditorProps> = ({ onUpdate, ini
             align-items: center;
             justify-content: center;
             max-width: none;
+            position: relative;
           }
           
-          .compact-calendar .react-datepicker__day--selected {
-            background: #000000 !important;
+          .premium-calendar .react-datepicker__day--selected {
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
             color: white !important;
-            font-weight: 700;
-            transform: scale(1.05);
-            border-radius: 8px;
-            border: 1px solid #ffffff !important;
+            font-weight: 800;
+            transform: scale(1.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+            border: 2px solid #ffffff !important;
           }
           
           /* Hide selection if it's outside the current month */

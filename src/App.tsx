@@ -103,31 +103,35 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {!shouldHideNav && (
         <>
           {/* Navigation */}
-          <nav className="relative z-50 pt-4 pb-4 border-b border-white/20 bg-black">
+          <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between h-16">
-                <div className="flex">
+              <div className="flex justify-between items-center h-14">
+                <div className="flex items-center">
                   <Link to="/" className="flex-shrink-0 flex items-center">
-                    <div className="text-5xl md:text-6xl text-white">
+                    <div className="text-4xl md:text-5xl text-white font-light">
                       {renderLogo()}
                     </div>
                   </Link>
                 </div>
 
                 {/* Desktop menu */}
-                <div className="hidden md:flex items-center gap-4">
-                  {isAuthenticated && <StreakIndicator />}
+                <div className="hidden md:flex items-center gap-6">
+                  {isAuthenticated && (
+                    <div className="flex items-center">
+                      <StreakIndicator />
+                    </div>
+                  )}
                   {isAuthenticated ? (
                     <button 
                       onClick={logout}
-                      className="ml-4 py-2.5 px-5 border border-white/30 rounded-md text-lg font-medium text-white hover:bg-black/30 transition-colors"
+                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
                     >
                       Sign out
                     </button>
                   ) : (
                     <Link 
                       to="/login"
-                      className="ml-4 py-2.5 px-5 border border-white/30 rounded-md text-lg font-medium text-white hover:bg-black/30 transition-colors"
+                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
                     >
                       Sign in
                     </Link>
@@ -138,15 +142,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <div className="md:hidden flex items-center">
                   <button
                     onClick={toggleMobileMenu}
-                    className="inline-flex items-center justify-center p-2 rounded-md text-white hover:bg-black/30 focus:outline-none transition-colors"
+                    className="inline-flex items-center justify-center p-2 rounded-lg text-white hover:bg-white/10 focus:outline-none transition-all duration-200"
                   >
                     <span className="sr-only">Open main menu</span>
                     {!isMobileMenuOpen ? (
-                      <svg className="block h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                       </svg>
                     ) : (
-                      <svg className="block h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     )}
@@ -163,15 +167,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="md:hidden absolute w-full bg-black/80 backdrop-blur-md shadow-lg"
+                className="md:hidden absolute w-full bg-black/90 backdrop-blur-md shadow-lg border-b border-white/20 z-40"
               >
-                <div className="px-2 pt-2 pb-3 space-y-1">
+                <div className="px-4 py-3 space-y-2">
                   {isAuthenticated && (
-                    <>
-                      <div className="px-3 py-2">
-                        <StreakIndicator />
-                      </div>
-                    </>
+                    <div className="px-3 py-2 border-b border-white/10">
+                      <StreakIndicator />
+                    </div>
                   )}
                   {isAuthenticated ? (
                     <button
@@ -179,7 +181,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         logout();
                         setIsMobileMenuOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-black/50"
+                      className="w-full text-left px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
                     >
                       Sign out
                     </button>
@@ -187,7 +189,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <Link
                       to="/login"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-black/50"
+                      className="block px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
                     >
                       Sign in
                     </Link>
@@ -206,9 +208,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       
       {/* Only show footer on non-home, non-login pages */}
       {!shouldHideNav && (
-        <footer className="bg-black/50 backdrop-blur-sm py-4 border-t border-white/10 relative z-10">
+        <footer className="bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-xs sm:text-sm text-white/70">
+            <p className="text-center text-xs sm:text-sm text-white/60">
               © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
             </p>
           </div>
