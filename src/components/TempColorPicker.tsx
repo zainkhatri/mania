@@ -564,20 +564,26 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
       palette.push(getDefaultColors(12)[palette.length]);
     }
 
+    // No media query or breakpoint logic: use the same grid for all sizes except true mobile
     return (
-      <div className="w-full py-2 px-1">
-        <div className="grid grid-cols-3 gap-2 w-full">
+      <div className="w-full py-0.5 px-0.5">
+        <div className="grid grid-cols-6 w-full" style={{ gap: window.innerWidth <= 768 ? '3px' : '6px' }}>
           {palette.map((color, i) => (
             <button
               key={`color-${i}`}
-              className={`aspect-square rounded-lg transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm
-                ${colors.locationColor === color ? 'ring-2 ring-blue-500 scale-105' : 'hover:scale-105'}`}
-              style={{ backgroundColor: color }}
+              className="rounded-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm hover:scale-105"
+              style={{ 
+                backgroundColor: color,
+                width: window.innerWidth <= 768 ? '16px' : '24px',
+                height: window.innerWidth <= 768 ? '16px' : '24px',
+                border: colors.locationColor === color ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.2)',
+                transform: colors.locationColor === color ? 'scale(1.1)' : 'scale(1)'
+              }}
               onClick={() => selectColor(color)}
               title={color}
             >
               {colors.locationColor === color && (
-                <svg className="w-3 h-3 text-white drop-shadow mx-auto" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <svg className={window.innerWidth <= 768 ? "w-1.5 h-1.5 text-white drop-shadow mx-auto" : "w-2 h-2 text-white drop-shadow mx-auto"} fill="none" stroke="currentColor" strokeWidth="4" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}

@@ -18,14 +18,14 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
       <div className="grid grid-cols-2 gap-3">
         <div
           onClick={() => setLayoutMode('standard')}
-          className={`relative p-3 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+          className={`relative aspect-square border-2 rounded-lg cursor-pointer transition-all duration-200 flex flex-col items-center justify-between p-2 ${
             layoutMode === 'standard' 
               ? 'border-white bg-black/60 shadow-md' 
               : 'border-gray-600 bg-black/40 hover:border-gray-400'
           }`}
         >
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-full h-16 bg-[#1a1a1a]/70 rounded-md p-1 flex flex-col space-y-[2px]">
+          <div className="flex flex-col items-center gap-1 w-full h-full">
+            <div className="w-full aspect-square bg-[#1a1a1a]/70 rounded-md p-1 flex flex-col space-y-[2px]">
               {/* Top row */}
               <div className="w-full h-1/4 flex items-center justify-center">
                 <div className="w-full h-1 bg-gray-500 rounded-full"></div>
@@ -69,14 +69,14 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
 
         <div
           onClick={() => setLayoutMode('mirrored')}
-          className={`relative p-3 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+          className={`relative aspect-square border-2 rounded-lg cursor-pointer transition-all duration-200 flex flex-col items-center justify-between p-2 ${
             layoutMode === 'mirrored' 
               ? 'border-white bg-black/60 shadow-md' 
               : 'border-gray-600 bg-black/40 hover:border-gray-400'
           }`}
         >
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-full h-16 bg-[#1a1a1a]/70 rounded-md p-1 flex flex-col space-y-[2px]">
+          <div className="flex flex-col items-center gap-1 w-full h-full">
+            <div className="w-full aspect-square bg-[#1a1a1a]/70 rounded-md p-1 flex flex-col space-y-[2px]">
               {/* Top row */}
               <div className="w-full h-1/4 flex items-center justify-center">
                 <div className="w-full h-1 bg-gray-500 rounded-full"></div>

@@ -7,9 +7,6 @@ import './App.css';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import JournalCanvas from './components/JournalCanvas';
-import MobileJournalEditor from './components/MobileJournalEditor';
-import { isMobile } from './utils/isMobile';
-import { useMediaQuery } from 'react-responsive';
 
 import JournalForm from './components/JournalForm';
 import Login from './components/auth/Login';
@@ -206,9 +203,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
       
-      {/* Only show footer on non-home, non-login pages */}
+      {/* Only show footer on non-home, non-login pages and hide on mobile */}
       {!shouldHideNav && (
-        <footer className="bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
+        <footer className="hidden md:block bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-xs sm:text-sm text-white/60">
               © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
@@ -225,11 +222,6 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [date, setDate] = useState(new Date());
-  const [location, setLocation] = useState('');
-  const [images, setImages] = useState<(string | Blob)[]>([]);
-  const [textSections, setTextSections] = useState<string[]>(['']);
-  const isMobileView = useMediaQuery({ maxWidth: 767 });
 
   // Effect to check if user is logged in using Firebase Auth
   useEffect(() => {
@@ -275,17 +267,7 @@ function App() {
     logout
   };
 
-  const handleMobileUpdate = (data: {
-    date: Date;
-    location: string;
-    images: (string | Blob)[];
-    textSections: string[];
-  }) => {
-    setDate(data.date);
-    setLocation(data.location);
-    setImages(data.images);
-    setTextSections(data.textSections);
-  };
+
 
   if (loading) {
     return (
@@ -306,21 +288,9 @@ function App() {
                 path="/journal" 
                 element={
                   isAuthenticated ? (
-                  isMobileView ? (
-                        <MobileJournalEditor
-                          onUpdate={handleMobileUpdate}
-                          initialData={{
-                            date,
-                            location,
-                            images,
-                            textSections,
-                          }}
-                        />
-                      ) : (
                     <Layout>
-                    <JournalForm isAuthenticated={isAuthenticated} />
+                      <JournalForm isAuthenticated={isAuthenticated} />
                     </Layout>
-                  )
                   ) : (
                     <Navigate to="/login" replace />
                   )

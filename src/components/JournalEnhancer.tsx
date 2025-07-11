@@ -582,7 +582,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
                     <path d="M4 10C2.9 10 2 10.9 2 12C2 13.1 2.9 14 4 14C5.1 14 6 13.1 6 12C6 10.9 5.1 10 4 10Z" fill="currentColor"/>
                   </svg>
                 </div>
-                <h3 className="text-3xl font-medium text-white">Need inspiration?</h3>
+                <h3 className="text-base md:text-lg font-medium text-white">Need inspiration?</h3>
               </div>
               <svg 
                 className={`w-7 h-7 text-white transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} 
@@ -611,7 +611,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
                 ) : (
                   <>
                     <div className="mb-4">
-                      <p className={`text-3xl text-white ${isGlitching ? 'glitch-text' : ''}`}>
+                      <p className={`text-sm md:text-base text-white ${isGlitching ? 'glitch-text' : ''}`}>
                         {currentQuestion || 'What thoughts were running through your mind that you didn\'t express at the time?'}
                       </p>
                     </div>
@@ -622,7 +622,7 @@ const JournalEnhancer: React.FC<JournalEnhancerProps> = ({
                           e.stopPropagation();
                           handleGetAnotherQuestion();
                         }}
-                        className="px-5 py-4 bg-blue-600 text-white rounded-lg text-2xl flex-1 hover:bg-blue-700 focus:outline-none transition-colors"
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm md:text-base flex-1 hover:bg-blue-700 focus:outline-none transition-colors"
                       >
                         Try another
                       </button>

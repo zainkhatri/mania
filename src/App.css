@@ -41,22 +41,29 @@
 body {
   font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
   color: #1a1a1a;
-  background-color: #f5f2e9;
+  background-color: #000000;
   min-height: 100%;
   position: relative;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
 }
 
 html {
   height: 100%;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background-color: #000000;
+  /* Handle overscroll areas */
+  overscroll-behavior: contain;
 }
 
 #root {
   min-height: 100%;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   position: relative;
+  background-color: #000000;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -68,23 +75,34 @@ button, a {
   font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
-/* Custom scrollbar for an elegant feel */
+/* Vercel-inspired sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 12px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f5f2e9;
+  background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
-  border-radius: 6px;
-  border: 3px solid #f5f2e9;
+  background: #333333;
+  border-radius: 4px;
+  border: none;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #1a1a1a;
+  background: #555555;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #777777;
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333333 #000000;
 }
 
 /* Animation keyframes */
@@ -138,7 +156,7 @@ button, a {
   textarea,
   select,
   button {
-    font-size: 24px !important;
+    font-size: 18px !important;
     line-height: 1.6 !important;
   }
 
@@ -147,33 +165,200 @@ button, a {
   input[type="date"],
   textarea {
     padding: 16px 18px !important;
-    min-height: 60px !important;
+    min-height: 56px !important;
   }
 
   /* Make layout containers take full width on mobile */
   .journal-form-container .grid {
-    gap: 24px !important;
+    gap: 16px !important;
   }
 
   /* Increase button size for better touch targets */
   button {
     padding: 16px 24px !important;
-    min-height: 60px !important;
+    min-height: 56px !important;
   }
   
   /* Adjust labels and title text */
   label span, h3 {
-    font-size: 24px !important;
+    font-size: 18px !important;
   }
   
   /* Make placeholder text larger */
   ::placeholder {
-    font-size: 24px !important;
+    font-size: 18px !important;
   }
   
   /* Increase file upload area size */
   .upload-area {
-    min-height: 180px !important;
+    min-height: 140px !important;
+  }
+
+  /* Mobile-specific optimizations */
+  .journal-form-container {
+    padding: 8px !important;
+  }
+
+  /* Optimize mobile canvas interactions */
+  canvas {
+    touch-action: manipulation !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  /* Better mobile scrolling */
+  body {
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: auto !important; /* Allow page scrolling */
+    overflow-x: hidden !important; /* Prevent horizontal scrolling */
+    background-color: #000000 !important;
+    /* Handle overscroll bounce on iOS */
+    overscroll-behavior-y: contain;
+  }
+
+  /* Improve mobile date picker */
+  .react-datepicker {
+    font-size: 16px !important;
+  }
+
+  /* Ensure full viewport height usage with page scroll */
+  html, body {
+    min-height: 100dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  #root {
+    min-height: 100dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Mobile form optimization - allow page scroll */
+  .journal-form-container {
+    min-height: 100dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Compact mobile form sections */
+  .space-y-2 > * + * {
+    margin-top: 0.25rem !important;
+  }
+
+  .space-y-1 > * + * {
+    margin-top: 0.125rem !important;
+  }
+
+  /* Smaller mobile text inputs */
+  input[type="text"],
+  input[type="date"],
+  textarea {
+    padding: 8px 12px !important;
+    min-height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  /* Smaller mobile buttons */
+  button {
+    padding: 8px 16px !important;
+    min-height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  /* Compact mobile labels */
+  label {
+    font-size: 14px !important;
+  }
+
+  /* Compact mobile textarea */
+  textarea {
+    min-height: 60px !important;
+  }
+
+  .react-datepicker__input-container input {
+    font-size: 18px !important;
+    padding: 16px !important;
+  }
+
+  /* Mobile viewport optimizations */
+  @supports (height: 100dvh) {
+    .min-h-screen {
+      min-height: 100dvh !important;
+    }
+  }
+
+  /* Improve mobile tap targets */
+  button, .cursor-pointer {
+    min-height: 48px !important;
+    min-width: 48px !important;
+  }
+
+  /* Better mobile text inputs */
+  input[type="text"], input[type="email"], input[type="password"], textarea {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    -webkit-appearance: none !important;
+    border-radius: 8px !important;
+  }
+
+  /* Mobile-specific layout adjustments */
+  .grid.grid-cols-1.md\\:grid-cols-2 {
+    gap: 8px !important;
+  }
+
+  /* Ensure mobile layout allows scrolling */
+  @media (max-width: 767px) {
+    .grid.grid-cols-1.md\\:grid-cols-2 {
+      grid-template-rows: auto auto !important;
+      min-height: 100vh !important;
+      overflow-y: auto !important;
+    }
+
+    .grid.grid-cols-1.md\\:grid-cols-2 > div:first-child {
+      /* Journal preview on top */
+      overflow-y: auto !important;
+    }
+
+    .grid.grid-cols-1.md\\:grid-cols-2 > div:last-child {
+      /* Form on bottom */
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+  }
+
+  /* Improve mobile form spacing */
+  .space-y-4 > * + * {
+    margin-top: 12px !important;
+  }
+
+  .space-y-3 > * + * {
+    margin-top: 8px !important;
+  }
+
+  .space-y-2 > * + * {
+    margin-top: 6px !important;
+  }
+
+  .space-y-1 > * + * {
+    margin-top: 4px !important;
+  }
+
+  /* Mobile journal canvas optimization */
+  @media (max-width: 767px) {
+    #journal-canvas {
+      max-height: 40vh !important;
+      width: auto !important;
+      object-fit: contain !important;
+    }
+
+    #journal-container {
+      max-height: 45vh !important;
+      overflow-y: auto !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
   }
 }
 
