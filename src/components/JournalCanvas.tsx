@@ -1007,8 +1007,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           fontSize = Math.max(minFontSize, fontSize * 0.85);
           
           // Set the font with our precisely determined size for content text
-          // Use normal font weight for crisp, clean text on all devices
-          const fontWeight = '400'; // Changed from 700 to 400 for normal weight
+          // Use semi-bold font weight for better visibility without looking like shit
+          const fontWeight = '600'; // Changed from 400 to 600 for semi-bold weight
           const fontString = `${fontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
@@ -1089,7 +1089,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.shadowBlur = 0;
                   ctx.shadowOffsetX = 0;
                   ctx.shadowOffsetY = 0;
+                  
+                  // Draw text with subtle double-stroke for better boldness without looking like shit
                   ctx.fillText(currentLine, areaX, currentY);
+                  // Add a very subtle second stroke with minimal offset for enhanced boldness
+                  ctx.globalAlpha = 0.3;
+                  ctx.fillText(currentLine, areaX + 0.5, currentY);
+                  
                   ctx.restore();
                   currentLine = '';
                   break;
@@ -1113,7 +1119,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.shadowBlur = 0;
                   ctx.shadowOffsetX = 0;
                   ctx.shadowOffsetY = 0;
+                  
+                  // Draw text with subtle double-stroke for better boldness without looking like shit
                   ctx.fillText(currentLine, areaX, currentY);
+                  // Add a very subtle second stroke with minimal offset for enhanced boldness
+                  ctx.globalAlpha = 0.3;
+                  ctx.fillText(currentLine, areaX + 0.5, currentY);
+                  
                   ctx.restore();
                   currentLine = '';
                 }
@@ -1248,7 +1260,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize = Math.max(minFontSize, fontSize * 0.85);
             
             // Set font for cursor positioning
-            const cursorFontWeight = '400'; // Changed from '700' to '400' for normal weight
+            const cursorFontWeight = '600'; // Changed from '400' to '600' for semi-bold weight
             ctx.font = `${cursorFontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
             
             // Get text areas and calculate cursor position
