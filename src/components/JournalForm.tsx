@@ -1711,51 +1711,80 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     <p>Long press the image below to save it to your device.</p>
                     <img src="${blobUrl}" alt="Journal Export" />
                     <br>
-                                         <button class="download-btn" onclick="downloadImage()">
-                       Download Image
-                     </button>
-                    <p class="help-text">
-                      • On iOS: Long press the image and select "Save to Photos"<br>
-                      • On Android: Tap the download button or long press the image<br>
-                      • If download doesn't work, try opening this page in your default browser
-                    </p>
+                                                               <button class="download-btn" onclick="downloadImage()">
+                        Save to Photos
+                      </button>
+                      <p class="help-text">
+                        • Tap the button above to save to your photo gallery<br>
+                        • Or long press the image and select "Save to Photos"<br>
+                        • The image will open in a new tab where you can use the share button
+                      </p>
                   </div>
                                      <script>
                      function downloadImage() {
                        try {
-                         console.log('Attempting download...');
+                         console.log('Attempting mobile save...');
                          
-                         // Method 1: Try direct download
-                         const link = document.createElement('a');
-                         link.href = '${blobUrl}';
-                         link.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
-                         link.style.display = 'none';
-                         document.body.appendChild(link);
-                         link.click();
-                         document.body.removeChild(link);
+                         // Check if we can use the Web Share API for native sharing
+                         if (navigator.share && navigator.canShare) {
+                           // Convert blob URL to actual blob for sharing
+                           fetch('${blobUrl}')
+                             .then(response => response.blob())
+                             .then(blob => {
+                               const file = new File([blob], 'journal-${format(date, 'yyyy-MM-dd')}.png', { type: 'image/png' });
+                               if (navigator.canShare({ files: [file] })) {
+                                 navigator.share({
+                                   title: 'Journal Entry',
+                                   text: 'My journal entry from ${format(date, 'yyyy-MM-dd')}',
+                                   files: [file]
+                                 }).then(() => {
+                                   console.log('Shared successfully');
+                                 }).catch(err => {
+                                   console.log('Share cancelled or failed:', err);
+                                   fallbackSave();
+                                 });
+                               } else {
+                                 fallbackSave();
+                               }
+                             })
+                             .catch(err => {
+                               console.error('Failed to create blob for sharing:', err);
+                               fallbackSave();
+                             });
+                         } else {
+                           fallbackSave();
+                         }
                          
-                         console.log('Download initiated successfully');
-                         
-                         // Show success message
-                         setTimeout(() => {
-                           alert('Download started! Check your Downloads folder or notification bar.');
-                         }, 500);
+                         function fallbackSave() {
+                           // For mobile, we want to trigger the native save dialog
+                           // Create a temporary link that opens the image in a way that allows saving
+                           const tempLink = document.createElement('a');
+                           tempLink.href = '${blobUrl}';
+                           tempLink.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
+                           tempLink.target = '_blank';
+                           
+                           // On mobile, this will typically open the image in a new tab
+                           // where users can use the share button to save to Photos
+                           tempLink.click();
+                           
+                           // Show mobile-specific instructions
+                           setTimeout(() => {
+                             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                             const isAndroid = /Android/i.test(navigator.userAgent);
+                             
+                             if (isIOS) {
+                               alert('Tap the Share button (square with arrow) at the bottom, then select "Save to Photos" to save to your photo gallery.');
+                             } else if (isAndroid) {
+                               alert('Tap the 3-dot menu and select "Download" or use the share button to save to your gallery.');
+                             } else {
+                               alert('Use your browser\\'s share or download option to save the image.');
+                             }
+                           }, 1000);
+                         }
                          
                        } catch (e) {
-                         console.error('Download failed:', e);
-                         
-                         // Method 2: Try opening in new window
-                         try {
-                           const newWin = window.open('${blobUrl}', '_blank');
-                           if (newWin) {
-                             alert('Image opened in new tab. Right-click and select "Save Image As" to download.');
-                           } else {
-                             throw new Error('Popup blocked');
-                           }
-                         } catch (e2) {
-                           console.error('Fallback also failed:', e2);
-                           alert('Download failed. Please long press the image above and select "Save Image" or "Save to Photos".');
-                         }
+                         console.error('Save failed:', e);
+                         alert('Please long press the image above and select "Save to Photos" or "Save Image".');
                        }
                      }
                      
@@ -1843,50 +1872,79 @@ const JournalForm: React.FC<JournalFormProps> = ({
                      <img src="${dataUrl}" alt="Journal Export" />
                      <br>
                      <button class="download-btn" onclick="downloadImage()">
-                       Download Image
+                       Save to Photos
                      </button>
                      <p class="help-text">
-                       • On iOS: Long press the image and select "Save to Photos"<br>
-                       • On Android: Tap the download button or long press the image<br>
-                       • If download doesn't work, try opening this page in your default browser
+                       • Tap the button above to save to your photo gallery<br>
+                       • Or long press the image and select "Save to Photos"<br>
+                       • The image will open in a new tab where you can use the share button
                      </p>
                    </div>
                    <script>
                                            function downloadImage() {
                         try {
-                          console.log('Attempting download (fallback)...');
+                          console.log('Attempting mobile save (fallback)...');
                           
-                          // Method 1: Try direct download
-                          const link = document.createElement('a');
-                          link.href = '${dataUrl}';
-                          link.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
-                          link.style.display = 'none';
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
+                          // Check if we can use the Web Share API for native sharing
+                          if (navigator.share && navigator.canShare) {
+                            // Convert dataUrl to blob for sharing
+                            fetch('${dataUrl}')
+                              .then(response => response.blob())
+                              .then(blob => {
+                                const file = new File([blob], 'journal-${format(date, 'yyyy-MM-dd')}.png', { type: 'image/png' });
+                                if (navigator.canShare({ files: [file] })) {
+                                  navigator.share({
+                                    title: 'Journal Entry',
+                                    text: 'My journal entry from ${format(date, 'yyyy-MM-dd')}',
+                                    files: [file]
+                                  }).then(() => {
+                                    console.log('Shared successfully');
+                                  }).catch(err => {
+                                    console.log('Share cancelled or failed:', err);
+                                    fallbackSave();
+                                  });
+                                } else {
+                                  fallbackSave();
+                                }
+                              })
+                              .catch(err => {
+                                console.error('Failed to create blob for sharing:', err);
+                                fallbackSave();
+                              });
+                          } else {
+                            fallbackSave();
+                          }
                           
-                          console.log('Download initiated successfully (fallback)');
-                          
-                          // Show success message
-                          setTimeout(() => {
-                            alert('Download started! Check your Downloads folder or notification bar.');
-                          }, 500);
+                          function fallbackSave() {
+                            // For mobile, we want to trigger the native save dialog
+                            // Create a temporary link that opens the image in a way that allows saving
+                            const tempLink = document.createElement('a');
+                            tempLink.href = '${dataUrl}';
+                            tempLink.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
+                            tempLink.target = '_blank';
+                            
+                            // On mobile, this will typically open the image in a new tab
+                            // where users can use the share button to save to Photos
+                            tempLink.click();
+                            
+                            // Show mobile-specific instructions
+                            setTimeout(() => {
+                              const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                              const isAndroid = /Android/i.test(navigator.userAgent);
+                              
+                              if (isIOS) {
+                                alert('Tap the Share button (square with arrow) at the bottom, then select "Save to Photos" to save to your photo gallery.');
+                              } else if (isAndroid) {
+                                alert('Tap the 3-dot menu and select "Download" or use the share button to save to your gallery.');
+                              } else {
+                                alert('Use your browser\\'s share or download option to save the image.');
+                              }
+                            }, 1000);
+                          }
                           
                         } catch (e) {
-                          console.error('Download failed:', e);
-                          
-                          // Method 2: Try opening in new window
-                          try {
-                            const newWin = window.open('${dataUrl}', '_blank');
-                            if (newWin) {
-                              alert('Image opened in new tab. Right-click and select "Save Image As" to download.');
-                            } else {
-                              throw new Error('Popup blocked');
-                            }
-                          } catch (e2) {
-                            console.error('Fallback also failed:', e2);
-                            alert('Download failed. Please long press the image above and select "Save Image" or "Save to Photos".');
-                          }
+                          console.error('Save failed:', e);
+                          alert('Please long press the image above and select "Save to Photos" or "Save Image".');
                         }
                       }
                    </script>
