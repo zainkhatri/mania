@@ -1566,7 +1566,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       }
       
       console.log('Target element:', targetElement.tagName, targetElement.id);
-      
+    
       // Pre-render optimization: Ensure everything is fully rendered before export
       await new Promise(resolve => setTimeout(resolve, 150));
       
@@ -1574,7 +1574,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       void targetElement.offsetHeight;
       
       let dataUrl: string;
-      
+    
       // If we have a canvas, use it directly for best quality
       if (journalCanvas && journalCanvas.tagName === 'CANVAS') {
         console.log('Using canvas directly for maximum quality');
@@ -1588,8 +1588,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
         const ctx = highResCanvas.getContext('2d');
         if (!ctx) {
           throw new Error('Could not get canvas context');
-        }
-        
+    }
+    
         // Set high quality rendering
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
@@ -1603,7 +1603,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         
       } else {
         console.log('Using html-to-image for DOM export');
-        
+          
         // Use html-to-image for DOM elements
         dataUrl = await htmlToImage.toPng(targetElement, {
           cacheBust: true,
@@ -1625,36 +1625,279 @@ const JournalForm: React.FC<JournalFormProps> = ({
         console.log('html-to-image export complete');
       }
       
-      // Detect iOS Safari for special handling
+      // Detect mobile devices for special handling
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-      const isIOSSafari = isIOS && isSafari;
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isMobile = isIOS || isAndroid;
       
-      if (isIOSSafari) {
-        // iOS Safari doesn't support automatic downloads well
-        // Open in new tab and let user save manually
-        const newWindow = window.open();
-        if (newWindow) {
-          newWindow.document.write(`
-            <html>
-              <head><title>Journal Export</title></head>
-              <body style="margin:0;padding:20px;background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;">
-                <div style="text-align:center;color:white;">
-                  <h3>Your Journal Export</h3>
-                  <p>Long press the image below to save it to your device.</p>
-                  <img src="${dataUrl}" style="max-width:100%;height:auto;border:1px solid #333;" alt="Journal Export" />
-                  <p style="margin-top:20px;font-size:14px;color:#ccc;">
-                    If the download doesn't work, try opening this page in Safari.
-                  </p>
-                </div>
-              </body>
-            </html>
-          `);
-          newWindow.document.close();
-        }
-        
-        toast.dismiss(toastId);
-        toast.success('Image opened in new tab. Long press to save!');
+      if (isMobile) {
+        // Mobile devices need special handling - create a blob URL for better performance
+        try {
+          console.log('Creating blob URL for mobile, dataUrl length:', dataUrl.length);
+          console.log('DataUrl preview:', dataUrl.substring(0, 100) + '...');
+          
+          // Convert dataUrl to blob for better mobile performance
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          console.log('Blob created successfully, size:', blob.size, 'type:', blob.type);
+          console.log('Blob URL:', blobUrl);
+          
+          // For mobile devices, open in new tab with better image handling
+          const newWindow = window.open('', '_blank');
+          if (newWindow) {
+            newWindow.document.write(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <title>Journal Export</title>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <style>
+                    body { 
+                      margin: 0; 
+                      padding: 20px; 
+                      background: #000; 
+                      display: flex; 
+                      flex-direction: column;
+                      justify-content: center; 
+                      align-items: center; 
+                      min-height: 100vh;
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    }
+                    .container {
+                      text-align: center;
+                      color: white;
+                      max-width: 90%;
+                    }
+                    h3 { 
+                      margin-bottom: 15px; 
+                      font-size: 24px;
+                    }
+                    p { 
+                      margin: 10px 0; 
+                      font-size: 16px;
+                    }
+                    img { 
+                      max-width: 100%; 
+                      height: auto; 
+                      border: 1px solid #333; 
+                      border-radius: 8px;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                    }
+                    .download-btn {
+                      background: #007AFF;
+                      color: white;
+                      border: none;
+                      padding: 12px 24px;
+                      border-radius: 8px;
+                      font-size: 16px;
+                      margin-top: 15px;
+                      cursor: pointer;
+                      text-decoration: none;
+                      display: inline-block;
+                    }
+                    .help-text {
+                      margin-top: 20px;
+                      font-size: 14px;
+                      color: #ccc;
+                      line-height: 1.4;
+                    }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <h3>Your Journal Export</h3>
+                    <p>Long press the image below to save it to your device.</p>
+                    <img src="${blobUrl}" alt="Journal Export" />
+                    <br>
+                                         <button class="download-btn" onclick="downloadImage()">
+                       Download Image
+                     </button>
+                    <p class="help-text">
+                      • On iOS: Long press the image and select "Save to Photos"<br>
+                      • On Android: Tap the download button or long press the image<br>
+                      • If download doesn't work, try opening this page in your default browser
+                    </p>
+                  </div>
+                                     <script>
+                     function downloadImage() {
+                       try {
+                         console.log('Attempting download...');
+                         
+                         // Method 1: Try direct download
+                         const link = document.createElement('a');
+                         link.href = '${blobUrl}';
+                         link.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
+                         link.style.display = 'none';
+                         document.body.appendChild(link);
+                         link.click();
+                         document.body.removeChild(link);
+                         
+                         console.log('Download initiated successfully');
+                         
+                         // Show success message
+                         setTimeout(() => {
+                           alert('Download started! Check your Downloads folder or notification bar.');
+                         }, 500);
+                         
+                       } catch (e) {
+                         console.error('Download failed:', e);
+                         
+                         // Method 2: Try opening in new window
+                         try {
+                           const newWin = window.open('${blobUrl}', '_blank');
+                           if (newWin) {
+                             alert('Image opened in new tab. Right-click and select "Save Image As" to download.');
+                           } else {
+                             throw new Error('Popup blocked');
+                           }
+                         } catch (e2) {
+                           console.error('Fallback also failed:', e2);
+                           alert('Download failed. Please long press the image above and select "Save Image" or "Save to Photos".');
+                         }
+                       }
+                     }
+                     
+                     // Clean up blob URL after a delay to prevent memory leaks
+                     setTimeout(() => {
+                       URL.revokeObjectURL('${blobUrl}');
+                     }, 60000);
+                   </script>
+                </body>
+              </html>
+            `);
+            newWindow.document.close();
+          }
+          
+          toast.dismiss(toastId);
+          toast.success('Image opened in new tab. Long press to save!');
+          
+                 } catch (blobError) {
+           console.error('Error creating blob URL:', blobError);
+           // Fallback to original method if blob creation fails
+           const newWindow = window.open('', '_blank');
+           if (newWindow) {
+             newWindow.document.write(`
+               <!DOCTYPE html>
+               <html>
+                 <head>
+                   <title>Journal Export</title>
+                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                   <style>
+                     body { 
+                       margin: 0; 
+                       padding: 20px; 
+                       background: #000; 
+                       display: flex; 
+                       flex-direction: column;
+                       justify-content: center; 
+                       align-items: center; 
+                       min-height: 100vh;
+                       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                     }
+                     .container {
+                       text-align: center;
+                       color: white;
+                       max-width: 90%;
+                     }
+                     h3 { 
+                       margin-bottom: 15px; 
+                       font-size: 24px;
+                     }
+                     p { 
+                       margin: 10px 0; 
+                       font-size: 16px;
+                     }
+                     img { 
+                       max-width: 100%; 
+                       height: auto; 
+                       border: 1px solid #333; 
+                       border-radius: 8px;
+                       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                     }
+                     .download-btn {
+                       background: #007AFF;
+                       color: white;
+                       border: none;
+                       padding: 12px 24px;
+                       border-radius: 8px;
+                       font-size: 16px;
+                       margin-top: 15px;
+                       cursor: pointer;
+                       text-decoration: none;
+                       display: inline-block;
+                     }
+                     .help-text {
+                       margin-top: 20px;
+                       font-size: 14px;
+                       color: #ccc;
+                       line-height: 1.4;
+                     }
+                   </style>
+                 </head>
+                 <body>
+                   <div class="container">
+                     <h3>Your Journal Export</h3>
+                     <p>Long press the image below to save it to your device.</p>
+                     <img src="${dataUrl}" alt="Journal Export" />
+                     <br>
+                     <button class="download-btn" onclick="downloadImage()">
+                       Download Image
+                     </button>
+                     <p class="help-text">
+                       • On iOS: Long press the image and select "Save to Photos"<br>
+                       • On Android: Tap the download button or long press the image<br>
+                       • If download doesn't work, try opening this page in your default browser
+                     </p>
+                   </div>
+                   <script>
+                                           function downloadImage() {
+                        try {
+                          console.log('Attempting download (fallback)...');
+                          
+                          // Method 1: Try direct download
+                          const link = document.createElement('a');
+                          link.href = '${dataUrl}';
+                          link.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
+                          link.style.display = 'none';
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          
+                          console.log('Download initiated successfully (fallback)');
+                          
+                          // Show success message
+                          setTimeout(() => {
+                            alert('Download started! Check your Downloads folder or notification bar.');
+                          }, 500);
+                          
+                        } catch (e) {
+                          console.error('Download failed:', e);
+                          
+                          // Method 2: Try opening in new window
+                          try {
+                            const newWin = window.open('${dataUrl}', '_blank');
+                            if (newWin) {
+                              alert('Image opened in new tab. Right-click and select "Save Image As" to download.');
+                            } else {
+                              throw new Error('Popup blocked');
+                            }
+                          } catch (e2) {
+                            console.error('Fallback also failed:', e2);
+                            alert('Download failed. Please long press the image above and select "Save Image" or "Save to Photos".');
+                          }
+                        }
+                      }
+                   </script>
+                 </body>
+               </html>
+             `);
+             newWindow.document.close();
+           }
+           toast.dismiss(toastId);
+           toast.success('Image opened in new tab. Long press to save!');
+         }
         
       } else {
         // Standard download for other browsers

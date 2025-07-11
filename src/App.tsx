@@ -289,7 +289,7 @@ function App() {
                 element={
                   isAuthenticated ? (
                     <Layout>
-                      <JournalForm isAuthenticated={isAuthenticated} />
+                    <JournalForm isAuthenticated={isAuthenticated} />
                     </Layout>
                   ) : (
                     <Navigate to="/login" replace />
