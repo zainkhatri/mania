@@ -1571,7 +1571,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       await new Promise(resolve => setTimeout(resolve, 150));
       
       // Force a reflow to ensure all styles are applied
-      targetElement.offsetHeight;
+      void targetElement.offsetHeight;
       
       let dataUrl: string;
       
