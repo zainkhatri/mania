@@ -1553,10 +1553,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
       return;
     }
     
-    if (!journalRef.current) return;
-    
-    const journalElement = journalRef.current;
-    
     // Create a loading toast
     const toastId = toast.loading("Creating high-quality PDF...", {
       position: "bottom-center",
@@ -1566,30 +1562,100 @@ const JournalForm: React.FC<JournalFormProps> = ({
     });
     
     try {
-      // Step 1: Capture the journal with maximum quality
+      // Step 1: Find the journal element - try multiple strategies
+      toast.update(toastId, {
+        render: "Finding journal content...",
+        isLoading: true
+      });
+      
+      let journalElement: HTMLElement | null = null;
+      
+      // Strategy 1: Try to find the actual canvas element first
+      const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
+      if (canvasElement) {
+        journalElement = canvasElement;
+        console.log('Using canvas element:', journalElement);
+      }
+      
+      // Strategy 2: Try the ref
+      if (!journalElement && journalRef.current) {
+        journalElement = journalRef.current;
+        console.log('Using journalRef.current:', journalElement);
+      }
+      
+      // Strategy 3: Try to find by ID
+      if (!journalElement) {
+        journalElement = document.getElementById('journal-container');
+        console.log('Using journal-container ID:', journalElement);
+      }
+      
+      // Strategy 4: Try to find the main form container
+      if (!journalElement) {
+        journalElement = document.querySelector('[data-journal-content]') as HTMLElement;
+        console.log('Using data-journal-content:', journalElement);
+      }
+      
+      // Strategy 5: Find the entire form
+      if (!journalElement) {
+        journalElement = document.querySelector('form') as HTMLElement;
+        console.log('Using form element:', journalElement);
+      }
+      
+      if (!journalElement) {
+        throw new Error('Could not find journal element to capture');
+      }
+      
+      console.log('Final element dimensions:', {
+        width: journalElement.offsetWidth,
+        height: journalElement.offsetHeight,
+        scrollWidth: journalElement.scrollWidth,
+        scrollHeight: journalElement.scrollHeight
+      });
+      
+      // Step 2: Capture the journal with debugging
       toast.update(toastId, {
         render: "Capturing journal content...",
         isLoading: true
       });
       
-      // Use maximum scale for highest quality
-      const scale = 6; // Higher scale for better quality
+      // Wait a moment to ensure everything is rendered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Use a more conservative scale to avoid memory issues
+      const scale = 2; // Further reduced scale for reliability
       
       const canvas = await html2canvas(journalElement, {
         scale: scale,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 120000, // 2 minutes timeout
+        logging: true, // Enable logging for debugging
+        imageTimeout: 60000, // 1 minute timeout
         letterRendering: true,
-        foreignObjectRendering: true,
+        foreignObjectRendering: false, // Disable this as it can cause issues
         removeContainer: false,
-        width: journalElement.scrollWidth,
-        height: journalElement.scrollHeight
+        onclone: (clonedDoc: Document) => {
+          // Ensure all styles are applied in the cloned document
+          const clonedElement = clonedDoc.querySelector('[data-journal-content]') || clonedDoc.querySelector('#journal-container');
+          if (clonedElement) {
+            (clonedElement as HTMLElement).style.minHeight = '300px';
+            (clonedElement as HTMLElement).style.visibility = 'visible';
+            (clonedElement as HTMLElement).style.opacity = '1';
+          }
+        }
       });
       
-      // Step 2: Generate PDF with high quality settings
+      console.log('Canvas created:', {
+        width: canvas.width,
+        height: canvas.height,
+        isEmpty: canvas.width === 0 || canvas.height === 0
+      });
+      
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Generated canvas is empty - no content captured');
+      }
+      
+      // Step 3: Generate PDF with debugging
       toast.update(toastId, {
         render: "Generating PDF document...",
         isLoading: true
@@ -1598,6 +1664,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 297; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      console.log('PDF dimensions:', {
+        imgWidth,
+        imgHeight,
+        pageHeight,
+        pagesNeeded: Math.ceil(imgHeight / pageHeight)
+      });
       
       // Create PDF with high quality settings
       const pdf = new jsPDF({ 
@@ -1608,7 +1681,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
       });
       
       // Convert canvas to high quality image data
-      const imgData = canvas.toDataURL('image/png', 1.0); // Use PNG for lossless quality
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      
+      console.log('Image data length:', imgData.length);
+      
+      if (imgData.length < 1000) {
+        throw new Error('Generated image data is too small - likely blank');
+      }
       
       // Add image to PDF
       if (imgHeight <= pageHeight) {
@@ -1628,7 +1707,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         }
       }
       
-      // Step 3: Download the PDF
+      // Step 4: Download the PDF
       toast.update(toastId, {
         render: "Downloading PDF...",
         isLoading: true
@@ -1651,10 +1730,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
     } catch (error) {
       console.error("Error creating PDF:", error);
       toast.update(toastId, {
-        render: "❌ Failed to create PDF. Please try again.",
+        render: `❌ Failed to create PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: "error",
         isLoading: false,
-        autoClose: 5000,
+        autoClose: 8000,
         closeButton: true
       });
     }
@@ -1966,7 +2045,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 {/* Collapsible journal content */}
                 <div className={`transition-all duration-700 ease-in-out overflow-hidden ${isJournalCollapsed ? 'max-h-0 opacity-0 md:max-h-none md:opacity-100' : 'max-h-[60vh] opacity-100 md:max-h-none'}`}>
                   <div className={`transition-all duration-700 ease-in-out ${isJournalCollapsed ? 'p-0 md:p-2 md:p-3 lg:p-6 scale-95 md:scale-100' : 'p-2 md:p-3 lg:p-6 scale-100'}`}>
-                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[300px]" ref={journalRef} id="journal-container">
+                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[300px]" ref={journalRef} id="journal-container" data-journal-content>
                       <JournalCanvas
                         ref={canvasRef}
                         date={date}
