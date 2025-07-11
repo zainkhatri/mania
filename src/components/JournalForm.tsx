@@ -1619,21 +1619,28 @@ const JournalForm: React.FC<JournalFormProps> = ({
       });
       
       // Wait a moment to ensure everything is rendered
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Use a more conservative scale to avoid memory issues
-      const scale = 2; // Further reduced scale for reliability
+      // Use maximum scale for 4K quality - fuck memory issues, we want quality
+      const scale = 8; // 8x scale for ultra-high quality
       
       const canvas = await html2canvas(journalElement, {
         scale: scale,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: true, // Enable logging for debugging
-        imageTimeout: 60000, // 1 minute timeout
+        logging: false, // Disable logging for performance
+        imageTimeout: 180000, // 3 minutes timeout for high quality
         letterRendering: true,
-        foreignObjectRendering: false, // Disable this as it can cause issues
+        foreignObjectRendering: false,
         removeContainer: false,
+        // High quality rendering options
+        width: journalElement.scrollWidth,
+        height: journalElement.scrollHeight,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        scrollX: 0,
+        scrollY: 0,
         onclone: (clonedDoc: Document) => {
           // Ensure all styles are applied in the cloned document
           const clonedElement = clonedDoc.querySelector('[data-journal-content]') || clonedDoc.querySelector('#journal-container');
@@ -1641,7 +1648,26 @@ const JournalForm: React.FC<JournalFormProps> = ({
             (clonedElement as HTMLElement).style.minHeight = '300px';
             (clonedElement as HTMLElement).style.visibility = 'visible';
             (clonedElement as HTMLElement).style.opacity = '1';
+            (clonedElement as HTMLElement).style.transform = 'none';
+            (clonedElement as HTMLElement).style.filter = 'none';
           }
+          
+          // Ensure all canvas elements are properly rendered
+          const canvasElements = clonedDoc.querySelectorAll('canvas');
+          canvasElements.forEach(canvas => {
+            canvas.style.imageRendering = 'pixelated';
+            canvas.style.imageRendering = '-moz-crisp-edges';
+            canvas.style.imageRendering = 'crisp-edges';
+          });
+          
+          // Ensure all text is crisp
+          const textElements = clonedDoc.querySelectorAll('*');
+          textElements.forEach(element => {
+            const htmlElement = element as HTMLElement;
+            htmlElement.style.textRendering = 'optimizeLegibility';
+            (htmlElement.style as any).fontSmooth = 'never';
+            (htmlElement.style as any).webkitFontSmoothing = 'none';
+          });
         }
       });
       
