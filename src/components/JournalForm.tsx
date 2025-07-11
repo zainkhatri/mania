@@ -199,7 +199,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
-  const [showSaveOptions, setShowSaveOptions] = useState(false);
+
   const [isJournalCollapsed, setIsJournalCollapsed] = useState(false);
   const [textColors, setTextColors] = useState<TextColors>({
     locationColor: '#2D9CDB',
@@ -1544,444 +1544,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
 
   
-  // New function to handle saving as image
-  const handleSaveAsImage = async () => {
-    console.log('Save image button clicked');
-    
-    setShowSaveOptions(false);
-    
-    // Show loading notification
-    const toastId = toast.loading('Creating high-quality image...', {
-      position: 'top-right',
-      autoClose: false
-    });
-    
-    try {
-      // Get the target element - try canvas first, then container
-      const journalCanvas = document.getElementById('journal-canvas') as HTMLCanvasElement;
-      const targetElement = journalCanvas || document.getElementById('journal-container') || journalRef.current;
-      
-      if (!targetElement) {
-        throw new Error('No journal element found');
-      }
-      
-      console.log('Target element:', targetElement.tagName, targetElement.id);
-    
-      // Pre-render optimization: Ensure everything is fully rendered before export
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Force a reflow to ensure all styles are applied
-      void targetElement.offsetHeight;
-      
-      let dataUrl: string;
-    
-      // If we have a canvas, use it directly for best quality
-      if (journalCanvas && journalCanvas.tagName === 'CANVAS') {
-        console.log('Using canvas directly for maximum quality');
-        
-        // Create a high-resolution version
-        const scale = 4; // 4x scale is usually enough and won't crash mobile
-        const highResCanvas = document.createElement('canvas');
-        highResCanvas.width = journalCanvas.width * scale;
-        highResCanvas.height = journalCanvas.height * scale;
-        
-        const ctx = highResCanvas.getContext('2d');
-        if (!ctx) {
-          throw new Error('Could not get canvas context');
-    }
-    
-        // Set high quality rendering
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Scale and draw
-        ctx.scale(scale, scale);
-        ctx.drawImage(journalCanvas, 0, 0);
-        
-        dataUrl = highResCanvas.toDataURL('image/png', 1.0);
-        console.log('Canvas export complete:', highResCanvas.width, 'x', highResCanvas.height);
-        
-      } else {
-        console.log('Using html-to-image for DOM export');
-          
-        // Use html-to-image for DOM elements
-        dataUrl = await htmlToImage.toPng(targetElement, {
-          cacheBust: true,
-          backgroundColor: '#111111', // Match your journal background
-          pixelRatio: 3, // Good balance of quality and performance
-          style: {
-            // Force pixel-perfect rendering
-            imageRendering: 'pixelated',
-            WebkitFontSmoothing: 'none',
-            MozOsxFontSmoothing: 'unset',
-          } as any,
-          filter: (node) => {
-            // Optional: exclude certain elements from export
-            // return !node.classList?.contains('no-export');
-            return true;
-          }
-        });
-        
-        console.log('html-to-image export complete');
-      }
-      
-      // Detect mobile devices for special handling
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isAndroid = /Android/i.test(navigator.userAgent);
-      const isMobile = isIOS || isAndroid;
-      
-      if (isMobile) {
-        // Mobile devices need special handling - create a blob URL for better performance
-        try {
-          console.log('Creating blob URL for mobile, dataUrl length:', dataUrl.length);
-          console.log('DataUrl preview:', dataUrl.substring(0, 100) + '...');
-          
-          // Convert dataUrl to blob for better mobile performance
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          
-          console.log('Blob created successfully, size:', blob.size, 'type:', blob.type);
-          console.log('Blob URL:', blobUrl);
-          
-          // For mobile devices, open in new tab with better image handling
-          const newWindow = window.open('', '_blank');
-          if (newWindow) {
-            newWindow.document.write(`
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <title>Journal Export</title>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <style>
-                    body { 
-                      margin: 0; 
-                      padding: 20px; 
-                      background: #000; 
-                      display: flex; 
-                      flex-direction: column;
-                      justify-content: center; 
-                      align-items: center; 
-                      min-height: 100vh;
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    }
-                    .container {
-                      text-align: center;
-                      color: white;
-                      max-width: 90%;
-                    }
-                    h3 { 
-                      margin-bottom: 15px; 
-                      font-size: 24px;
-                    }
-                    p { 
-                      margin: 10px 0; 
-                      font-size: 16px;
-                    }
-                    img { 
-                      max-width: 100%; 
-                      height: auto; 
-                      border: 1px solid #333; 
-                      border-radius: 8px;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                    }
-                    .download-btn {
-                      background: #007AFF;
-                      color: white;
-                      border: none;
-                      padding: 12px 24px;
-                      border-radius: 8px;
-                      font-size: 16px;
-                      margin-top: 15px;
-                      cursor: pointer;
-                      text-decoration: none;
-                      display: inline-block;
-                    }
-                    .help-text {
-                      margin-top: 20px;
-                      font-size: 14px;
-                      color: #ccc;
-                      line-height: 1.4;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="container">
-                    <h3>Your Journal Export</h3>
-                    <p>Long press the image below to save it to your device.</p>
-                    <img src="${blobUrl}" alt="Journal Export" />
-                    <br>
-                                                               <button class="download-btn" onclick="downloadImage()">
-                        Save to Photos
-                      </button>
-                      <p class="help-text">
-                        • Tap the button above to save to your photo gallery<br>
-                        • Or long press the image and select "Save to Photos"<br>
-                        • The image will open in a new tab where you can use the share button
-                      </p>
-                  </div>
-                                     <script>
-                     function downloadImage() {
-                       try {
-                         console.log('Attempting mobile save...');
-                         
-                         // Check if we can use the Web Share API for native sharing
-                         if (navigator.share && navigator.canShare) {
-                           // Convert blob URL to actual blob for sharing
-                           fetch('${blobUrl}')
-                             .then(response => response.blob())
-                             .then(blob => {
-                               const file = new File([blob], 'journal-${format(date, 'yyyy-MM-dd')}.png', { type: 'image/png' });
-                               if (navigator.canShare({ files: [file] })) {
-                                 navigator.share({
-                                   title: 'Journal Entry',
-                                   text: 'My journal entry from ${format(date, 'yyyy-MM-dd')}',
-                                   files: [file]
-                                 }).then(() => {
-                                   console.log('Shared successfully');
-                                 }).catch(err => {
-                                   console.log('Share cancelled or failed:', err);
-                                   fallbackSave();
-                                 });
-                               } else {
-                                 fallbackSave();
-                               }
-                             })
-                             .catch(err => {
-                               console.error('Failed to create blob for sharing:', err);
-                               fallbackSave();
-                             });
-                         } else {
-                           fallbackSave();
-                         }
-                         
-                         function fallbackSave() {
-                           // For mobile, we want to trigger the native save dialog
-                           // Create a temporary link that opens the image in a way that allows saving
-                           const tempLink = document.createElement('a');
-                           tempLink.href = '${blobUrl}';
-                           tempLink.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
-                           tempLink.target = '_blank';
-                           
-                           // On mobile, this will typically open the image in a new tab
-                           // where users can use the share button to save to Photos
-                           tempLink.click();
-                           
-                           // Show mobile-specific instructions
-                           setTimeout(() => {
-                             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                             const isAndroid = /Android/i.test(navigator.userAgent);
-                             
-                             if (isIOS) {
-                               alert('Tap the Share button (square with arrow) at the bottom, then select "Save to Photos" to save to your photo gallery.');
-                             } else if (isAndroid) {
-                               alert('Tap the 3-dot menu and select "Download" or use the share button to save to your gallery.');
-                             } else {
-                               alert('Use your browser\\'s share or download option to save the image.');
-                             }
-                           }, 1000);
-                         }
-                         
-                       } catch (e) {
-                         console.error('Save failed:', e);
-                         alert('Please long press the image above and select "Save to Photos" or "Save Image".');
-                       }
-                     }
-                     
-                     // Clean up blob URL after a delay to prevent memory leaks
-                     setTimeout(() => {
-                       URL.revokeObjectURL('${blobUrl}');
-                     }, 60000);
-                   </script>
-                </body>
-              </html>
-            `);
-            newWindow.document.close();
-          }
-          
-          toast.dismiss(toastId);
-          toast.success('Image opened in new tab. Long press to save!');
-          
-                 } catch (blobError) {
-           console.error('Error creating blob URL:', blobError);
-           // Fallback to original method if blob creation fails
-           const newWindow = window.open('', '_blank');
-           if (newWindow) {
-             newWindow.document.write(`
-               <!DOCTYPE html>
-               <html>
-                 <head>
-                   <title>Journal Export</title>
-                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                   <style>
-                     body { 
-                       margin: 0; 
-                       padding: 20px; 
-                       background: #000; 
-                       display: flex; 
-                       flex-direction: column;
-                       justify-content: center; 
-                       align-items: center; 
-                       min-height: 100vh;
-                       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                     }
-                     .container {
-                       text-align: center;
-                       color: white;
-                       max-width: 90%;
-                     }
-                     h3 { 
-                       margin-bottom: 15px; 
-                       font-size: 24px;
-                     }
-                     p { 
-                       margin: 10px 0; 
-                       font-size: 16px;
-                     }
-                     img { 
-                       max-width: 100%; 
-                       height: auto; 
-                       border: 1px solid #333; 
-                       border-radius: 8px;
-                       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                     }
-                     .download-btn {
-                       background: #007AFF;
-                       color: white;
-                       border: none;
-                       padding: 12px 24px;
-                       border-radius: 8px;
-                       font-size: 16px;
-                       margin-top: 15px;
-                       cursor: pointer;
-                       text-decoration: none;
-                       display: inline-block;
-                     }
-                     .help-text {
-                       margin-top: 20px;
-                       font-size: 14px;
-                       color: #ccc;
-                       line-height: 1.4;
-                     }
-                   </style>
-                 </head>
-                 <body>
-                   <div class="container">
-                     <h3>Your Journal Export</h3>
-                     <p>Long press the image below to save it to your device.</p>
-                     <img src="${dataUrl}" alt="Journal Export" />
-                     <br>
-                     <button class="download-btn" onclick="downloadImage()">
-                       Save to Photos
-                     </button>
-                     <p class="help-text">
-                       • Tap the button above to save to your photo gallery<br>
-                       • Or long press the image and select "Save to Photos"<br>
-                       • The image will open in a new tab where you can use the share button
-                     </p>
-                   </div>
-                   <script>
-                                           function downloadImage() {
-                        try {
-                          console.log('Attempting mobile save (fallback)...');
-                          
-                          // Check if we can use the Web Share API for native sharing
-                          if (navigator.share && navigator.canShare) {
-                            // Convert dataUrl to blob for sharing
-                            fetch('${dataUrl}')
-                              .then(response => response.blob())
-                              .then(blob => {
-                                const file = new File([blob], 'journal-${format(date, 'yyyy-MM-dd')}.png', { type: 'image/png' });
-                                if (navigator.canShare({ files: [file] })) {
-                                  navigator.share({
-                                    title: 'Journal Entry',
-                                    text: 'My journal entry from ${format(date, 'yyyy-MM-dd')}',
-                                    files: [file]
-                                  }).then(() => {
-                                    console.log('Shared successfully');
-                                  }).catch(err => {
-                                    console.log('Share cancelled or failed:', err);
-                                    fallbackSave();
-                                  });
-                                } else {
-                                  fallbackSave();
-                                }
-                              })
-                              .catch(err => {
-                                console.error('Failed to create blob for sharing:', err);
-                                fallbackSave();
-                              });
-                          } else {
-                            fallbackSave();
-                          }
-                          
-                          function fallbackSave() {
-                            // For mobile, we want to trigger the native save dialog
-                            // Create a temporary link that opens the image in a way that allows saving
-                            const tempLink = document.createElement('a');
-                            tempLink.href = '${dataUrl}';
-                            tempLink.download = 'journal-${format(date, 'yyyy-MM-dd')}.png';
-                            tempLink.target = '_blank';
-                            
-                            // On mobile, this will typically open the image in a new tab
-                            // where users can use the share button to save to Photos
-                            tempLink.click();
-                            
-                            // Show mobile-specific instructions
-                            setTimeout(() => {
-                              const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                              const isAndroid = /Android/i.test(navigator.userAgent);
-                              
-                              if (isIOS) {
-                                alert('Tap the Share button (square with arrow) at the bottom, then select "Save to Photos" to save to your photo gallery.');
-                              } else if (isAndroid) {
-                                alert('Tap the 3-dot menu and select "Download" or use the share button to save to your gallery.');
-                              } else {
-                                alert('Use your browser\\'s share or download option to save the image.');
-                              }
-                            }, 1000);
-                          }
-                          
-                        } catch (e) {
-                          console.error('Save failed:', e);
-                          alert('Please long press the image above and select "Save to Photos" or "Save Image".');
-                        }
-                      }
-                   </script>
-                 </body>
-               </html>
-             `);
-             newWindow.document.close();
-           }
-           toast.dismiss(toastId);
-           toast.success('Image opened in new tab. Long press to save!');
-         }
-        
-      } else {
-        // Standard download for other browsers
-        const link = document.createElement('a');
-        link.download = `journal-${format(date, 'yyyy-MM-dd')}.png`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast.dismiss(toastId);
-        toast.success('Image saved successfully!');
-      }
-      
-    } catch (error) {
-      console.error('Error saving image:', error);
-        toast.dismiss(toastId);
-      toast.error(`Failed to save image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-  
-  // Completely rewritten share function - ultra simplified
+    // PDF export function
   const handleShare = async () => {
     // Check authentication first
     if (!isAuthenticated) {
-      toast.error("Please sign in to share or download your journal");
+      toast.error("Please sign in to download your journal");
       navigate("/login");
       return;
     }
@@ -1990,12 +1557,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     
     const journalElement = journalRef.current;
     
-    // Device detection
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isMobile = isIOS || isAndroid;
-    
-    // Create a toast notification with progress bar
+    // Create a loading toast
     const toastId = toast.loading("Creating high-quality PDF...", {
       position: "bottom-center",
       autoClose: false,
@@ -2003,150 +1565,98 @@ const JournalForm: React.FC<JournalFormProps> = ({
       style: { maxWidth: '320px', width: '100%' }
     });
     
-    // Type alias for toast types used in update
-    type ToastUpdateType = 'success' | 'error' | 'info' | 'warning' | 'default';
-
-    const updateToast = (
-      content: React.ReactNode, 
-      type: ToastUpdateType = 'default', 
-      options: Partial<import('react-toastify').UpdateOptions> = {}
-    ) => {
-      toast.update(toastId, {
-        render: content,
-        type: type, // Pass the type directly
-        isLoading: false, // Assume no longer loading unless specified
-        ...options, // Spread other options like autoClose, closeButton, etc.
-      });
-    };
-    
-    updateToast("Initializing PDF export..."); // Initial message (type defaults to 'default')
-    
     try {
-      // Step 1: Capture canvas with high quality
-      updateToast("Capturing journal content (High Quality)...", 'default', { 
-        progress: 0.2, 
-        isLoading: true // Keep showing spinner
-      }); 
+      // Step 1: Capture the journal with maximum quality
+      toast.update(toastId, {
+        render: "Capturing journal content...",
+        isLoading: true
+      });
       
-      // Use higher scale for quality, consistent across devices if possible
-      const scale = 4; // Let's try scale 4 for both, aiming for quality
+      // Use maximum scale for highest quality
+      const scale = 6; // Higher scale for better quality
       
       const canvas = await html2canvas(journalElement, {
-          scale: scale,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
+        scale: scale,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 90000, // Increased timeout for higher scale
-        letterRendering: true
+        imageTimeout: 120000, // 2 minutes timeout
+        letterRendering: true,
+        foreignObjectRendering: true,
+        removeContainer: false,
+        width: journalElement.scrollWidth,
+        height: journalElement.scrollHeight
       });
       
-      // Step 2: Generate PDF
-      updateToast("Generating PDF document...", 'default', { 
-        progress: 0.5, 
-        isLoading: true 
+      // Step 2: Generate PDF with high quality settings
+      toast.update(toastId, {
+        render: "Generating PDF document...",
+        isLoading: true
       });
       
-      const imgWidth = 210; // A4 width mm
-      const pageHeight = 297; // A4 height mm
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pagesNeeded = Math.ceil(imgHeight / pageHeight);
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0); // High quality JPEG
       
-      // Add image to PDF pages
-      updateToast("Adding content to PDF...", 'default', { 
-        progress: 0.7, 
-        isLoading: true 
+      // Create PDF with high quality settings
+      const pdf = new jsPDF({ 
+        orientation: 'portrait', 
+        unit: 'mm', 
+        format: 'a4',
+        compress: false // Disable compression for better quality
       });
-      let heightLeft = imgHeight;
-      let position = 0;
-      for (let i = 0; i < pagesNeeded; i++) {
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, -position, imgWidth, imgHeight);
-        position += pageHeight;
-        heightLeft -= pageHeight;
-      }
       
-      // Step 3: Prepare output & attempt display/download
-      updateToast("Finalizing PDF...", 'default', { 
-        progress: 0.9, 
-        isLoading: true 
-      });
-      const filename = `journal-${new Date().toISOString().slice(0, 10)}.pdf`;
+      // Convert canvas to high quality image data
+      const imgData = canvas.toDataURL('image/png', 1.0); // Use PNG for lossless quality
       
-      // Determine browser on iOS
-      const isChromeIOS = navigator.userAgent.match("CriOS");
-      const isFirefoxIOS = navigator.userAgent.match("FxiOS");
-      const isSafariIOS = isIOS && !isChromeIOS && !isFirefoxIOS;
-      
-      // Attempt download using the most reliable methods first
-      try {
-        // Method 1: Use pdf.save() - works well on Desktop, Android, and Safari iOS
-        pdf.save(filename);
+      // Add image to PDF
+      if (imgHeight <= pageHeight) {
+        // Single page
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      } else {
+        // Multiple pages
+        let heightLeft = imgHeight;
+        let position = 0;
+        const pagesNeeded = Math.ceil(imgHeight / pageHeight);
         
-        // Update toast with instructions based on OS/browser
-        if (isSafariIOS) {
-          updateToast(
-            <div>
-              <p className="font-bold">✅ PDF Download Initiated!</p>
-              <p className="text-sm">Check Safari downloads (⬇️ icon) or the Files app.</p>
-              <p className="text-xs mt-1">Once downloaded, open the PDF and use Share &gt; &apos;Copy to Goodnotes&apos;.</p>
-            </div>,
-            'success',
-            { autoClose: 15000, isLoading: false, closeButton: true }
-          );
-        } else if (isIOS) { // Chrome, Firefox, etc. on iOS
-          updateToast(
-            <div>
-              <p className="font-bold">✅ PDF Download Attempted</p>
-              <p className="text-sm">If download doesn&apos;t start, try opening:</p>
-              {/* Add button to open data URI as fallback */}
-              <button 
-                onClick={() => {
-                  try {
-                    const pdfDataUri = pdf.output('datauristring');
-                    window.open(pdfDataUri, '_blank');
-                  } catch (e) { 
-                    alert('Could not open PDF directly. Please check downloads.');
-                  }
-                }}
-                className="mt-2 py-1 px-2 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
-              >
-                Open PDF in New Tab
-              </button>
-              <p className="text-xs mt-1">Then use Share &gt; &apos;Copy to Goodnotes&apos;. Check Files app if needed.</p>
-            </div>,
-            'info', // Use info as pdf.save might not work reliably here
-            { autoClose: 20000, isLoading: false, closeButton: true }
-          );
-          } else {
-          // Non-iOS (Desktop, Android) - Silent success
-          toast.dismiss(toastId);
+        for (let i = 0; i < pagesNeeded; i++) {
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, -position, imgWidth, imgHeight);
+          position += pageHeight;
+          heightLeft -= pageHeight;
         }
-      } catch (saveError) {
-        console.error("pdf.save() failed:", saveError);
-        // Fallback error message if pdf.save fails
-        updateToast(
-          <div>
-            <p className="font-bold">Download Failed</p>
-            <p className="text-sm">Could not save the PDF. Please try again.</p>
-          </div>,
-          'error',
-          { autoClose: 7000, isLoading: false, closeButton: true }
-        );
       }
+      
+      // Step 3: Download the PDF
+      toast.update(toastId, {
+        render: "Downloading PDF...",
+        isLoading: true
+      });
+      
+      const filename = `journal-${format(date, 'yyyy-MM-dd')}.pdf`;
+      
+      // Save the PDF
+      pdf.save(filename);
+      
+      // Success message
+      toast.update(toastId, {
+        render: "✅ High-quality PDF downloaded successfully!",
+        type: "success",
+        isLoading: false,
+        autoClose: 3000,
+        closeButton: true
+      });
       
     } catch (error) {
       console.error("Error creating PDF:", error);
-      updateToast(
-        <div>
-          <p className="font-bold">PDF Generation Failed</p>
-          <p className="text-sm">An error occurred. Please try again.</p>
-        </div>,
-        'error',
-        { autoClose: 7000, isLoading: false, closeButton: true }
-      );
+      toast.update(toastId, {
+        render: "❌ Failed to create PDF. Please try again.",
+        type: "error",
+        isLoading: false,
+        autoClose: 5000,
+        closeButton: true
+      });
     }
   };
   
@@ -2717,26 +2227,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         
                         {/* Download Options - Show when there's content to download */}
                         {(location.trim() || journalText.trim() || images.length > 0) && (
-                          <div className="flex justify-center gap-2 pt-2 border-t border-white/10">
-                            <button 
-                              type="button"
-                              onClick={handleSaveAsImage} 
-                              className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-lg flex items-center gap-1 md:gap-2 transition-all duration-200 backdrop-blur-sm border border-blue-500/30 text-xs md:text-sm"
-                            >
-                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-4 md:h-4">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                              </svg>
-                              Save Image
-                            </button>
+                          <div className="flex justify-center pt-2 border-t border-white/10">
                             <button 
                               type="button"
                               onClick={handleSaveAsPDF} 
-                              className="px-3 py-1.5 md:px-4 md:py-2 bg-purple-600/80 hover:bg-purple-600 text-white rounded-lg flex items-center gap-1 md:gap-2 transition-all duration-200 backdrop-blur-sm border border-purple-500/30 text-xs md:text-sm"
+                              className="px-4 py-2 md:px-6 md:py-3 bg-purple-600/80 hover:bg-purple-600 text-white rounded-lg flex items-center gap-2 transition-all duration-200 backdrop-blur-sm border border-purple-500/30 text-sm md:text-base font-medium"
                             >
-                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-4 md:h-4">
+                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-5 md:h-5">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                               </svg>
-                              Download PDF
+                              Download High-Quality PDF
                             </button>
                 </div>
                         )}
