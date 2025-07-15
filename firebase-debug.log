@@ -1,0 +1,39 @@
+[debug] [2025-07-15T21:27:48.045Z] ----------------------------------------------------------------------
+[debug] [2025-07-15T21:27:48.046Z] Command:       /opt/homebrew/Cellar/node/23.6.1/bin/node /opt/homebrew/bin/firebase deploy --only hosting
+[debug] [2025-07-15T21:27:48.047Z] CLI Version:   14.10.1
+[debug] [2025-07-15T21:27:48.047Z] Platform:      darwin
+[debug] [2025-07-15T21:27:48.047Z] Node Version:  v23.6.1
+[debug] [2025-07-15T21:27:48.047Z] Time:          Tue Jul 15 2025 14:27:48 GMT-0700 (Pacific Daylight Time)
+[debug] [2025-07-15T21:27:48.047Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-07-15T21:27:48.049Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-07-15T21:27:48.139Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-07-15T21:27:48.139Z] > authorizing via signed-in user (zainnkhatri@gmail.com)
+[debug] [2025-07-15T21:27:48.139Z] [iam] checking project mania-65325 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2025-07-15T21:27:48.139Z] Checked if tokens are valid: false, expires at: 1745815322432
+[debug] [2025-07-15T21:27:48.139Z] Checked if tokens are valid: false, expires at: 1745815322432
+[debug] [2025-07-15T21:27:48.139Z] > refreshing access token with scopes: []
+[debug] [2025-07-15T21:27:48.139Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-07-15T21:27:48.139Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-07-15T21:27:48.247Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-07-15T21:27:48.247Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-07-15T21:27:48.260Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/mania-65325:testIamPermissions [none]
+[debug] [2025-07-15T21:27:48.260Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/mania-65325:testIamPermissions x-goog-quota-user=projects/mania-65325
+[debug] [2025-07-15T21:27:48.260Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/mania-65325:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-07-15T21:27:48.358Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/mania-65325:testIamPermissions 200
+[debug] [2025-07-15T21:27:48.358Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/mania-65325:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2025-07-15T21:27:48.358Z] Checked if tokens are valid: true, expires at: 1752618467247
+[debug] [2025-07-15T21:27:48.358Z] Checked if tokens are valid: true, expires at: 1752618467247
+[debug] [2025-07-15T21:27:48.359Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/mania-65325 [none]
+[debug] [2025-07-15T21:27:48.509Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-07-15T21:27:48.509Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-07-15T21:27:48.605Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/mania-65325 200
+[debug] [2025-07-15T21:27:48.605Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/mania-65325 {"projectId":"mania-65325","projectNumber":"194788144457","displayName":"mania","name":"projects/mania-65325","resources":{"hostingSite":"mania-65325"},"state":"ACTIVE","etag":"1_68806afe-8f84-49b6-8d7e-d6ab3655d8f4"}
+[info] 
+[info] === Deploying to 'mania-65325'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2025-07-15T21:27:48.608Z] Checked if tokens are valid: true, expires at: 1752618467247
+[debug] [2025-07-15T21:27:48.608Z] Checked if tokens are valid: true, expires at: 1752618467247
+[debug] [2025-07-15T21:27:48.609Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/mania-65325/versions [none]
+[debug] [2025-07-15T21:27:48.609Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/mania-65325/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}

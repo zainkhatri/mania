@@ -34,7 +34,7 @@ export const AuthContext = createContext<AuthContextProps>({
   logout: () => {}
 });
 
-// Layout component that conditionally renders header and footer
+// Layout component that conditionally renders header and footers
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { isAuthenticated, logout } = useContext(AuthContext);
