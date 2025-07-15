@@ -177,13 +177,11 @@ window.CURRENT_COLORS = {
 
 interface JournalFormProps {
   templateUrl?: string;
-  isAuthenticated?: boolean;
   saveButtonText?: string;
 }
 
 const JournalForm: React.FC<JournalFormProps> = ({ 
   templateUrl = '/templates/cream-black-template.jpg',
-  isAuthenticated = false,
   saveButtonText = 'Create Journal'
 }) => {
   const navigate = useNavigate();
@@ -282,11 +280,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Function to save journal entry to Firestore
   const saveJournalToBackend = async () => {
-    if (!isAuthenticated) {
-      toast.error("Please sign in to save your journal");
-      navigate("/login");
-      return;
-    }
 
     // Show a loading toast
     const toastId = toast.loading("Saving your journal...");
@@ -1260,13 +1253,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check authentication first
-    if (!isAuthenticated) {
-      toast.error("Please sign in to create a journal");
-      navigate("/login");
-      return;
-    }
-    
     // Break the journal text into paragraphs
     const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
     
@@ -1297,10 +1283,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       console.error('Error saving submitted journal');
     }
     
-    // Always save to backend if user is authenticated
-    if (isAuthenticated) {
-      saveJournalToBackend();
-    }
+    // Save to backend
+    saveJournalToBackend();
   };
   
   const handleReset = () => {
@@ -1546,12 +1530,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
     // PDF export function
   const handleShare = async () => {
-    // Check authentication first
-    if (!isAuthenticated) {
-      toast.error("Please sign in to download your journal");
-      navigate("/login");
-      return;
-    }
     
     // Create a loading toast
     const toastId = toast.loading("Creating high-quality PDF...", {
@@ -1767,13 +1745,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Handle PDF Save function (for dropdown menu)
   const handleSaveAsPDF = async () => {
-    // Check authentication before saving as PDF
-    if (!isAuthenticated) {
-      toast.error("Please sign in to create a PDF");
-      navigate("/login");
-      return;
-    }
-    
     // Reuse the share functionality which now focuses on PDF export
     handleShare();
   };

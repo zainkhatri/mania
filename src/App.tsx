@@ -1,51 +1,24 @@
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import JournalCanvas from './components/JournalCanvas';
-
 import JournalForm from './components/JournalForm';
-import Login from './components/auth/Login';
 import Home from './components/Home';
-import StreakIndicator from './components/StreakIndicator';
-
-interface User {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-}
-
-// Create AuthContext
-interface AuthContextProps {
-  isAuthenticated: boolean;
-  user: User | null;
-  login: (token: string) => void;
-  logout: () => void;
-}
-
-export const AuthContext = createContext<AuthContextProps>({
-  isAuthenticated: false,
-  user: null,
-  login: () => {},
-  logout: () => {}
-});
 
 // Layout component that conditionally renders header and footer
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const { isAuthenticated, logout } = useContext(AuthContext);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoHighlight, setLogoHighlight] = useState(false);
   const [isLogoHovered, setIsLogoHovered] = useState(false);
   const [typedText, setTypedText] = useState("");
   const fullText = "ania";
   
-  // Exclude header/footer from both home and login pages
-  const shouldHideNav = location.pathname === '/' || location.pathname === '/login';
+  // Exclude header/footer from home page
+  const shouldHideNav = location.pathname === '/';
   
   // Typewriter effect for the logo
   useEffect(() => {
@@ -96,7 +69,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   
   return (
     <>
-      {/* Only show header and mobile menu on pages that aren't home or login */}
+      {/* Only show header and mobile menu on pages that aren't home */}
       {!shouldHideNav && (
         <>
           {/* Navigation */}
@@ -113,26 +86,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
                 {/* Desktop menu */}
                 <div className="hidden md:flex items-center gap-6">
-                  {isAuthenticated && (
-                    <div className="flex items-center">
-                      <StreakIndicator />
-                    </div>
-                  )}
-                  {isAuthenticated ? (
-                    <button 
-                      onClick={logout}
-                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
-                    >
-                      Sign out
-                    </button>
-                  ) : (
-                    <Link 
-                      to="/login"
-                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
-                    >
-                      Sign in
-                    </Link>
-                  )}
+                  {/* Navigation content can be added here if needed */}
                 </div>
 
                 {/* Mobile menu button */}
@@ -167,30 +121,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 className="md:hidden absolute w-full bg-black/90 backdrop-blur-md shadow-lg border-b border-white/20 z-40"
               >
                 <div className="px-4 py-3 space-y-2">
-                  {isAuthenticated && (
-                    <div className="px-3 py-2 border-b border-white/10">
-                      <StreakIndicator />
-                    </div>
-                  )}
-                  {isAuthenticated ? (
-                    <button
-                      onClick={() => {
-                        logout();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
-                    >
-                      Sign out
-                    </button>
-                  ) : (
-                    <Link
-                      to="/login"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="block px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
-                    >
-                      Sign in
-                    </Link>
-                  )}
+                  {/* Mobile menu content can be added here if needed */}
                 </div>
               </motion.div>
             )}
@@ -203,7 +134,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
       
-      {/* Only show footer on non-home, non-login pages and hide on mobile */}
+      {/* Only show footer on non-home pages and hide on mobile */}
       {!shouldHideNav && (
         <footer className="hidden md:block bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -218,111 +149,37 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Effect to check if user is logged in using Firebase Auth
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName
-        });
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setLoading(false);
-    });
-    
-    return () => unsubscribe();
-  }, []);
-
-  // Handle login
-  const login = (token: string) => {
-    // Note: actual login is handled by Firebase Auth
-    console.log("Login with token:", token);
-  };
-  
-  // Handle logout
-  const logout = () => {
-    auth.signOut().then(() => {
-      setIsAuthenticated(false);
-      setUser(null);
-    }).catch((error) => {
-      console.error("Error signing out:", error);
-    });
-  };
-  
-  // Auth context value
-  const authContextValue = {
-    isAuthenticated,
-    user,
-    login,
-    logout
-  };
-
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-      </div>
-    );
-  }
-
   return (
-    <AuthContext.Provider value={authContextValue}>
-      <Router>
-        <div className="min-h-screen flex flex-col bg-gray-50">
-          {/* Only wrap in Layout if not on mobile journal */}
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route 
+    <Router>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Routes>
+          <Route path="/" element={<Home />} />
+                        <Route 
                 path="/journal" 
                 element={
-                  isAuthenticated ? (
-                    <Layout>
-                    <JournalForm isAuthenticated={isAuthenticated} />
-                    </Layout>
-                  ) : (
-                    <Navigate to="/login" replace />
-                  )
+                  <Layout>
+                    <JournalForm />
+                  </Layout>
                 } 
               />
-              <Route 
-                path="/login" 
-                element={
-                  isAuthenticated ? (
-                    <Navigate to="/journal" replace />
-                  ) : (
-                    <Login />
-                  )
-                } 
-              />
-            </Routes>
-        </div>
-        {/* Toast notifications container */}
-        <ToastContainer 
-          position="bottom-center"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="dark"
-        />
-      </Router>
-    </AuthContext.Provider>
+        </Routes>
+      </div>
+      {/* Toast notifications container */}
+      <ToastContainer 
+        position="bottom-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
+    </Router>
   );
 }
 

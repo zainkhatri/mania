@@ -1,24 +1,18 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../App';
 import { clearJournalCache } from '../utils/storageUtils';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useContext(AuthContext);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [showGlitch, setShowGlitch] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Function to handle starting the journal
   const handleStart = () => {
-    if (isAuthenticated) {
-      // Clear any previous journal drafts or submissions
-      clearJournalCache();
-      navigate('/journal');
-    } else {
-      navigate('/login');
-    }
+    // Clear any previous journal drafts or submissions
+    clearJournalCache();
+    navigate('/journal');
   };
 
   // Effect to create dynamic title style cycling
