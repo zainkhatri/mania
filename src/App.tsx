@@ -121,18 +121,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </AnimatePresence>
       
       {/* Main content */}
-      <main className="flex-grow relative z-10">
+      <main className="flex-grow relative z-10 overflow-hidden">
         {children}
       </main>
-      
-      {/* Footer */}
-      <footer className="hidden md:block bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-xs sm:text-sm text-white/60">
-            © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
-          </p>
-        </div>
-      </footer>
     </>
   );
 };
@@ -142,7 +133,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
         <Routes>
           <Route path="/" element={<Navigate to="/journal" replace />} />
           <Route 

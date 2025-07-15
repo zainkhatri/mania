@@ -120,6 +120,7 @@ interface JournalCanvasProps {
   onTextClick?: (area: ClickableTextArea) => void; // Callback when text is clicked
   onImageDrag?: (index: number, x: number, y: number) => void; // Callback when image is dragged
   onImageClick?: (x: number, y: number) => void; // Callback when image is clicked for eyedropper
+  onImageDelete?: (index: number) => void; // Callback when image delete button is clicked
   forceUpdate?: number; // Add timestamp to force updates
   onAddSticker?: (e: React.ChangeEvent<HTMLInputElement>) => void; // Add callback for sticker button
   template?: {
@@ -141,6 +142,8 @@ interface JournalCanvasProps {
   showCursor?: boolean; // Add showCursor prop
   cursorVisible?: boolean; // Add cursorVisible prop
   cursorPosition?: { textAreaIndex: number; characterIndex: number } | { isLocation: true; characterIndex: number }; // Add cursorPosition prop
+  needInspiration?: boolean; // Whether to show inspiration question
+  inspirationQuestion?: string; // The inspiration question to display
 }
 
 // Export the imperative handle type
@@ -227,6 +230,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   showCursor = false,
   cursorVisible = false,
   cursorPosition,
+  needInspiration = false,
+  inspirationQuestion = '',
   ...props
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -265,6 +270,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     resizeBtn: null
   });
   const [hoveredButton, setHoveredButton] = useState<'delete' | 'rotate' | 'resize' | null>(null);
+  const [hoveredImage, setHoveredImage] = useState<number | null>(null);
   const [debounceRender, setDebounceRender] = useState(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -1131,6 +1137,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         }
       }
       
+
+      
       // Draw cursor if enabled - always show when focused, blink with cursorVisible
       if (showCursor && cursorPosition) {
         console.log('Cursor drawing conditions met:', { showCursor, cursorPosition, cursorVisible });
@@ -1411,6 +1419,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             text: '',
             index: i
           });
+          
+          // Draw delete button if image is hovered and in edit mode
+          if (props.editMode && hoveredImage === i) {
+            const deleteBtnX = position.x + position.width - 20;
+            const deleteBtnY = position.y + 20;
+            drawSFSymbolButton(
+              ctx,
+              deleteBtnX,
+              deleteBtnY,
+              '#ff4444', // Red background
+              'delete',
+              20, // Smaller radius for image delete buttons
+              false
+            );
+          }
         }
       } catch (err) {
         console.error('Error drawing images:', err);
@@ -1967,6 +1990,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
     console.log("Canvas clicked at:", mouseX, mouseY);
 
+    // First check for image delete button clicks
+    if (props.editMode && hoveredImage !== null && imagePositionsRef.current[hoveredImage]) {
+      const position = imagePositionsRef.current[hoveredImage];
+      const deleteBtnX = position.x + position.width - 20;
+      const deleteBtnY = position.y + 20;
+      const btnRadius = 20;
+      
+      // Check if delete button was clicked
+      if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= btnRadius) {
+        console.log("Deleting image:", hoveredImage);
+        if (props.onImageDelete) {
+          props.onImageDelete(hoveredImage);
+        }
+        setHoveredImage(null);
+        return;
+      }
+    }
+
     // First check for button clicks if a sticker is active
     if (activeSticker !== null && stickerButtonsData.deleteBtn) {
       const deleteBtn = stickerButtonsData.deleteBtn;
@@ -2146,6 +2187,46 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           setCanvasCursor('default');
         }
         
+        debouncedRender();
+      }
+    }
+    
+    // Check for image hover
+    if (props.editMode && imagePositionsRef.current.length > 0) {
+      let foundHoveredImage = false;
+      
+      // Check each image for hover
+      for (let i = 0; i < imagePositionsRef.current.length; i++) {
+        const position = imagePositionsRef.current[i];
+        
+        // Check if mouse is within image bounds
+        if (x >= position.x && x <= position.x + position.width &&
+            y >= position.y && y <= position.y + position.height) {
+          
+          // Check if hovering over delete button
+          const deleteBtnX = position.x + position.width - 20;
+          const deleteBtnY = position.y + 20;
+          const btnRadius = 20;
+          
+          if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius) {
+            setCanvasCursor('pointer');
+          } else {
+            setCanvasCursor('default');
+          }
+          
+          if (hoveredImage !== i) {
+            setHoveredImage(i);
+            debouncedRender();
+          }
+          foundHoveredImage = true;
+          break;
+        }
+      }
+      
+      // If not hovering over any image, clear hover state
+      if (!foundHoveredImage && hoveredImage !== null) {
+        setHoveredImage(null);
+        setCanvasCursor('default');
         debouncedRender();
       }
     }

@@ -197,6 +197,24 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [needInspiration, setNeedInspiration] = useState(false);
+  
+  // Inspiration questions that appear in the journal preview
+  const getInspirationQuestion = () => {
+    const questions = [
+      "What made today special?",
+      "What's something you're grateful for right now?",
+      "What challenged you today and how did you handle it?",
+      "What's a moment that made you smile today?",
+      "What are you looking forward to?",
+      "What did you learn about yourself today?",
+      "What's something you accomplished that you're proud of?",
+      "What's on your mind that you'd like to explore?",
+      "How are you feeling right now and why?",
+      "What's something beautiful you noticed today?"
+    ];
+    return questions[Math.floor(Math.random() * questions.length)];
+  };
 
   const [isJournalCollapsed, setIsJournalCollapsed] = useState(false);
   const [textColors, setTextColors] = useState<TextColors>({
@@ -1999,19 +2017,19 @@ const JournalForm: React.FC<JournalFormProps> = ({
   };
 
   return (
-    <div className="bg-black min-h-screen w-full">
-      <div className="relative journal-form-container">
+    <div className="bg-black h-screen w-full overflow-hidden">
+      <div className="relative journal-form-container h-full">
         {/* Black background instead of video */}
         <div className="absolute w-full h-full bg-black z-0"></div>
         {/* Main content */}
-        <div className="relative z-10">
-          {/* Journal editor content - Now fully scrollable */}
-          <div className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto min-h-screen">
+        <div className="relative z-10 h-full">
+          {/* Journal editor content - No scroll, fit viewport */}
+          <div className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto h-full -mt-3">
             {/* Side by side layout on desktop, stacked on mobile */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-8 max-w-[1600px] mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-8 max-w-[1600px] mx-auto h-full">
               
               {/* Journal Preview - Collapsible on mobile, top on mobile, right on desktop */}
-              <div className="bg-black/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 overflow-hidden order-1 md:order-2 md:sticky md:top-8 md:h-fit">
+              <div className="bg-black/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 overflow-hidden order-1 md:order-2 md:sticky md:top-8 md:h-fit mt-4">
                 <div className="p-2 md:p-3 lg:p-6 border-b border-white/10 flex justify-between items-center">
                   <h3 className="text-base md:text-lg lg:text-2xl font-semibold text-white">
                     Journal Preview
@@ -2059,6 +2077,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           console.log(`Image ${index} dragged to ${x},${y}`);
                         }}
                         onImageClick={handleCanvasImageClick}
+                        onImageDelete={removeImage}
                       />
                     </div>
                   </div>
@@ -2077,7 +2096,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     transition={{ duration: 0.5 }}
                   >
                     {/* Compact mobile layout */}
-                    <div className="space-y-1 md:space-y-3 lg:space-y-6">
+                    <div className="space-y-4 md:space-y-5 lg:space-y-6">
                                               {/* Date and Location Row - Always side by side for compact layout */}
                         <div className="grid grid-cols-2 gap-2 md:gap-6">
                         {/* Date Picker */}
@@ -2137,21 +2156,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             <span>Images ({images.length}/3)</span>
                           </label>
                           
-                          {/* Add Sticker button */}
-                          {images.length > 0 && (
-                            <div className="flex items-center mb-1">
-                              <label className="bg-blue-600/80 hover:bg-blue-600 text-white py-1 px-2 md:py-1 md:px-3 lg:py-1 lg:px-3 rounded-lg cursor-pointer transition-all duration-200 backdrop-blur-sm border border-blue-500/30 text-xs md:text-sm lg:text-sm">
-                                Add Stickers
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={handleStickerUpload}
-                                  className="hidden"
-                                  multiple
-                                />
-                              </label>
-                            </div>
-                          )}
+
                           
                           {/* Image upload area - only show when we have fewer than 3 images */}
                           {images.length < 3 && (
@@ -2181,103 +2186,122 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             </div>
                           )}
 
-                          {images.length > 0 && (
-                            <motion.div 
-                              className="grid grid-cols-3 gap-1 mt-1"
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {images.map((image, index) => (
-                                <div 
-                                  key={index} 
-                                  className="relative group overflow-hidden rounded-lg shadow-lg border border-white/20 aspect-square bg-black/20 backdrop-blur-sm"
-                                >
-                                  <img 
-                                    src={image} 
-                                    alt={`Upload ${index + 1}`} 
-                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => removeImage(index)}
-                                    className="absolute top-0.5 right-0.5 bg-black/80 backdrop-blur-sm p-1 lg:p-1 rounded-full shadow-lg text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:scale-110"
-                                  >
-                                    <svg className="w-3 h-3 lg:w-3 lg:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
-                                  </button>
-                                </div>
-                              ))}
-                            </motion.div>
-                          )}
 
-                          {/* Layout Toggle - Under Images */}
-                          <div className="flex justify-center md:justify-start mt-2">
-                            <div className="scale-75 md:scale-90 lg:scale-100">
-                              <LayoutToggle
-                                layoutMode={layoutMode}
-                                setLayoutMode={setLayoutMode}
-                              />
+
+                          {/* Layout Toggle and Colors - Side by side */}
+                          <div className="grid grid-cols-2 gap-6" style={{ marginTop: '2rem' }}>
+                            {/* Layout Toggle */}
+                            <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3">
+                              <div className="flex justify-center">
+                                <div className="scale-90">
+                                  <LayoutToggle
+                                    layoutMode={layoutMode}
+                                    setLayoutMode={setLayoutMode}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Colors - Compact */}
+                            <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3">
+                              <label className="block text-sm font-medium text-white flex items-center gap-2 mb-3">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                                </svg>
+                                <span>Colors</span>
+                              </label>
+                              <div className="grid grid-cols-4 gap-2">
+                                <SimpleColorPicker 
+                                  colors={textColors}
+                                  onChange={handleColorChange}
+                                  images={submitted ? submittedData.images : images}
+                                  compact={true}
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
 
-                        {/* Colors - Compact */}
-                        <div className="space-y-1">
-                          <label className="block text-sm md:text-sm font-medium text-white flex items-center gap-1 md:gap-2">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-                            </svg>
-                            <span>Colors</span>
-                          </label>
-                          <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-1 md:p-2">
-                            <SimpleColorPicker 
-                              colors={textColors}
-                              onChange={handleColorChange}
-                              images={submitted ? submittedData.images : images}
-                              compact={true}
-                            />
-                      </div>
-                    </div>
-
                                                                       {/* Journal Entry - Long and at bottom */}
                         <div className="space-y-1">
-                          <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        <span>Journal Entry</span>
-                      </label>
-                      <textarea
-                            ref={textareaRef}
-                        id="journalText"
-                        value={journalText}
-                            onChange={(e) => {
-                              setJournalText(e.target.value);
-                              // Auto-resize textarea
-                              const textarea = e.target;
-                              textarea.style.height = 'auto';
-                              textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px';
-                            }}
-                        placeholder="Write your journal entry here..."
-                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 lg:px-4 lg:py-3 min-h-[80px] text-white transition-all duration-200 bg-black/40 backdrop-blur-sm text-base md:text-lg resize-none overflow-hidden"
-                            style={{ height: 'auto' }}
-                        required
-                      />
-                      {journalText.trim().length > 0 && (
-                        <JournalEnhancer
-                          journalText={journalText}
-                          location={location}
-                          minWordCount={10}
-                          showInitially={false}
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                              </svg>
+                              <span>Journal Entry</span>
+                            </label>
+                            
+                            {/* Need Inspiration Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => setNeedInspiration(!needInspiration)}
+                              className="flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ease-in-out text-sm font-medium text-white hover:text-gray-200"
+                            >
+                              {/* Toggle Switch Track */}
+                              <div className={`relative w-10 h-6 rounded-full transition-all duration-300 ${
+                                needInspiration ? 'bg-blue-400' : 'bg-gray-600'
+                              }`}>
+                                {/* Toggle Knob */}
+                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out ${
+                                  needInspiration ? 'translate-x-4' : 'translate-x-0.5'
+                                }`}></div>
+                              </div>
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                              </svg>
+                              <span className="hidden sm:inline">Need Inspiration</span>
+                            </button>
+                          </div>
+                      <div className="relative">
+                        <textarea
+                          ref={textareaRef}
+                          id="journalText"
+                          value={journalText}
+                          onChange={(e) => {
+                            setJournalText(e.target.value);
+                            // Auto-resize textarea
+                            const textarea = e.target;
+                            textarea.style.height = 'auto';
+                            textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px';
+                          }}
+                          placeholder="Write your journal entry here..."
+                          className={`w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 lg:px-4 lg:py-3 min-h-[80px] transition-all duration-200 resize-none overflow-hidden ${
+                            needInspiration && journalText.trim().split(/\s+/).filter(word => word.length > 0).length >= 8 ? 'bg-transparent text-transparent' : 'bg-black/40 text-white'
+                          }`}
+                          style={{ height: 'auto', fontSize: '98px' }}
+                          required
                         />
-                      )}
+                        
+                        {/* Integrated inspiration text that appears after 8+ words */}
+                        {needInspiration && journalText.trim().split(/\s+/).filter(word => word.length > 0).length >= 8 && (
+                          <div 
+                            className="absolute inset-0 pointer-events-none w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 lg:px-4 lg:py-3 min-h-[80px] transition-all duration-200 resize-none overflow-hidden"
+                            style={{ 
+                              fontFamily: 'inherit',
+                              lineHeight: 'inherit',
+                              whiteSpace: 'pre-wrap',
+                              wordWrap: 'break-word',
+                              overflow: 'hidden',
+                              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                              borderRadius: '0.5rem',
+                              minHeight: '80px',
+                              padding: '10px',
+                              fontSize: '22px'
+                            }}
+                          >
+                            <div style={{ fontSize: '22px' }}>
+                              <span className="text-white" style={{ fontSize: '22px' }}>{journalText}</span><span className="text-gray-500/60" style={{ fontSize: '22px' }}> {getInspirationQuestion()}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                         <p className="text-xs lg:text-xs text-gray-400 mt-1 lg:mt-1">Use double line breaks to create new paragraphs.</p>
               </div>
 
                       {/* Action Buttons - Under Journal Entry */}
-                      <div className="space-y-2 pb-8">
+                      <div className="space-y-2 pb-8 mb-4">
                         <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10">
                     <button 
                       type="button"
@@ -2291,31 +2315,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     </button>
                     <button 
                       type="button"
-                      onClick={handleSubmit} 
+                      onClick={handleSaveAsPDF} 
                             className="px-4 py-1.5 md:px-6 md:py-2 bg-green-600/80 hover:bg-green-600 text-white rounded-lg flex items-center gap-1 md:gap-2 transition-all duration-200 backdrop-blur-sm border border-green-500/30 text-sm md:text-base"
                     >
                             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-4 md:h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                       </svg>
                       Create Journal
                     </button>
                   </div>
-                        
-                        {/* Download Options - Show when there's content to download */}
-                        {(location.trim() || journalText.trim() || images.length > 0) && (
-                          <div className="flex justify-center pt-2 border-t border-white/10">
-                            <button 
-                              type="button"
-                              onClick={handleSaveAsPDF} 
-                              className="px-4 py-2 md:px-6 md:py-3 bg-purple-600/80 hover:bg-purple-600 text-white rounded-lg flex items-center gap-2 transition-all duration-200 backdrop-blur-sm border border-purple-500/30 text-sm md:text-base font-medium"
-                            >
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-5 md:h-5">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                              </svg>
-                              Download High-Quality PDF
-                            </button>
-                </div>
-                        )}
               </div>
             </div>
                   </motion.div>
