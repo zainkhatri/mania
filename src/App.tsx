@@ -1,79 +1,64 @@
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ToastContainer, toast } from 'react-toastify';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import JournalCanvas from './components/JournalCanvas';
-
+import './mobile-scroll-fix.css';
 import JournalForm from './components/JournalForm';
-import Login from './components/auth/Login';
 import Home from './components/Home';
-import StreakIndicator from './components/StreakIndicator';
 
-interface User {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
+
+// Extend Window interface for global functions
+declare global {
+  interface Window {
+    handleHighQualityPDFExport?: () => void;
+    handleReset?: () => void;
+  }
 }
-
-// Create AuthContext
-interface AuthContextProps {
-  isAuthenticated: boolean;
-  user: User | null;
-  login: (token: string) => void;
-  logout: () => void;
-}
-
-export const AuthContext = createContext<AuthContextProps>({
-  isAuthenticated: false,
-  user: null,
-  login: () => {},
-  logout: () => {}
-});
 
 // Layout component that conditionally renders header and footer
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const { isAuthenticated, logout } = useContext(AuthContext);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [logoHighlight, setLogoHighlight] = useState(false);
   const [isLogoHovered, setIsLogoHovered] = useState(false);
-  const [typedText, setTypedText] = useState("");
-  const fullText = "ania";
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showGlitch, setShowGlitch] = useState(false);
   
-  // Exclude header/footer from both home and login pages
-  const shouldHideNav = location.pathname === '/' || location.pathname === '/login';
+  // Exclude header/footer from home page
+  const shouldHideNav = location.pathname === '/';
   
-  // Typewriter effect for the logo
+  // Home screen style animation for the logo
   useEffect(() => {
-    // Only animate when hovered and on journal page
     if (isLogoHovered && location.pathname === '/journal') {
-      let currentIndex = 0;
-      const typingInterval = setInterval(() => {
-        if (currentIndex < fullText.length) {
-          setTypedText(fullText.substring(0, currentIndex + 1));
-          currentIndex++;
-        } else {
-          clearInterval(typingInterval);
+      // Create dynamic title style cycling like home screen
+      const styleInterval = setInterval(() => {
+        // Pick a random letter to highlight instead of cycling sequentially
+        // Only cycle through "ania" (4 letters), not "mania" (5 letters)
+        const randomIndex = Math.floor(Math.random() * 4);
+        setHighlightIndex(randomIndex);
+      }, 200); // Fast random cycling
+      
+      const glitchInterval = setInterval(() => {
+        // Random glitch effect
+        if (Math.random() > 0.7) {
+          setShowGlitch(true);
+          setTimeout(() => setShowGlitch(false), 150);
         }
-      }, 100); // Speed of typing
+      }, 1200);
       
       return () => {
-        clearInterval(typingInterval);
+        clearInterval(styleInterval);
+        clearInterval(glitchInterval);
       };
-    } else if (!isLogoHovered) {
-      setTypedText("");
+    } else {
+      // Reset when not hovered
+      setHighlightIndex(0);
+      setShowGlitch(false);
     }
   }, [isLogoHovered, location.pathname]);
   
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+
   
-  // Render the logo with typewriter animation
+  // Render the logo with home screen style animation
   const renderLogo = () => {
     const isJournalPage = location.pathname === '/journal';
     
@@ -85,8 +70,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onMouseLeave={() => setIsLogoHovered(false)}
           style={{ minWidth: "200px" }}
         >
-          <span className="logo-m">m</span>
-          <span className="logo-m">{typedText}</span>
+          {isLogoHovered ? (
+            <span 
+              className="text-flicker"
+              style={{ 
+                filter: showGlitch ? 'hue-rotate(90deg) brightness(1.5)' : 'none',
+                transition: 'filter 0.1s'
+              }}
+            >
+              {renderTitle()}
+            </span>
+          ) : (
+            <span className="logo-m">m</span>
+          )}
         </div>
       );
     } else {
@@ -94,13 +90,34 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
   
+  // Render the title with one highlighted letter at a time (like home screen)
+  const renderTitle = () => {
+    const word = "ania";
+    
+    return (
+      <span className="title-container">
+        <span className="logo-m">m</span>
+        {word.split('').map((letter, index) => (
+          <span 
+            key={`letter-${index}-${highlightIndex}`}
+            className={index === highlightIndex 
+              ? "letter-highlight" 
+              : "letter-normal"}
+          >
+            {letter}
+          </span>
+        ))}
+      </span>
+    );
+  };
+  
   return (
     <>
-      {/* Only show header and mobile menu on pages that aren't home or login */}
+      {/* Only show header and mobile menu on pages that aren't home */}
       {!shouldHideNav && (
         <>
-          {/* Navigation */}
-          <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md">
+          {/* Navigation - Hidden on mobile */}
+          <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-14">
                 <div className="flex items-center">
@@ -113,216 +130,108 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
                 {/* Desktop menu */}
                 <div className="hidden md:flex items-center gap-6">
-                  {isAuthenticated && (
-                    <div className="flex items-center">
-                      <StreakIndicator />
-                    </div>
-                  )}
-                  {isAuthenticated ? (
-                    <button 
-                      onClick={logout}
-                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
-                    >
-                      Sign out
-                    </button>
-                  ) : (
-                    <Link 
-                      to="/login"
-                      className="py-2 px-4 border border-white/30 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
-                    >
-                      Sign in
-                    </Link>
-                  )}
                 </div>
 
-                {/* Mobile menu button */}
-                <div className="md:hidden flex items-center">
+                {/* Desktop action buttons */}
+                <div className="hidden md:flex items-center gap-2">
+                  {/* Download Journal Button */}
                   <button
-                    onClick={toggleMobileMenu}
-                    className="inline-flex items-center justify-center p-2 rounded-lg text-white hover:bg-white/10 focus:outline-none transition-all duration-200"
+                    onClick={() => {
+                      // We'll need to pass this function from JournalForm
+                      if (window.handleHighQualityPDFExport) {
+                        window.handleHighQualityPDFExport();
+                      }
+                    }}
+                    className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white focus:outline-none transition-all duration-200"
+                    title="Download Journal"
                   >
-                    <span className="sr-only">Open main menu</span>
-                    {!isMobileMenuOpen ? (
-                      <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                      </svg>
-                    ) : (
-                      <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
+                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                  </button>
+                  
+                  {/* Clear Journal Button */}
+                  <button
+                    onClick={() => {
+                      // We'll need to pass this function from JournalForm
+                      if (window.handleReset) {
+                        window.handleReset();
+                      }
+                    }}
+                    className="inline-flex items-center justify-center p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white focus:outline-none transition-all duration-200"
+                    title="Clear Journal"
+                  >
+                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
                   </button>
                 </div>
               </div>
             </div>
           </nav>
           
-          {/* Mobile menu */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="md:hidden absolute w-full bg-black/90 backdrop-blur-md shadow-lg border-b border-white/20 z-40"
-              >
-                <div className="px-4 py-3 space-y-2">
-                  {isAuthenticated && (
-                    <div className="px-3 py-2 border-b border-white/10">
-                      <StreakIndicator />
-                    </div>
-                  )}
-                  {isAuthenticated ? (
-                    <button
-                      onClick={() => {
-                        logout();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
-                    >
-                      Sign out
-                    </button>
-                  ) : (
-                    <Link
-                      to="/login"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="block px-3 py-2 rounded-lg text-base font-medium text-white hover:bg-white/10 transition-all duration-200"
-                    >
-                      Sign in
-                    </Link>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
         </>
       )}
       
       {/* Main content */}
-      <main className="flex-grow relative z-10">
+      <main className="flex-1 relative z-10 overflow-hidden">
         {children}
       </main>
       
-      {/* Only show footer on non-home, non-login pages and hide on mobile */}
-      {!shouldHideNav && (
-        <footer className="hidden md:block bg-black/80 backdrop-blur-md py-3 border-t border-white/10 relative z-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-xs sm:text-sm text-white/60">
-              © {new Date().getFullYear()} Create zain's journals without the pen in your hand.
-            </p>
-          </div>
-        </footer>
-      )}
+      {/* Footer removed */}
     </>
   );
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Effect to check if user is logged in using Firebase Auth
+  // Check if device is mobile on mount and resize
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName
-        });
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setLoading(false);
-    });
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
     
-    return () => unsubscribe();
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Handle login
-  const login = (token: string) => {
-    // Note: actual login is handled by Firebase Auth
-    console.log("Login with token:", token);
-  };
-  
-  // Handle logout
-  const logout = () => {
-    auth.signOut().then(() => {
-      setIsAuthenticated(false);
-      setUser(null);
-    }).catch((error) => {
-      console.error("Error signing out:", error);
-    });
-  };
-  
-  // Auth context value
-  const authContextValue = {
-    isAuthenticated,
-    user,
-    login,
-    logout
-  };
-
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-      </div>
-    );
-  }
-
   return (
-    <AuthContext.Provider value={authContextValue}>
-      <Router>
-        <div className="min-h-screen flex flex-col bg-gray-50">
-          {/* Only wrap in Layout if not on mobile journal */}
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route 
-                path="/journal" 
-                element={
-                  isAuthenticated ? (
-                    <Layout>
-                    <JournalForm isAuthenticated={isAuthenticated} />
-                    </Layout>
-                  ) : (
-                    <Navigate to="/login" replace />
-                  )
-                } 
-              />
-              <Route 
-                path="/login" 
-                element={
-                  isAuthenticated ? (
-                    <Navigate to="/journal" replace />
-                  ) : (
-                    <Login />
-                  )
-                } 
-              />
-            </Routes>
-        </div>
-        {/* Toast notifications container */}
-        <ToastContainer 
-          position="bottom-center"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="dark"
-        />
-      </Router>
-    </AuthContext.Provider>
+    <Router>
+      <div className="h-screen flex flex-col bg-black overflow-hidden mobile-scroll-container">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route 
+            path="/journal" 
+            element={
+              isMobile ? (
+                <JournalForm />
+              ) : (
+                <Layout>
+                  <JournalForm />
+                </Layout>
+              )
+            } 
+          />
+        </Routes>
+      </div>
+      {/* Toast notifications container */}
+      <ToastContainer 
+        position="bottom-center"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
+    </Router>
   );
 }
 

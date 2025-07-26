@@ -35,7 +35,7 @@ This application uses the OpenAI API to generate personalized journal prompts:
 2. Get your API key from the [API keys page](https://platform.openai.com/account/api-keys)
 3. Create a `.env` file in the root directory with the following content:
    ```
-   REACT_APP_CHATGPTAPI=your_openai_api_key_here
+   REACT_APP_OPENAI_API_KEY=your_openai_api_key_here
    ```
 4. The app uses the `gpt-4o-mini` model for the best balance of quality and cost efficiency
 

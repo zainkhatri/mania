@@ -1,44 +1,81 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import JournalCanvas, { ClickableTextArea, JournalCanvasHandle } from './JournalCanvas';
-import SimpleColorPicker, { TextColors } from './TempColorPicker';
-import LayoutToggle from './LayoutToggle';
-// @ts-ignore
-import html2canvas from 'html2canvas';
-// Import html2pdf properly
-import html2pdf from 'html2pdf.js';
-// Add module imports at the top
-import * as htmlToImage from 'html-to-image';
-// Import jsPDF for direct PDF generation
-// @ts-ignore
-import { jsPDF } from 'jspdf';
-import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
-// Import from local copy of the library
-// @ts-ignore
-import imageCompression from '../lib/browser-image-compression';
-import { clearJournalCache } from '../utils/storageUtils';
-import { saveJournal, journalExistsForDate } from '../services/journalService';
-import { format } from 'date-fns';
-import JournalEnhancer from './JournalEnhancer';
-import ColorPicker from './ColorPicker';
-// Import DatePicker
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
+import 'react-datepicker/dist/react-datepicker.css';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { TextColors } from './ColorPicker';
+import JournalCanvas, { JournalCanvasHandle, ClickableTextArea } from './JournalCanvas';
+import LayoutToggle from './LayoutToggle';
+import { generateJournalPrompts } from '../services/gptService';
+import html2canvas from 'html2canvas';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
+import { saveJournal, journalExistsForDate } from '../services/journalService';
+import SimpleColorPicker from './TempColorPicker';
+import { useNavigate } from 'react-router-dom';
+import { clearJournalCache } from '../utils/storageUtils';
+import { format } from 'date-fns';
+import imageCompression from 'browser-image-compression';
 
-// Apply custom styles to the DatePicker
+// Enhanced date formatting function from sample.js
+const formatDate = (date: Date): string => {
+  // Create a new date object that preserves the selected day without timezone issues
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const adjustedDate = new Date(year, month, day, 12, 0, 0);
+  
+  // Helper function to get ordinal suffix
+  const getOrdinalSuffix = (day: number): string => {
+    if (day > 3 && day < 21) return 'TH';
+    switch (day % 10) {
+      case 1: return 'ST';
+      case 2: return 'ND';
+      case 3: return 'RD';
+      default: return 'TH';
+    }
+  };
+
+  const options: Intl.DateTimeFormatOptions = { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  };
+  
+  // Format the date without ordinal first using adjusted date
+  let dateStr = adjustedDate.toLocaleDateString('en-US', options);
+  
+  // Extract the day number and add the ordinal suffix
+  const ordinalSuffix = getOrdinalSuffix(day);
+  
+  // Replace the day number with day + ordinal suffix
+  dateStr = dateStr.replace(/(\d+)/, `$1${ordinalSuffix}`);
+  
+  // Fix double commas - remove any existing comma after the day before adding our own
+  dateStr = dateStr.replace(/(\d+[A-Z]+),/, '$1');
+  
+  // Make sure there's a comma after the ordinal suffix
+  dateStr = dateStr.replace(/(\d+[A-Z]+)/, '$1,');
+  
+  return dateStr.toUpperCase();
+};
+
+// Apply custom styles to the DatePicker with jet black theme and zain font
 const datePickerStyles = `
   .react-datepicker {
-    font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    background-color: #121212 !important;
+    font-family: 'ZainCustomFont', 'zain.ttf', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background-color: #000000 !important;
     color: white !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     border-radius: 0.5rem !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8) !important;
   }
   
   .react-datepicker__header {
-    background-color: #1a1a1a !important;
+    background-color: #000000 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
   }
   
@@ -47,6 +84,7 @@ const datePickerStyles = `
   .react-datepicker__day, 
   .react-datepicker__time-name {
     color: white !important;
+    font-family: 'ZainCustomFont', 'zain.ttf', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
   
   .react-datepicker__day:hover, 
@@ -66,14 +104,49 @@ const datePickerStyles = `
     color: white !important;
   }
   
+  .react-datepicker__navigation--previous {
+    right: 50% !important;
+    transform: translateX(-80px) !important;
+  }
+  
+  .react-datepicker__navigation--next {
+    left: 50% !important;
+    transform: translateX(-40px) !important;
+  }
+  
   .react-datepicker__triangle {
-    border-bottom-color: #1a1a1a !important;
+    border-bottom-color: #000000 !important;
   }
   
   .react-datepicker__navigation-icon::before,
   .react-datepicker__year-read-view--down-arrow,
   .react-datepicker__month-read-view--down-arrow {
     border-color: white !important;
+  }
+  
+  .react-datepicker__month-container {
+    background-color: #000000 !important;
+  }
+  
+  .react-datepicker__month {
+    background-color: #000000 !important;
+  }
+  
+  .react-datepicker__week {
+    background-color: #000000 !important;
+  }
+  
+  .react-datepicker__day--outside-month {
+    color: #666666 !important;
+  }
+  
+  .react-datepicker__day--disabled {
+    color: #444444 !important;
+  }
+  
+  .react-datepicker__day--today {
+    font-weight: bold;
+    color: #3182ce !important;
   }
 `;
 
@@ -177,13 +250,11 @@ window.CURRENT_COLORS = {
 
 interface JournalFormProps {
   templateUrl?: string;
-  isAuthenticated?: boolean;
   saveButtonText?: string;
 }
 
 const JournalForm: React.FC<JournalFormProps> = ({ 
   templateUrl = '/templates/cream-black-template.jpg',
-  isAuthenticated = false,
   saveButtonText = 'Create Journal'
 }) => {
   const navigate = useNavigate();
@@ -191,16 +262,180 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
   
+  // Store image positions to preserve them when adding new images
+  const [imagePositions, setImagePositions] = useState<Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>>([]);
+  
   // Initialize date with noon time to avoid timezone issues
   const initialDate = new Date();
   initialDate.setHours(12, 0, 0, 0);
   const [date, setDate] = useState(initialDate);
   
-  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored'>('standard');
+  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>('freeflow');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [needInspiration, setNeedInspiration] = useState(false);
+  
+  // Logo state for typewriter effect
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
+  const [typedText, setTypedText] = useState("");
+  const fullText = "ania";
+  
+  // Typewriter effect for the logo
+  useEffect(() => {
+    if (isLogoHovered) {
+      let currentIndex = 0;
+      const typingInterval = setInterval(() => {
+        if (currentIndex < fullText.length) {
+          setTypedText(fullText.substring(0, currentIndex + 1));
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+        }
+      }, 100); // Speed of typing
+      
+      return () => {
+        clearInterval(typingInterval);
+      };
+    } else {
+      setTypedText("");
+    }
+  }, [isLogoHovered]);
+  
+  // Render the logo with typewriter animation
+  const renderLogo = () => {
+    return (
+      <div 
+        className="flex items-center cursor-pointer hover:opacity-80 transition-opacity duration-300"
+        onMouseEnter={() => setIsLogoHovered(true)}
+        onMouseLeave={() => setIsLogoHovered(false)}
+        onClick={() => window.open('https://www.maniajournal.org/', '_blank')}
+        style={{ minWidth: "200px" }}
+        title="Visit Mania Journal Website"
+      >
+        <span className="logo-m">m</span>
+        <span className="logo-m">{typedText}</span>
+      </div>
+    );
+  };
+  
+  // Inspiration questions that appear in the journal preview
+  const [inspirationQuestion, setInspirationQuestion] = useState<string>("");
+  const [isGeneratingInspiration, setIsGeneratingInspiration] = useState<boolean>(false);
+  const [hasGeneratedInspiration, setHasGeneratedInspiration] = useState<boolean>(false);
 
+  // Generate inspiration question when journal text changes
+  useEffect(() => {
+    const generateInspiration = async () => {
+      console.log('🔍 Inspiration check:', { 
+        hasGeneratedInspiration, 
+        needInspiration, 
+        wordCount: journalText.trim().split(/\s+/).filter(word => word.length > 0).length,
+        isGeneratingInspiration 
+      });
+      
+      // Count words in journal text
+      const wordCount = journalText.trim().split(/\s+/).filter(word => word.length > 0).length;
+      
+      // Auto-enable inspiration when word count reaches 10
+      if (wordCount >= 10 && !needInspiration && !hasGeneratedInspiration) {
+        console.log('🎯 Auto-enabling inspiration at 10 words');
+        setNeedInspiration(true);
+        return; // Let the next effect run handle the generation
+      }
+      
+      // Don't generate if already generated or if inspiration is off
+      if (hasGeneratedInspiration || !needInspiration) {
+        console.log('❌ Skipping inspiration generation:', { hasGeneratedInspiration, needInspiration });
+        return;
+      }
+      
+      // Only generate if we have at least 10 words and haven't generated yet
+      if (wordCount < 10) {
+        console.log('❌ Word count too low:', wordCount);
+        return;
+      }
+
+      if (isGeneratingInspiration) {
+        console.log('❌ Already generating inspiration');
+        return;
+      }
+
+      setIsGeneratingInspiration(true);
+      console.log('🚀 Starting inspiration generation...');
+      
+      try {
+        console.log('📞 Calling GPT service with:', { journalText: journalText.substring(0, 50) + '...', location });
+        const questions = await generateJournalPrompts(journalText, location);
+        console.log('📝 Received questions from GPT:', questions);
+        const question = questions[0] || "";
+        setInspirationQuestion(question);
+        setHasGeneratedInspiration(true);
+        
+        // Don't automatically insert the question - let user choose from dropdown
+        console.log('✅ Generated inspiration question:', question);
+        
+        // Keep inspiration enabled so the question shows in the dropdown
+        // setNeedInspiration(false); // Removed - keep inspiration visible
+      } catch (error) {
+        console.error('Error generating inspiration question:', error);
+        console.log('🔄 Using fallback questions due to error');
+        const fallbackQuestions = [
+          "What's really going on here?",
+          "What's the real story?",
+          "What happened?",
+          "What's bothering you?",
+          "What's on your mind?",
+          "What's going through your head?",
+          "What's the deal?",
+          "What's up?",
+          "What's happening?",
+          "What's the situation?"
+        ];
+        const fallbackQuestion = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
+        console.log('🎯 Selected fallback question:', fallbackQuestion);
+        setInspirationQuestion(fallbackQuestion);
+        setHasGeneratedInspiration(true);
+        
+        // Don't automatically insert the fallback question - let user choose from dropdown
+        console.log('✅ Generated fallback inspiration question:', fallbackQuestion);
+        
+        // Keep inspiration enabled so the question shows in the dropdown
+        // setNeedInspiration(false); // Removed - keep inspiration visible
+      } finally {
+        setIsGeneratingInspiration(false);
+      }
+    };
+
+    // Debounce the generation to avoid too many API calls
+    const timeoutId = setTimeout(generateInspiration, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [journalText, location, needInspiration, hasGeneratedInspiration, isGeneratingInspiration]);
+
+  // Reset inspiration state when journal is reset
+  useEffect(() => {
+    if (!journalText.trim()) {
+      setHasGeneratedInspiration(false);
+      setInspirationQuestion("");
+      setNeedInspiration(false); // Turn off inspiration when journal is cleared
+    }
+  }, [journalText]);
+
+  const getInspirationQuestion = () => {
+    return isGeneratingInspiration ? "Generating inspiration..." : inspirationQuestion;
+  };
+  
   const [isJournalCollapsed, setIsJournalCollapsed] = useState(false);
+  
+  // Mobile preview refs
+  const mobileCanvasRef = useRef<JournalCanvasHandle>(null);
+  const mobileJournalRef = useRef<HTMLDivElement>(null);
+  const [showMobilePreview, setShowMobilePreview] = useState(true);
+  const [activeMobileTab, setActiveMobileTab] = useState<'editing' | 'preview'>('editing');
   const [textColors, setTextColors] = useState<TextColors>({
     locationColor: '#2D9CDB',
     locationShadowColor: '#1D3557',
@@ -211,7 +446,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     text: string[];
     images: string[];
     textColors: TextColors;
-    layoutMode: 'standard' | 'mirrored';
+    layoutMode: 'standard' | 'mirrored' | 'freeflow';
     forceUpdate?: number;
   }>({
     date: (() => {
@@ -226,7 +461,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       locationColor: '#2D9CDB',
       locationShadowColor: '#1D3557',
     },
-    layoutMode: 'standard'
+    layoutMode: 'freeflow'
   });
   
   // Save notification state
@@ -282,11 +517,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Function to save journal entry to Firestore
   const saveJournalToBackend = async () => {
-    if (!isAuthenticated) {
-      toast.error("Please sign in to save your journal");
-      navigate("/login");
-      return;
-    }
 
     // Show a loading toast
     const toastId = toast.loading("Saving your journal...");
@@ -642,6 +872,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
         if (savedDraftJournal.layoutMode) {
           setLayoutMode(savedDraftJournal.layoutMode);
         }
+        // Restore image positions if available
+        if (savedDraftJournal.imagePositions) {
+          console.log('🖼️ Restoring image positions from localStorage:', savedDraftJournal.imagePositions);
+          setImagePositions(savedDraftJournal.imagePositions);
+        } else {
+          console.log('🖼️ No saved image positions found in localStorage');
+        }
         console.log('Restored draft journal from localStorage');
       } catch (error) {
         console.error('Error restoring draft journal:', error);
@@ -705,14 +942,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   }, [activeEditField, activeTextSection]);
 
-  // Auto-resize textarea on initial load and when content changes
+  // Fixed height textarea - no auto-resize, uses scrolling instead
   useEffect(() => {
     if (textareaRef.current) {
       const textarea = textareaRef.current;
-      textarea.style.height = 'auto';
-      textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px';
+      // Set fixed height - no auto-resize
+      textarea.style.height = '200px'; // Fixed height, will scroll when content exceeds
     }
-  }, [journalText]);
+  }, []); // Only run once on mount
 
   // Function to clear eyedropper state
   const clearEyedropper = useCallback(() => {
@@ -929,14 +1166,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
       // Convert Blob to File object as required by imageCompression
       const file = new File([blob], "image.jpg", { type: "image/jpeg" });
       
-      // Define compression options with more conservative settings for mobile
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      // Define compression options
       const options = {
-        maxSizeMB: isMobile ? 0.8 : 1,              // Smaller size on mobile
-        maxWidthOrHeight: isMobile ? 1000 : 1200,   // Smaller dimensions on mobile
-        useWebWorker: false,                        // Disable web workers to avoid issues on mobile
-        initialQuality: isMobile ? 0.7 : 0.8,       // Lower quality on mobile
-        maxIteration: 2                            // Limit compression iterations
+        maxSizeMB: 1,                              // Standard size
+        maxWidthOrHeight: 1200,                    // Standard dimensions
+        useWebWorker: false,                       // Disable web workers to avoid issues
+        initialQuality: 0.8,                       // Standard quality
+        maxIteration: 2                           // Limit compression iterations
       };
       
       // Compress using browser-image-compression library with timeout
@@ -1016,21 +1252,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
-    // Limit number of files to prevent overloading memory
-    const maxFiles = 3 - images.length;
-    if (maxFiles <= 0) {
-      toast.error('Maximum of 3 images allowed');
-      return;
-    }
-    
     // Process all selected files instead of just the first one
     let files = Array.from(e.target.files);
     
-    // Limit to maximum allowed
-    if (files.length > maxFiles) {
-      files = files.slice(0, maxFiles);
-      toast.info(`Only using ${maxFiles} image${maxFiles > 1 ? 's' : ''} (maximum 3 total)`);
-    }
+    // Allow unlimited images - no replacement logic needed
+    const maxFiles = files.length; // Use all selected files
     
     // Show loading indicator 
     setIsLoadingImage(true);
@@ -1063,9 +1289,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
           // Extract original images and enhanced images
           const originalImages = processedImages.map(img => img.originalImage);
           
-          // Update state with original images (we'll use enhanced ones for AI features)
+          // Update state - always add new images to existing ones
           const newImages = [...images, ...originalImages];
           setImages(newImages);
+          
+          // Preserve existing image positions and add default positions for new images
+          setImagePositions(prev => {
+            const newPositions = [...prev];
+            // Add default positions for any new images
+            for (let i = newPositions.length; i < newImages.length; i++) {
+              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+            }
+            return newPositions;
+          });
+          
+          // Show success message
+          toast.success(`Added ${originalImages.length} new image${originalImages.length > 1 ? 's' : ''}`);
           
           // FORCE COLOR EXTRACTION: Extract colors from the first processed image
           if (originalImages.length > 0) {
@@ -1189,6 +1428,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Remove image from form before submission
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
+    // Also remove the corresponding position
+    setImagePositions(prev => prev.filter((_, i) => i !== index));
   };
   
   // Add an image after journal generation
@@ -1260,13 +1501,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check authentication first
-    if (!isAuthenticated) {
-      toast.error("Please sign in to create a journal");
-      navigate("/login");
-      return;
-    }
-    
     // Break the journal text into paragraphs
     const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
     
@@ -1297,31 +1531,46 @@ const JournalForm: React.FC<JournalFormProps> = ({
       console.error('Error saving submitted journal');
     }
     
-    // Always save to backend if user is authenticated
-    if (isAuthenticated) {
-      saveJournalToBackend();
-    }
+    // Save to backend
+    saveJournalToBackend();
   };
   
   const handleReset = () => {
     setLocation('');
     setJournalText('');
     setImages([]);
+    setImagePositions([]); // Clear image positions when resetting
     
     // Create a new date with noon time to avoid timezone issues
     const today = new Date();
     today.setHours(12, 0, 0, 0);
     setDate(today);
     
-    setLayoutMode('standard');
+    setLayoutMode('freeflow');
     setSubmitted(false);
     setActiveEditField(null);
     setActiveTextSection(-1);
+    
+    // Reset inspiration state
+    setNeedInspiration(false);
+    setHasGeneratedInspiration(false);
+            setInspirationQuestion("");
     
     // Clear all stored data when resetting
     clearLocalStorageItem('webjournal_submitted');
     clearLocalStorageItem('webjournal_draft');
   };
+
+  // Expose functions globally for header buttons
+  useEffect(() => {
+    window.handleHighQualityPDFExport = handleHighQualityPDFExport;
+    window.handleReset = handleReset;
+    
+    return () => {
+      delete window.handleHighQualityPDFExport;
+      delete window.handleReset;
+    };
+  }, []);
   
   // Apply color changes
   const handleColorChange = (newColors: TextColors) => {
@@ -1546,12 +1795,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
     // PDF export function
   const handleShare = async () => {
-    // Check authentication first
-    if (!isAuthenticated) {
-      toast.error("Please sign in to download your journal");
-      navigate("/login");
-      return;
-    }
     
     // Create a loading toast
     const toastId = toast.loading("Creating high-quality PDF...", {
@@ -1767,15 +2010,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Handle PDF Save function (for dropdown menu)
   const handleSaveAsPDF = async () => {
-    // Check authentication before saving as PDF
-    if (!isAuthenticated) {
-      toast.error("Please sign in to create a PDF");
-      navigate("/login");
-      return;
-    }
-    
     // Reuse the share functionality which now focuses on PDF export
     handleShare();
+  };
+
+  // New high-quality PDF export function using the canvas export
+  const handleHighQualityPDFExport = async () => {
+    if (canvasRef.current && canvasRef.current.exportUltraHDPDF) {
+      canvasRef.current.exportUltraHDPDF();
+    } else {
+      // Fallback to regular PDF export
+      handleShare();
+    }
   };
   
   const journalRef = useRef<HTMLDivElement>(null);
@@ -1788,9 +2034,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
       images,
       date: date.toISOString(),
       textColors,
-      layoutMode
+      layoutMode,
+      imagePositions
     };
     
+    console.log('🖼️ Saving journal data with image positions:', imagePositions);
     saveToLocalStorage('webjournal_draft', draftData);
   };
   
@@ -1808,6 +2056,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   const [isSharing, setIsSharing] = useState(false);
   
+
+  
   // Auto-save the journal as the user types
   useEffect(() => {
     // Don't save if no content has been entered yet
@@ -1824,21 +2074,27 @@ const JournalForm: React.FC<JournalFormProps> = ({
         text: journalText.split('\n\n').filter(section => section.trim().length > 0),
         images,
         textColors,
-        layoutMode
+        layoutMode,
+        imagePositions
       };
       
       saveToLocalStorage('webjournal_draft', dataToSave);
     }, 2000); // 2 second debounce
     
     return () => clearTimeout(autoSaveTimeout);
-  }, [location, journalText, images, textColors, layoutMode, date]);
+  }, [location, journalText, images, textColors, layoutMode, date, imagePositions]);
 
-  // Format date for the input element without timezone issues
+  // Enhanced date formatting for input element using sample.js logic
   const formatDateForInput = (date: Date): string => {
+    // Use the same date handling logic as sample.js
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const month = date.getMonth();
+    const day = date.getDate();
+    const adjustedDate = new Date(year, month, day, 12, 0, 0);
+    
+    const monthStr = String(adjustedDate.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
+    const dayStr = String(adjustedDate.getDate()).padStart(2, '0');
+    return `${adjustedDate.getFullYear()}-${monthStr}-${dayStr}`;
   };
 
   // Add the styles to the document
@@ -1854,9 +2110,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   // Create a ref for the camera input
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  
-  // Detect if on mobile
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Helper functions for color extraction
   const extractDominantColors = (imageUrl: string): Promise<string[]> => {
@@ -2028,50 +2281,61 @@ const JournalForm: React.FC<JournalFormProps> = ({
   };
 
   return (
-    <div className="bg-black min-h-screen w-full">
-      <div className="relative journal-form-container">
+    <div className="bg-black w-full min-h-screen md:h-screen md:overflow-hidden">
+      {/* Mobile Navbar - Only visible on mobile */}
+      <div className="md:hidden relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14">
+            <div className="flex items-center">
+              <div className="text-4xl md:text-5xl text-white font-light">
+                <span className="logo-m">m</span>
+              </div>
+            </div>
+
+            {/* Mobile action buttons */}
+            <div className="flex items-center gap-2">
+              {/* Download Journal Button */}
+              <button
+                onClick={handleHighQualityPDFExport}
+                className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white focus:outline-none transition-all duration-200"
+                title="Download Journal"
+              >
+                <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+              </button>
+              
+              {/* Clear Journal Button */}
+              <button
+                onClick={handleReset}
+                className="inline-flex items-center justify-center p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white focus:outline-none transition-all duration-200"
+                title="Clear Journal"
+              >
+                <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative journal-form-container min-h-screen md:h-full">
         {/* Black background instead of video */}
         <div className="absolute w-full h-full bg-black z-0"></div>
         {/* Main content */}
-        <div className="relative z-10">
-          {/* Journal editor content - Now fully scrollable */}
-          <div className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto min-h-screen">
-            {/* Side by side layout on desktop, stacked on mobile */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-8 max-w-[1600px] mx-auto">
+        <div className="relative z-10 min-h-screen md:h-full flex flex-col">
+          {/* Journal editor content - Bounded container for desktop */}
+          <div className="p-2 sm:p-4 md:p-3 lg:p-4 max-w-7xl mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden flex flex-col md:items-start items-center">
+            {/* Desktop: Side by side layout */}
+            <div className="hidden md:grid md:grid-cols-2 gap-2 md:gap-4 max-w-[1600px] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden">
               
-              {/* Journal Preview - Collapsible on mobile, top on mobile, right on desktop */}
-              <div className="bg-black/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 overflow-hidden order-1 md:order-2 md:sticky md:top-8 md:h-fit">
-                <div className="p-2 md:p-3 lg:p-6 border-b border-white/10 flex justify-between items-center">
-                  <h3 className="text-base md:text-lg lg:text-2xl font-semibold text-white">
-                    Journal Preview
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs md:text-sm text-gray-400 hidden md:block">
-                      Updates as you type
-            </div>
-                                    {/* Collapse/Expand button - mobile only */}
-                <button 
-                  onClick={() => setIsJournalCollapsed(!isJournalCollapsed)}
-                  className="md:hidden p-1 rounded-lg hover:bg-white/10 transition-colors duration-200"
-                >
-                  <svg 
-                    width="16" 
-                    height="16" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24" 
-                    className={`text-white transition-transform duration-500 ease-in-out ${isJournalCollapsed ? 'rotate-180' : ''}`}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                  </svg>
-                </button>
-                  </div>
-                </div>
-                
+              {/* Journal Preview - Desktop only */}
+              <div className="hidden md:block bg-black rounded-2xl shadow-2xl border border-white/20 order-1 md:order-2 md:sticky md:top-0 flex flex-col min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] md:max-w-full">
                 {/* Collapsible journal content */}
-                <div className={`transition-all duration-700 ease-in-out overflow-hidden ${isJournalCollapsed ? 'max-h-0 opacity-0 md:max-h-none md:opacity-100' : 'max-h-[60vh] opacity-100 md:max-h-none'}`}>
-                  <div className={`transition-all duration-700 ease-in-out ${isJournalCollapsed ? 'p-0 md:p-2 md:p-3 lg:p-6 scale-95 md:scale-100' : 'p-2 md:p-3 lg:p-6 scale-100'}`}>
-                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[300px]" ref={journalRef} id="journal-container" data-journal-content>
+                <div className={`transition-all duration-700 ease-in-out flex-1 ${isJournalCollapsed ? 'max-h-0 opacity-0 md:max-h-none md:opacity-100' : 'min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] opacity-100 md:max-h-none'}`}>
+                  <div className={`transition-all duration-700 ease-in-out min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] ${isJournalCollapsed ? 'p-0 md:p-2 md:p-3 lg:p-6 scale-95 md:scale-100' : 'p-2 md:p-3 lg:p-6 scale-100'}`}>
+                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[300px] md:max-h-full" ref={journalRef} id="journal-container" data-journal-content>
                       <JournalCanvas
                         ref={canvasRef}
                         date={date}
@@ -2085,273 +2349,553 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         editMode={true}
                         onTextClick={handleTextClick}
                         onImageDrag={(index, x, y) => {
-                          console.log(`Image ${index} dragged to ${x},${y}`);
+                          console.log(`🖼️ Image ${index} dragged to ${x},${y}`);
+                          // Save the new position for this image
+                          setImagePositions(prev => {
+                            console.log(`🖼️ Updating position for image ${index}. Previous:`, prev[index]);
+                            const newPositions = [...prev];
+                            // Ensure we have enough positions for all images
+                            while (newPositions.length <= index) {
+                              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+                            }
+                            newPositions[index] = { ...newPositions[index], x, y };
+                            console.log(`🖼️ New position for image ${index}:`, newPositions[index]);
+                            return newPositions;
+                          });
+                          
+                          // Save to localStorage immediately when position changes
+                          setTimeout(() => {
+                            saveJournalData();
+                          }, 100);
+                        }}
+                        onImageResize={(index, width, height) => {
+                          console.log(`🖼️ Image ${index} resized to ${width}x${height}`);
+                          // Save the new size for this image
+                          setImagePositions(prev => {
+                            console.log(`🖼️ Updating size for image ${index}. Previous:`, prev[index]);
+                            const newPositions = [...prev];
+                            // Ensure we have enough positions for all images
+                            while (newPositions.length <= index) {
+                              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+                            }
+                            newPositions[index] = { ...newPositions[index], width, height };
+                            console.log(`🖼️ New size for image ${index}:`, newPositions[index]);
+                            return newPositions;
+                          });
+                          
+                          // Save to localStorage immediately when size changes
+                          setTimeout(() => {
+                            saveJournalData();
+                          }, 100);
                         }}
                         onImageClick={handleCanvasImageClick}
+                        onImageDelete={removeImage}
+                        needInspiration={needInspiration}
+                        inspirationQuestion={inspirationQuestion}
+                        savedImagePositions={imagePositions}
                       />
                     </div>
                   </div>
                 </div>
+                
+
               </div>
 
-              {/* Input Form - Left Side on desktop, bottom on mobile */}
-              <div className="bg-black/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 overflow-hidden order-2 md:order-1">
-                <div className="p-2 md:p-4 lg:p-6 border-b border-white/10">
-                  <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-white text-center">Create Your Entry</h2>
+              {/* Input Form - Full width on mobile, left side on desktop */}
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[500px] md:h-full">
+
+                <div className="p-2 md:p-3 lg:p-4 border-b border-white/10 flex-shrink-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <label htmlFor="location" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>Location</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="e.g., MANIA, LA JOLLA, CA"
+                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base location-input-responsive placeholder-gray-400"
+                        required
+                      />
+                    </div>
+                    <div className="flex-shrink-0">
+                      <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Date</span>
+                      </label>
+                      <DatePicker
+                        selected={date}
+                        onChange={(selectedDate: Date | null) => {
+                          if (selectedDate) {
+                            // Use the same date handling logic as sample.js
+                            const year = selectedDate.getFullYear();
+                            const month = selectedDate.getMonth();
+                            const day = selectedDate.getDate();
+                            const adjustedDate = new Date(year, month, day, 12, 0, 0);
+                            setDate(adjustedDate);
+                          }
+                        }}
+                        className="rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm w-36"
+                        calendarClassName="black-theme-calendar"
+                        dateFormat="MMM dd, yyyy"
+                        popperClassName="black-theme-popper"
+                        popperPlacement="bottom-end"
+                        required
+                        wrapperClassName="text-gray-400"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="p-2 md:p-3 lg:p-6">
+                <div className="p-2 md:p-3 lg:p-4 flex-1 md:overflow-y-auto md:max-h-[calc(100vh-8rem)] md:max-w-full relative">
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.5 }}
                   >
-                    {/* Compact mobile layout */}
-                    <div className="space-y-1 md:space-y-3 lg:space-y-6">
-                                              {/* Date and Location Row - Always side by side for compact layout */}
-                        <div className="grid grid-cols-2 gap-2 md:gap-6">
-                        {/* Date Picker */}
-                          <div className="space-y-1">
-                            <label htmlFor="date" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                            <span>Date</span>
-                          </label>
-                          <DatePicker
-                            selected={date}
-                            onChange={(selectedDate: Date | null) => {
-                              if (selectedDate) {
-                                // Set time to noon to avoid timezone issues
-                                const adjustedDate = new Date(selectedDate);
-                                adjustedDate.setHours(12, 0, 0, 0);
-                                setDate(adjustedDate);
-                              }
-                            }}
-                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-white transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base"
-                            calendarClassName="black-theme-calendar"
-                            dateFormat="yyyy-MM-dd"
-                            popperClassName="black-theme-popper"
-                            popperPlacement="bottom-start"
-                            required
-                          />
-                        </div>
+                    {/* Desktop layout */}
+                    <div className="space-y-4 md:space-y-5 lg:space-y-6 md:pb-8 md:max-w-full">
+                      {/* Images */}
+                      <div className="space-y-3">
+                        <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                          </svg>
+                          <span>Images ({images.length})</span>
+                        </label>
                         
-                        {/* Location */}
-                          <div className="space-y-1">
-                            <label htmlFor="location" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            </svg>
-                            <span>Location</span>
-                          </label>
+                        {/* Image upload area - always show */}
+                        <div 
+                          className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {isLoadingImage && (
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
+                              <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
+                            </div>
+                          )}
+                          <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                          </svg>
+                          <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
+                            Upload Images
+                          </p>
                           <input
-                            type="text"
-                            id="location"
-                            value={location}
-                            onChange={(e) => setLocation(e.target.value)}
-                            placeholder="e.g., MANIA, LA JOLLA, CA"
-                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-white transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base"
-                            required
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                            accept="image/*"
+                            multiple
+                            style={{ display: 'none' }}
                           />
                         </div>
                       </div>
 
-                                                                    {/* Images Section */}
-                        <div className="space-y-1">
-                          <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      {/* Layout Toggle and Colors - Hidden on mobile */}
+                      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        {/* Layout Toggle */}
+                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
+                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
                             </svg>
-                            <span>Images ({images.length}/3)</span>
+                            <span>Layout</span>
                           </label>
-                          
-                          {/* Add Sticker button */}
-                          {images.length > 0 && (
-                            <div className="flex items-center mb-1">
-                              <label className="bg-blue-600/80 hover:bg-blue-600 text-white py-1 px-2 md:py-1 md:px-3 lg:py-1 lg:px-3 rounded-lg cursor-pointer transition-all duration-200 backdrop-blur-sm border border-blue-500/30 text-xs md:text-sm lg:text-sm">
-                                Add Stickers
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={handleStickerUpload}
-                                  className="hidden"
-                                  multiple
-                                />
-                              </label>
-                            </div>
-                          )}
-                          
-                          {/* Image upload area - only show when we have fewer than 3 images */}
-                          {images.length < 3 && (
-                            <div 
-                              className="border-2 border-dashed border-white/30 rounded-xl p-3 md:p-4 lg:p-4 flex flex-col items-center justify-center cursor-pointer hover:border-white/50 transition-all duration-300 bg-black/30 backdrop-blur-sm hover:bg-black/40 relative group"
-                              onClick={() => fileInputRef.current?.click()}
-                            >
-                              {isLoadingImage && (
-                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
-                                  <div className="animate-spin rounded-full h-6 w-6 lg:h-6 lg:w-6 border-4 border-white border-t-transparent"></div>
-                                </div>
-                              )}
-                              <svg className="w-6 h-6 lg:w-6 lg:h-6 text-gray-300 mb-1 lg:mb-1 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                              </svg>
-                              <p className="text-xs lg:text-sm text-gray-300 text-center group-hover:text-white transition-colors">Tap to upload</p>
-                              <p className="text-xs lg:text-xs text-gray-400">PNG, JPG up to 10MB</p>
-                              <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleImageUpload}
-                                accept="image/*"
-                                multiple
-                                style={{ display: 'none' }}
-                                disabled={images.length >= 3}
-                              />
-                            </div>
-                          )}
-
-                          {images.length > 0 && (
-                            <motion.div 
-                              className="grid grid-cols-3 gap-1 mt-1"
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {images.map((image, index) => (
-                                <div 
-                                  key={index} 
-                                  className="relative group overflow-hidden rounded-lg shadow-lg border border-white/20 aspect-square bg-black/20 backdrop-blur-sm"
-                                >
-                                  <img 
-                                    src={image} 
-                                    alt={`Upload ${index + 1}`} 
-                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => removeImage(index)}
-                                    className="absolute top-0.5 right-0.5 bg-black/80 backdrop-blur-sm p-1 lg:p-1 rounded-full shadow-lg text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:scale-110"
-                                  >
-                                    <svg className="w-3 h-3 lg:w-3 lg:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
-                                  </button>
-                                </div>
-                              ))}
-                            </motion.div>
-                          )}
-
-                          {/* Layout Toggle - Under Images */}
-                          <div className="flex justify-center md:justify-start mt-2">
-                            <div className="scale-75 md:scale-90 lg:scale-100">
-                              <LayoutToggle
-                                layoutMode={layoutMode}
-                                setLayoutMode={setLayoutMode}
-                              />
-                            </div>
+                          <div className="flex justify-center">
+                            <LayoutToggle
+                              layoutMode={layoutMode}
+                              setLayoutMode={setLayoutMode}
+                            />
                           </div>
                         </div>
 
-                        {/* Colors - Compact */}
-                        <div className="space-y-1">
-                          <label className="block text-sm md:text-sm font-medium text-white flex items-center gap-1 md:gap-2">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                        {/* Colors */}
+                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
+                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                             </svg>
                             <span>Colors</span>
                           </label>
-                          <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-1 md:p-2">
+                          <div className="flex justify-center">
                             <SimpleColorPicker 
                               colors={textColors}
                               onChange={handleColorChange}
                               images={submitted ? submittedData.images : images}
-                              compact={true}
                             />
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                                                                      {/* Journal Entry - Long and at bottom */}
-                        <div className="space-y-1">
-                          <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                      {/* Journal Entry Header */}
+                      <div className="flex justify-between items-center relative">
+                        <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap">
                           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        <span>Journal Entry</span>
-                      </label>
-                      <textarea
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                          </svg>
+                          <span>Journal Entry</span>
+                        </label>
+                      </div>
+
+                      {/* Journal Entry */}
+                      <div className="space-y-3">
+                        <div className="relative">
+                          {/* AI Insights Button - Same x-coordinate as before, but at Journal Entry y-coordinate */}
+                          <div className="absolute right-2" style={{ top: '-62px' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNeedInspiration(true);
+                                setHasGeneratedInspiration(false);
+                                setInspirationQuestion("Analyzing...");
+                              }}
+                              disabled={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10}
+                              className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ease-in-out text-sm font-medium ${
+                                journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 
+                                  ? 'text-gray-500 cursor-not-allowed' 
+                                  : 'text-white hover:text-blue-300 hover:bg-blue-900/20'
+                              } rounded-md`}
+                              title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
+                            >
+                              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className={`${journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? 'text-gray-500' : 'text-blue-400'}`}>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                              </svg>
+                              <span className="hidden sm:inline">
+                                Get AI Insights
+                              </span>
+                            </button>
+                          </div>
+                          <textarea
                             ref={textareaRef}
-                        id="journalText"
-                        value={journalText}
+                            id="journalText"
+                            value={journalText}
                             onChange={(e) => {
                               setJournalText(e.target.value);
-                              // Auto-resize textarea
-                              const textarea = e.target;
-                              textarea.style.height = 'auto';
-                              textarea.style.height = Math.max(80, textarea.scrollHeight) + 'px';
                             }}
-                        placeholder="Write your journal entry here..."
-                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 lg:px-4 lg:py-3 min-h-[80px] text-white transition-all duration-200 bg-black/40 backdrop-blur-sm text-base md:text-lg resize-none overflow-hidden"
-                            style={{ height: 'auto' }}
-                        required
-                      />
-                      {journalText.trim().length > 0 && (
-                        <JournalEnhancer
-                          journalText={journalText}
-                          location={location}
-                          minWordCount={10}
-                          showInitially={false}
-                        />
-                      )}
-                        <p className="text-xs lg:text-xs text-gray-400 mt-1 lg:mt-1">Use double line breaks to create new paragraphs.</p>
-              </div>
+                            placeholder="Write your journal entry here..."
+                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                            style={{ fontSize: '18px' }}
+                            required
+                          />
+                        </div>
 
-                      {/* Action Buttons - Under Journal Entry */}
-                      <div className="space-y-2 pb-8">
-                        <div className="flex justify-between items-center pt-2 mt-2 border-t border-white/10">
-                    <button 
-                      type="button"
-                      onClick={handleReset} 
-                            className="px-3 py-1.5 md:px-4 md:py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg flex items-center gap-1 md:gap-2 transition-all duration-200 backdrop-blur-sm border border-red-500/30 text-sm md:text-base"
-                    >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-4 md:h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                      </svg>
-                      Clear
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={handleSubmit} 
-                            className="px-4 py-1.5 md:px-6 md:py-2 bg-green-600/80 hover:bg-green-600 text-white rounded-lg flex items-center gap-1 md:gap-2 transition-all duration-200 backdrop-blur-sm border border-green-500/30 text-sm md:text-base"
-                    >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-4 md:h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                      Create Journal
-                    </button>
-                  </div>
-                        
-                        {/* Download Options - Show when there's content to download */}
-                        {(location.trim() || journalText.trim() || images.length > 0) && (
-                          <div className="flex justify-center pt-2 border-t border-white/10">
-                            <button 
-                              type="button"
-                              onClick={handleSaveAsPDF} 
-                              className="px-4 py-2 md:px-6 md:py-3 bg-purple-600/80 hover:bg-purple-600 text-white rounded-lg flex items-center gap-2 transition-all duration-200 backdrop-blur-sm border border-purple-500/30 text-sm md:text-base font-medium"
-                            >
-                              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="md:w-5 md:h-5">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                              </svg>
-                              Download High-Quality PDF
-                            </button>
-                </div>
+                        {/* AI Insights Box - Below Journal Entry */}
+                        {needInspiration && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            className="mt-2 px-3 py-2 bg-blue-900/20 border border-blue-500/30 rounded-md backdrop-blur-sm"
+                          >
+                            {isGeneratingInspiration ? (
+                              <div className="flex items-center gap-2 text-blue-300">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
+                                <span style={{ fontSize: '22px' }}>AI is analyzing your journal entry...</span>
+                              </div>
+                            ) : inspirationQuestion && inspirationQuestion !== "Analyzing..." ? (
+                              <p className="text-blue-200 italic" style={{ fontSize: '22px' }}>{inspirationQuestion}</p>
+                            ) : inspirationQuestion === "Analyzing..." ? (
+                              <p className="text-blue-300" style={{ fontSize: '22px' }}>AI is analyzing...</p>
+                            ) : journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? (
+                              <p className="text-blue-300" style={{ fontSize: '22px' }}>✍️ Write at least 10 words to get AI insights.</p>
+                            ) : (
+                              <p className="text-blue-300" style={{ fontSize: '18px' }}></p>
+                            )}
+                          </motion.div>
                         )}
-              </div>
-            </div>
+                      </div>
+                    </div>
                   </motion.div>
                 </div>
               </div>
+            </div>
 
+            {/* Mobile Single Page Layout */}
+            <div className="md:hidden w-full flex justify-center px-4 -ml-2.5">
+              <div className="w-full max-w-sm space-y-4">
+              {/* Journal Preview at Top */}
+              <div className="bg-black rounded-2xl shadow-2xl border border-white/20 overflow-hidden w-full max-w-sm mx-auto">
+                <div className="p-4 border-b border-white/10">
+                  <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span>Journal Preview</span>
+                  </h3>
+                </div>
+                <div className="p-4">
+                  <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[400px]" ref={mobileJournalRef} id="journal-container-mobile" data-journal-content>
+                    <JournalCanvas
+                      ref={mobileCanvasRef}
+                      date={date}
+                      location={location}
+                      textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
+                      images={images}
+                      onNewEntry={handleReset}
+                      templateUrl={templateUrl}
+                      textColors={textColors}
+                      layoutMode={layoutMode}
+                      editMode={true}
+                      onTextClick={handleTextClick}
+                      onImageDrag={(index, x, y) => {
+                        console.log(`🖼️ Image ${index} dragged to ${x},${y}`);
+                        setImagePositions(prev => {
+                          const newPositions = [...prev];
+                          while (newPositions.length <= index) {
+                            newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+                          }
+                          newPositions[index] = { ...newPositions[index], x, y };
+                          return newPositions;
+                        });
+                        setTimeout(() => {
+                          saveJournalData();
+                        }, 100);
+                      }}
+                      onImageResize={(index, width, height) => {
+                        console.log(`🖼️ Image ${index} resized to ${width}x${height}`);
+                        setImagePositions(prev => {
+                          const newPositions = [...prev];
+                          while (newPositions.length <= index) {
+                            newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+                          }
+                          newPositions[index] = { ...newPositions[index], width, height };
+                          return newPositions;
+                        });
+                        setTimeout(() => {
+                          saveJournalData();
+                        }, 100);
+                      }}
+                      onImageClick={handleCanvasImageClick}
+                      onImageDelete={removeImage}
+                      needInspiration={needInspiration}
+                      inspirationQuestion={inspirationQuestion}
+                      savedImagePositions={imagePositions}
+                    />
+                  </div>
+                </div>
+              </div>
 
+              {/* Journal Editing Form */}
+              <div className="bg-black rounded-2xl shadow-2xl border border-white/20 overflow-hidden w-full max-w-sm mx-auto">
+                <div className="p-4 border-b border-white/10">
+                  <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <span>Journal Editing</span>
+                  </h3>
+                </div>
+                <div className="p-4">
+                  <div className="space-y-4">
+                    {/* Location and Date */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <label htmlFor="mobile-location" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          </svg>
+                          <span>Location</span>
+                        </label>
+                        <input
+                          type="text"
+                          id="mobile-location"
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
+                          placeholder="e.g., MANIA, LA JOLLA, CA"
+                          className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base placeholder-gray-400"
+                          required
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                          </svg>
+                          <span>Date</span>
+                        </label>
+                        <DatePicker
+                          selected={date}
+                          onChange={(selectedDate: Date | null) => {
+                            if (selectedDate) {
+                              const year = selectedDate.getFullYear();
+                              const month = selectedDate.getMonth();
+                              const day = selectedDate.getDate();
+                              const adjustedDate = new Date(year, month, day, 12, 0, 0);
+                              setDate(adjustedDate);
+                            }
+                          }}
+                          className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base"
+                          calendarClassName="black-theme-calendar"
+                          dateFormat="MMM dd, yyyy"
+                          popperClassName="black-theme-popper"
+                          popperPlacement="bottom-end"
+                          required
+                          wrapperClassName="text-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Images */}
+                    <div className="space-y-3">
+                      <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Images ({images.length})</span>
+                      </label>
+                      
+                      <div 
+                        className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {isLoadingImage && (
+                          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
+                            <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
+                          </div>
+                        )}
+                        <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
+                          Upload Images
+                        </p>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleImageUpload}
+                          accept="image/*"
+                          multiple
+                          style={{ display: 'none' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Colors - Mobile Horizontal Scroll */}
+                    <div className="space-y-3">
+                      <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                        </svg>
+                        <span>Colors</span>
+                      </label>
+                      <div className="overflow-x-auto pb-2 scrollbar-hide" style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
+                        <div className="flex gap-3 min-w-max px-1" style={{ paddingRight: '20px' }}>
+                          {[
+                            '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCF7F', 
+                            '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+                            '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE',
+                            '#85C1E9', '#F8C471', '#F1948A', '#A9DFBF'
+                          ].map((color, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                const newColors = {
+                                  ...textColors,
+                                  locationColor: color,
+                                  locationShadowColor: getComplementaryColor(color, 30)
+                                };
+                                handleColorChange(newColors);
+                              }}
+                              className={`w-12 h-12 rounded-full border-2 transition-all duration-200 hover:scale-110 ${
+                                textColors.locationColor === color 
+                                  ? 'border-white shadow-lg shadow-white/50' 
+                                  : 'border-white/30 hover:border-white/60'
+                              }`}
+                              style={{ backgroundColor: color }}
+                              title={`Color ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Journal Entry */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center relative">
+                        <label htmlFor="mobile-journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap">
+                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                          </svg>
+                          <span>Journal Entry</span>
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute -top-8 right-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNeedInspiration(true);
+                              setHasGeneratedInspiration(false);
+                              setInspirationQuestion("Analyzing...");
+                            }}
+                            disabled={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10}
+                            className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ease-in-out text-sm font-medium ${
+                              journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 
+                                ? 'text-gray-500 cursor-not-allowed' 
+                                : 'text-white hover:text-blue-300 hover:bg-blue-900/20'
+                            } rounded-md`}
+                            title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
+                          >
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className={`${journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? 'text-gray-500' : 'text-blue-400'}`}>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                            <span className="hidden sm:inline">
+                              Get AI Insights
+                            </span>
+                          </button>
+                        </div>
+                        <textarea
+                          id="mobile-journalText"
+                          value={journalText}
+                          onChange={(e) => {
+                            setJournalText(e.target.value);
+                          }}
+                          placeholder="Write your journal entry here..."
+                          className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                          style={{ fontSize: '18px' }}
+                          required
+                        />
+                      </div>
+
+                      {/* AI Insights Box */}
+                      {needInspiration && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: 'easeInOut' }}
+                          className="mt-2 px-3 py-2 bg-blue-900/20 border border-blue-500/30 rounded-md backdrop-blur-sm"
+                        >
+                          {isGeneratingInspiration ? (
+                            <div className="flex items-center gap-2 text-blue-300">
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
+                              <span style={{ fontSize: '22px' }}>AI is analyzing your journal entry...</span>
+                            </div>
+                          ) : inspirationQuestion && inspirationQuestion !== "Analyzing..." ? (
+                            <p className="text-blue-200 italic" style={{ fontSize: '22px' }}>{inspirationQuestion}</p>
+                          ) : inspirationQuestion === "Analyzing..." ? (
+                            <p className="text-blue-300" style={{ fontSize: '22px' }}>AI is analyzing...</p>
+                          ) : journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? (
+                            <p className="text-blue-300" style={{ fontSize: '22px' }}>✍️ Write at least 10 words to get AI insights.</p>
+                          ) : (
+                            <p className="text-blue-300" style={{ fontSize: '18px' }}></p>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </div>
             </div>
           </div>
         </div>

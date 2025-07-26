@@ -1,8 +1,16 @@
 import OpenAI from 'openai';
 
 // Initialize the OpenAI API
-// API key should be stored in .env file as CHATGPTAPI
-const apiKey = process.env.REACT_APP_CHATGPTAPI;
+// API key should be stored in .env file as REACT_APP_OPENAI_API_KEY
+const apiKey = process.env.REACT_APP_OPENAI_API_KEY || process.env.REACT_APP_CHATGPTAPI || process.env.OPEN_AI_API_KEY;
+
+// Debug environment variables
+console.log('🔍 Environment check:');
+console.log('REACT_APP_OPENAI_API_KEY exists:', !!process.env.REACT_APP_OPENAI_API_KEY);
+console.log('REACT_APP_OPENAI_API_KEY value:', process.env.REACT_APP_OPENAI_API_KEY ? process.env.REACT_APP_OPENAI_API_KEY.substring(0, 20) + '...' : 'undefined');
+console.log('All REACT_APP_ env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
+console.log('All env vars containing "OPENAI":', Object.keys(process.env).filter(key => key.includes('OPENAI')));
+console.log('All env vars containing "API":', Object.keys(process.env).filter(key => key.includes('API')));
 
 // Create a client with the API key
 let openai: OpenAI | null = null;
@@ -23,6 +31,7 @@ const recentQuestions: string[] = [];
 
 // Initialize OpenAI with logging and error handling
 try {
+  console.log('🔑 Checking API key:', apiKey ? 'Present' : 'Missing');
   // Only initialize if we have a valid API key
   if (apiKey && apiKey !== 'your_openai_api_key_here' && apiKey.length > 20) {
     openai = new OpenAI({
@@ -71,6 +80,8 @@ export const generateJournalPrompts = async (
   seed: number = Math.floor(Math.random() * 1000),
   retries: number = MAX_RETRY_ATTEMPTS
 ): Promise<string[]> => {
+  console.log('🚀 generateJournalPrompts called with:', { journalText: journalText.substring(0, 50) + '...', location });
+  
   // Early validation
   if (!journalText || journalText.trim() === '') {
     console.warn('Empty journal text provided');
@@ -78,7 +89,8 @@ export const generateJournalPrompts = async (
   }
   
   if (!openai) {
-    console.log('Using fallback prompts (no API key)');
+    console.log('❌ No OpenAI API key found - using fallback prompts');
+    console.log('🔑 API Key status:', apiKey ? 'Present but invalid' : 'Missing');
     return [getUniqueDefaultPrompt(journalText, location)];
   }
   
@@ -88,48 +100,22 @@ export const generateJournalPrompts = async (
   
   return withRetry(async () => {
     try {
+      console.log('🚀 Attempting to call OpenAI API...');
       if (!openai) {
         throw new Error('OpenAI API not initialized');
       }
       
-      // Enhanced prompt that emphasizes uniqueness and variety
+      // Natural conversational prompt that makes the AI genuinely curious
       const prompt = `
-I'm keeping a journal and have written the following entry:
+I just told you this:
 "${cleanJournalText}"
-${cleanLocation ? `\nLocation: ${cleanLocation}` : ''}
+${cleanLocation ? `\nI'm in: ${cleanLocation}` : ''}
 
-This entry appears to be ${detectContentType(cleanJournalText)}.
+You're my friend and you just heard me vent. Ask me ONE natural question that shows you were listening and makes me think deeper about what I just told you.
 
-I need a thoughtful, creative follow-up question that will help me expand on this journal entry and make it deeper and more reflective.
+Use my exact words and be genuinely curious about my situation.
 
-Generate ONE unique, insightful question that:
-1. Shows deep understanding of the content's style and substance
-2. Makes a specific reference to details or themes in my entry
-3. Encourages me to explore emotions, motivations, or meanings beyond what I've written
-4. Is phrased in a natural, conversational way
-5. Feels personalized and tailored to exactly what I've shared
-6. Is different from typical journaling questions - be creative and unique
-7. Focuses on a specific aspect, detail, or emotion from my entry
-
-IMPORTANT: Be creative and avoid generic questions. Each question should feel fresh and specifically crafted for this exact entry.
-
-Avoid:
-- Generic questions that could apply to any entry
-- Questions that misinterpret lyrics or poetic content as literal experiences
-- Questions about "rather" as if it's a person or thing
-- Using phrases like "tell me more about" without specific context
-- Repetitive or common journaling prompts
-
-Examples of good questions for lyrics or poetic content:
-- "What emotions were you channeling when you connected with these lyrics?"
-- "What part of your life story resonates with the line 'Truth is, they can't handle me at the top'?"
-- "If you were to add another verse to express how you feel now, what would it say?"
-
-Examples of good questions for personal narratives:
-- "How did feeling [specific emotion from text] change your perspective on [specific situation from text]?"
-- "What did you learn about yourself when [specific action/event from text]?"
-
-Respond ONLY with the question - no explanation, no introduction, no extra text.`;
+Respond ONLY with the question - no explanation.`;
       
       // Generate content using OpenAI with enhanced parameters for variety
       const response = await openai.chat.completions.create({
@@ -137,18 +123,19 @@ Respond ONLY with the question - no explanation, no introduction, no extra text.
         messages: [
           { 
             role: "system", 
-            content: "You are an expert writing coach and journaling companion who helps people reflect deeply on their experiences, emotions, and creative expressions. You're skilled at recognizing different writing styles including poetry, lyrics, personal narratives, and creative fiction. You always generate unique, creative questions that are specifically tailored to the content provided."
+            content: "You are a caring friend who just heard someone share something personal. Ask them ONE natural question that shows you were listening and makes them think deeper. Use their exact words and be genuinely curious about their situation."
           },
           { role: "user", content: prompt }
         ],
         temperature: 0.8, // Increased for more variety
-        max_tokens: 150,
+        max_tokens: 50,
         seed: seed,
         presence_penalty: 0.6, // Encourage novel content
         frequency_penalty: 0.3  // Reduce repetition
       });
       
       const text = response.choices[0].message.content || '';
+      console.log('📝 Raw GPT response:', text);
       
       // Clean up the response
       const cleanedQuestion = text
@@ -217,42 +204,105 @@ function addToRecentQuestions(question: string): void {
 }
 
 const getUniqueDefaultPrompt = (journalText = '', location?: string): string => {
-  // Default prompts for when no AI-generated prompt is available
+  // Analyze the journal text to create more targeted prompts
+  const lowerText = journalText.toLowerCase();
+  const words = journalText.split(/\s+/).filter(word => word.length > 0);
+  
+  // Extract key themes and words from the journal entry
+  const keyWords = words.filter(word => 
+    word.length > 3 && 
+    !['the', 'and', 'but', 'for', 'are', 'with', 'his', 'they', 'have', 'this', 'that', 'will', 'your', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'just', 'into', 'than', 'more', 'other', 'about', 'many', 'then', 'them', 'these', 'so', 'people', 'can', 'said', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'up', 'out', 'many', 'then', 'them', 'these', 'so', 'people', 'can', 'said', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'up', 'out'].includes(word.toLowerCase())
+  ).slice(0, 5);
+  
+  // Detect emotions and themes
+  const emotions = [];
+  if (lowerText.includes('happy') || lowerText.includes('joy') || lowerText.includes('excited')) emotions.push('happiness');
+  if (lowerText.includes('sad') || lowerText.includes('depressed') || lowerText.includes('down')) emotions.push('sadness');
+  if (lowerText.includes('angry') || lowerText.includes('frustrated') || lowerText.includes('mad')) emotions.push('anger');
+  if (lowerText.includes('anxious') || lowerText.includes('worried') || lowerText.includes('nervous')) emotions.push('anxiety');
+  if (lowerText.includes('tired') || lowerText.includes('exhausted') || lowerText.includes('drained')) emotions.push('exhaustion');
+  if (lowerText.includes('grateful') || lowerText.includes('thankful') || lowerText.includes('blessed')) emotions.push('gratitude');
+  
+  // Detect themes
+  const themes = [];
+  if (lowerText.includes('work') || lowerText.includes('job') || lowerText.includes('career')) themes.push('work');
+  if (lowerText.includes('friend') || lowerText.includes('family') || lowerText.includes('relationship')) themes.push('relationships');
+  if (lowerText.includes('goal') || lowerText.includes('dream') || lowerText.includes('future')) themes.push('goals');
+  if (lowerText.includes('health') || lowerText.includes('exercise') || lowerText.includes('body')) themes.push('health');
+  if (lowerText.includes('learn') || lowerText.includes('study') || lowerText.includes('school')) themes.push('learning');
+  
+  // Create targeted prompts based on detected content
+  let targetedPrompts = [];
+  
+  if (emotions.length > 0) {
+    const emotion = emotions[0];
+    targetedPrompts.push(`What's going on with this ${emotion}?`);
+    targetedPrompts.push(`What's behind this ${emotion}?`);
+  }
+  
+  if (themes.length > 0) {
+    const theme = themes[0];
+    if (theme === 'work') {
+      targetedPrompts.push("What's going on at work?");
+      targetedPrompts.push("What's the deal with your job?");
+    } else if (theme === 'relationships') {
+      targetedPrompts.push("What's happening with your relationships?");
+      targetedPrompts.push("What's going on with the people in your life?");
+    } else if (theme === 'goals') {
+      targetedPrompts.push("What's stopping you?");
+      targetedPrompts.push("What do you want?");
+    }
+  }
+  
+  if (keyWords.length > 0) {
+    const keyWord = keyWords[0];
+    targetedPrompts.push(`What's up with "${keyWord}"?`);
+    targetedPrompts.push(`What's the deal with "${keyWord}"?`);
+  }
+  
+  // Natural fallback prompts
   const defaultPrompts = [
-    "What emotions were you feeling as you wrote this entry?",
-    "How does what you wrote relate to your current goals or values?",
-    "What's something you learned from the experience you described?",
-    "How might your future self look back on what you've written today?",
-    "What would you like to remember most about what you've written?",
-    "What strength did you demonstrate in the experience you described?",
-    "If you could change one aspect of what you've written about, what would it be?",
-    "What support might you need regarding what you've shared in your entry?"
+    "What's really going on here?",
+    "What's the real story?",
+    "What happened?",
+    "What's bothering you?",
+    "What's on your mind?",
+    "What's going through your head?",
+    "What's the deal?",
+    "What's up?"
   ];
   
-  // Special prompts for lyrics or poetic content
+  // Natural prompts for lyrics
   const lyricalPrompts = [
-    "What emotions do these lyrics evoke for you?",
-    "Which line in this passage speaks to you most strongly?",
-    "What memories or associations do these words bring up for you?",
-    "What draws you to these particular lyrics?",
-    "How do these words reflect your current state of mind?",
-    "If you could add another verse, what would it say?",
-    "What truth are these lyrics helping you express?",
-    "How do these lyrics connect to your personal experiences?"
+    "What's going on with these lyrics?",
+    "What's up with this song?",
+    "What's the deal with these words?",
+    "What's happening here?",
+    "What's on your mind with this?",
+    "What's going through your head?",
+    "What's the story behind this?",
+    "What's really going on?"
   ];
   
   // If text appears to be lyrics, use lyrical prompts
   const isLyrical = detectContentType(journalText).includes("lyric") || 
                     journalText.toLowerCase().includes("i'd rather");
   
-  const appropriatePrompts = isLyrical ? lyricalPrompts : defaultPrompts;
+  // Prioritize targeted prompts, then lyrical if applicable, then defaults
+  let allPrompts = [...targetedPrompts];
+  
+  if (isLyrical) {
+    allPrompts = [...targetedPrompts, ...lyricalPrompts];
+  } else {
+    allPrompts = [...targetedPrompts, ...defaultPrompts];
+  }
   
   // Find a prompt that hasn't been used recently
-  let availablePrompts = appropriatePrompts.filter(p => !recentQuestions.includes(p));
+  let availablePrompts = allPrompts.filter(p => !recentQuestions.includes(p));
   
   // If all prompts have been used recently, just use the full list
   if (availablePrompts.length === 0) {
-    availablePrompts = appropriatePrompts;
+    availablePrompts = allPrompts;
   }
   
   // Choose a random prompt from the available ones

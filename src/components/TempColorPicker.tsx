@@ -15,6 +15,10 @@ interface ColorPickerProps {
 export default function SimpleColorPicker({ colors, onChange, images = [], compact = false }: ColorPickerProps) {
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [shadowDarkness, setShadowDarkness] = useState(0.7);
+  const [shadowOffsetX, setShadowOffsetX] = useState(5);
+  const [shadowOffsetY, setShadowOffsetY] = useState(8);
 
   // Extract colors from images when the component mounts or images change
   useEffect(() => {
@@ -505,10 +509,9 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   };
     
   // Add shadow effect customization
-  const [shadowDarkness, setShadowDarkness] = useState<number>(0.7); // Default 0.7 (30% darker)
-  const [shadowOffsetX, setShadowOffsetX] = useState<number>(5); 
-  const [shadowOffsetY, setShadowOffsetY] = useState<number>(8);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
+  // const [shadowOffsetX, setShadowOffsetX] = useState<number>(5); 
+  // const [shadowOffsetY, setShadowOffsetY] = useState<number>(8);
+  // const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   
   // Modified select color to use custom shadow settings
   const selectColor = (color: string) => {
@@ -554,54 +557,32 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   const sortedColors = sortColorsByHue(extractedColors);
   
   if (compact) {
-    // Always show exactly 12 colors, using fallback if needed
-    let palette = sortedColors.slice(0, 12);
-    if (palette.length < 12) {
-      const fallback = getDefaultColors(12).filter(c => !palette.includes(c));
-      palette = [...palette, ...fallback].slice(0, 12);
-    }
-    while (palette.length < 12) {
-      palette.push(getDefaultColors(12)[palette.length]);
-    }
-
-    // No media query or breakpoint logic: use the same grid for all sizes except true mobile
     return (
-      <div className="w-full py-0.5 px-0.5">
-        <div className="grid grid-cols-6 w-full" style={{ gap: window.innerWidth <= 768 ? '3px' : '6px' }}>
-          {palette.map((color, i) => (
-            <button
-              key={`color-${i}`}
-              className="rounded-sm transition-transform duration-100 focus:outline-none focus:ring-1 focus:ring-blue-400 shadow-sm hover:scale-105"
-              style={{ 
-                backgroundColor: color,
-                width: window.innerWidth <= 768 ? '16px' : '24px',
-                height: window.innerWidth <= 768 ? '16px' : '24px',
-                border: colors.locationColor === color ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.2)',
-                transform: colors.locationColor === color ? 'scale(1.1)' : 'scale(1)'
-              }}
-              onClick={() => selectColor(color)}
-              title={color}
-            >
-              {colors.locationColor === color && (
-                <svg className={window.innerWidth <= 768 ? "w-1.5 h-1.5 text-white drop-shadow mx-auto" : "w-2 h-2 text-white drop-shadow mx-auto"} fill="none" stroke="currentColor" strokeWidth="4" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
+      <div className="grid grid-cols-4 gap-2">
+        {sortedColors.map((color, i) => (
+          <button
+            key={`compact-${i}`}
+            className={`w-8 h-8 rounded-md shadow hover:shadow-md transition-all duration-200 border border-white/30 ${
+              colors.locationColor === color 
+                ? 'ring-2 ring-offset-1 ring-white/70 transform scale-110' 
+                : 'hover:scale-105'
+            }`}
+            style={{ 
+              backgroundColor: color,
+            }}
+            onClick={() => selectColor(color)}
+            title={color}
+          />
+        ))}
       </div>
     );
   }
   
   return (
     <div className="p-5 bg-black/70 backdrop-blur-md rounded-lg border border-white/20">
-      <h3 className="text-xl font-semibold mb-4 text-white">Choose Title Color</h3>
-      
       {/* Image-derived colors */}
       {extractedColors.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-sm text-gray-300 mb-3 font-medium">Colors From Your Images</h4>
           <div className="grid grid-cols-4 gap-4">
             {sortedColors.map((color, i) => (
               <button
@@ -632,8 +613,8 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
         </div>
       )}
       
-      {/* Custom color picker */}
-      <div className="mt-6 pt-5 border-t border-white/10">
+      {/* Custom color picker - Hidden on desktop */}
+      <div className="mt-6 pt-5 border-t border-white/10 md:hidden">
         <label className="block text-sm font-medium mb-3 text-gray-300">Custom Color</label>
         <div className="flex items-center gap-4">
           <input

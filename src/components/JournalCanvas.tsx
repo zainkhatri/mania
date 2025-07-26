@@ -115,11 +115,13 @@ interface JournalCanvasProps {
   onNewEntry: () => void;
   templateUrl?: string; // Add optional template URL prop
   textColors?: TextColors; // Direct color customization
-  layoutMode?: 'standard' | 'mirrored'; // Layout mode for the journal
+  layoutMode?: 'standard' | 'mirrored' | 'freeflow'; // Layout mode for the journal
   editMode?: boolean; // Whether we're in edit mode
   onTextClick?: (area: ClickableTextArea) => void; // Callback when text is clicked
   onImageDrag?: (index: number, x: number, y: number) => void; // Callback when image is dragged
+  onImageResize?: (index: number, width: number, height: number) => void; // Callback when image is resized
   onImageClick?: (x: number, y: number) => void; // Callback when image is clicked for eyedropper
+  onImageDelete?: (index: number) => void; // Callback when image delete button is clicked
   forceUpdate?: number; // Add timestamp to force updates
   onAddSticker?: (e: React.ChangeEvent<HTMLInputElement>) => void; // Add callback for sticker button
   template?: {
@@ -141,12 +143,22 @@ interface JournalCanvasProps {
   showCursor?: boolean; // Add showCursor prop
   cursorVisible?: boolean; // Add cursorVisible prop
   cursorPosition?: { textAreaIndex: number; characterIndex: number } | { isLocation: true; characterIndex: number }; // Add cursorPosition prop
+  needInspiration?: boolean; // Whether to show inspiration question
+  inspirationQuestion?: string; // The inspiration question to display
+  savedImagePositions?: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>; // Saved image positions to restore
 }
 
 // Export the imperative handle type
 export interface JournalCanvasHandle {
   addSticker: (file: File, width?: number, height?: number) => boolean;
   addMultipleStickers: (files: File[]) => boolean;
+  exportUltraHDPDF: () => void; // Add the export function to the interface
+  clearStickers: () => void; // Add function to clear all stickers
 }
 
 // Helper function to adjust color brightness 
@@ -206,7 +218,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     locationColor: '#3498DB',
     locationShadowColor: '#AED6F1'
   },
-  layoutMode = 'standard', // Default to standard layout
+      layoutMode = 'freeflow', // Default to freeflow layout
   onAddSticker,
   template = {
     name: 'Default',
@@ -227,6 +239,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   showCursor = false,
   cursorVisible = false,
   cursorPosition,
+  needInspiration = false,
+  inspirationQuestion = '',
   ...props
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -249,6 +263,114 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   useEffect(() => {
     console.log("Stickers state updated:", stickers.length, stickers);
   }, [stickers]);
+
+  // Add persistence for stickers - save to localStorage whenever stickers change
+  useEffect(() => {
+    if (stickers.length > 0) {
+      try {
+        // Save stickers to localStorage with a unique key based on date and location
+        const stickerKey = `stickers_${date.toISOString().split('T')[0]}_${location}`;
+        const stickersToSave = stickers.map(sticker => ({
+          ...sticker,
+          // Don't save imageObj as it can't be serialized
+          imageObj: undefined,
+          // Don't save originalUrl as it's a blob URL that will be invalid
+          originalUrl: undefined
+        }));
+        localStorage.setItem(stickerKey, JSON.stringify(stickersToSave));
+        console.log("Saved stickers to localStorage:", stickerKey, stickersToSave.length);
+      } catch (error) {
+        console.error("Failed to save stickers to localStorage:", error);
+      }
+    }
+  }, [stickers, date, location]);
+
+  // Load stickers from localStorage on component mount
+  useEffect(() => {
+    try {
+      const stickerKey = `stickers_${date.toISOString().split('T')[0]}_${location}`;
+      const savedStickers = localStorage.getItem(stickerKey);
+      if (savedStickers) {
+        const parsedStickers = JSON.parse(savedStickers);
+        console.log("Loaded stickers from localStorage:", stickerKey, parsedStickers.length);
+        
+        // Restore stickers with their positions and properties, and reload their images
+        const restoredStickers = parsedStickers.map((sticker: any) => ({
+          ...sticker,
+          // Recreate imageObj and originalUrl when needed
+          imageObj: undefined,
+          originalUrl: undefined
+        }));
+        
+        setStickers(restoredStickers);
+        
+        // Reload the images for the restored stickers
+        restoredStickers.forEach((sticker: any, index: number) => {
+          if (sticker.src) {
+            const img = new window.Image();
+            img.crossOrigin = "anonymous";
+            img.decoding = 'sync';
+            
+            img.onload = () => {
+              setStickers(prev => {
+                const newStickers = [...prev];
+                if (newStickers[index]) {
+                  newStickers[index] = {
+                    ...newStickers[index],
+                    imageObj: img
+                  };
+                }
+                return newStickers;
+              });
+            };
+            
+            img.onerror = (error) => {
+              console.error("Failed to reload sticker image:", error);
+            };
+            
+            // Handle both File objects and string URLs
+            if (typeof sticker.src === 'string') {
+              img.src = sticker.src;
+            } else {
+              // For File objects, we need to recreate the object URL
+              const url = URL.createObjectURL(sticker.src);
+              img.src = url;
+              // Update the sticker with the new URL
+              setStickers(prev => {
+                const newStickers = [...prev];
+                if (newStickers[index]) {
+                  newStickers[index] = {
+                    ...newStickers[index],
+                    originalUrl: url
+                  };
+                }
+                return newStickers;
+              });
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load stickers from localStorage:", error);
+    }
+  }, [date, location]); // Only reload when date or location changes
+
+  // Clear stickers when component unmounts or when date/location changes significantly
+  useEffect(() => {
+    return () => {
+      // Cleanup function - revoke any object URLs to prevent memory leaks
+      stickers.forEach(sticker => {
+        if (sticker.originalUrl) {
+          URL.revokeObjectURL(sticker.originalUrl);
+        }
+      });
+    };
+  }, [stickers]);
+  
+  // Debug: Log stickers state changes
+  useEffect(() => {
+    console.log("Stickers state updated:", stickers.length, stickers);
+  }, [stickers]);
   const [activeSticker, setActiveSticker] = useState<number | null>(null);
   const [stickerDragOffset, setStickerDragOffset] = useState<StickerDragData | null>(null);
   const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
@@ -265,7 +387,31 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     resizeBtn: null
   });
   const [hoveredButton, setHoveredButton] = useState<'delete' | 'rotate' | 'resize' | null>(null);
+  const [hoveredImage, setHoveredImage] = useState<number | null>(null);
   const [debounceRender, setDebounceRender] = useState(0);
+  
+  // Add selected image state for freeflow layout
+  const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  
+  // Simple layout image dragging state
+  const [simpleImagePositions, setSimpleImagePositions] = useState<Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    image: string | Blob;
+  }>>([]);
+  const [draggedSimpleImage, setDraggedSimpleImage] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState<{x: number, y: number}>({x: 0, y: 0});
+  const [resizingSimpleImage, setResizingSimpleImage] = useState<number | null>(null);
+  const [resizeStartData, setResizeStartData] = useState<{
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startImageX: number;
+    startImageY: number;
+  } | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Performance optimization refs with iOS-specific settings
@@ -336,7 +482,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Load content font
         const contentFont = new FontFace('ZainCustomFont', `url(${contentFontUrl})`, {
           style: 'normal',
-          weight: '400',
+          weight: '900',
           display: 'swap'
         });
         
@@ -508,32 +654,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         }
         setTemplateImage(loadedTemplate);
         
-        console.log('Debug: Images to load:', images.length);
-        
         // Then load the regular images
         const loadedImages: HTMLImageElement[] = [];
         
         // Create an array of promises for loading each image
-        const imagePromises = images.map((src) => {
+        const imagePromises = images.map((src, index) => {
           return new Promise<HTMLImageElement | null>((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous'; // Set crossOrigin for all images to prevent tainted canvas
             img.onload = () => {
-              console.log('Debug: Image loaded successfully');
               resolve(img);
             };
             img.onerror = (err) => {
-              console.error('Failed to load image:', err);
+              console.error(`Failed to load image ${index}:`, err);
               resolve(null);
             };
             // Determine source type
             if (typeof src === 'string') {
-              console.log('Debug: Loading image from URL');
               // Use the direct source without cache busting to avoid rendering issues
               img.src = src;
             } else {
               // Blob (File) object
-              console.log('Debug: Loading image from Blob');
               img.src = URL.createObjectURL(src);
             }
             
@@ -547,13 +688,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const results = await Promise.all(imagePromises);
           // Fix the linter error by using type guard to filter out nulls
           const validImages = results.filter((img): img is HTMLImageElement => img !== null);
-          console.log('Debug: Successfully loaded images:', validImages.length);
           loadedImages.push(...validImages);
-        } else {
-          console.log('Debug: No images to load');
         }
         
         setImageObjects(loadedImages);
+        // Force a re-render when images are loaded
+        renderJournal();
       } catch (err) {
         console.error('Error loading template or images:', err);
       } finally {
@@ -562,7 +702,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
     
     loadTemplateAndImages();
-  }, [images, templateUrl, fontLoaded]);
+  }, [images, templateUrl, fontLoaded, renderJournal]);
 
   // Helper to draw images preserving aspect ratio, border, rotation, flipping, and quality
   const drawImagePreservingAspectRatio = (
@@ -691,6 +831,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     if (!canvasRef.current) return;
     if (isLoading) return; // Don't draw while loading
     
+    // For freeflow layout, render even if images are still loading
+    // The canvas will re-render when images finish loading
+    
     const renderCanvas = () => {
     // Check for global flag to force redraw
     if (window.FORCE_CANVAS_REDRAW) {
@@ -776,8 +919,155 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         console.log('No template image available, using default background');
       }
       
+      // Handle freeflow layout mode (text-only flow)
+      if (layoutMode === 'freeflow') {
+        // Draw date and location first
+        const dateText = formatDate(date);
+        try {
+          // Find optimal font size for date - same as standard/mirrored layouts
+          const maxDateFontSize = calculateOptimalFontSize(
+            ctx, 
+            dateText, 
+            canvas.width - 80,
+            "'TitleFont', sans-serif",
+            120,
+            300
+          );
+          
+          // Set font and color for date - identical to standard/mirrored layouts
+          ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'left';
+          ctx.shadowColor = 'rgba(0,0,0,0)';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+          
+          // Draw date
+          ctx.fillText(dateText, 40, 190);
+          
+          // Draw location if provided - identical styling to standard/mirrored layouts
+          if (location) {
+            try {
+              // Get the default font size for 12 characters - same as standard/mirrored layouts
+              const defaultFontSize = getDefaultLocationFontSize(ctx, canvas.width);
+              
+              // Use this as the maximum font size - same calculation as standard/mirrored layouts
+              const maxLocationFontSize = Math.min(
+                defaultFontSize,
+                calculateOptimalFontSize(
+                  ctx, 
+                  location.toUpperCase(), 
+                  canvas.width - 80,
+                  "'TitleFont', sans-serif",
+                  60,
+                  defaultFontSize // Use the 12-char size as the maximum
+                )
+              );
+              
+              // Determine colors - use direct selection if provided, otherwise use default - same as standard/mirrored layouts
+              const locationColor = window.FORCE_CANVAS_REDRAW 
+                ? window.CURRENT_COLORS.locationColor 
+                : (textColors.locationColor || '#3498DB');
+              const locationShadowColor = window.FORCE_CANVAS_REDRAW 
+                ? window.CURRENT_COLORS.locationShadowColor 
+                : (textColors.locationShadowColor || '#AED6F1');
+                  
+              // Reset any existing filters or shadow settings - same as standard/mirrored layouts
+              ctx.filter = 'none';
+              ctx.shadowColor = 'rgba(0,0,0,0)';
+              ctx.shadowBlur = 0;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 0;
+              
+              // Set font - identical to standard/mirrored layouts
+              ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
+              ctx.textAlign = 'left'; // Ensure text is left-aligned
+              
+              // For the location, we'll ensure it's drawn last (on top of all other elements)
+              ctx.save();
+              
+              // Calculate the text metrics for proper positioning - same as standard/mirrored layouts
+              const locationMetrics = ctx.measureText(location.toUpperCase());
+              let locationBaseline;
+              if (locationMetrics.fontBoundingBoxAscent) {
+                locationBaseline = locationMetrics.fontBoundingBoxAscent;
+              } else {
+                // Fallback: estimate ascent as 0.8x the font size
+                locationBaseline = maxLocationFontSize * 0.8;
+              }
+              
+              // Position the location baseline - use the same calculation as original
+              const dateTextBaselineOffset = maxDateFontSize * 0.2;
+              const minSpacingBetweenElements = -40;
+              const locationY = 190 + dateTextBaselineOffset + minSpacingBetweenElements + 15 + locationBaseline;
+              
+              // Create graffiti lag effect for location text - draw shadow first - same as standard/mirrored layouts
+              ctx.fillStyle = locationShadowColor;
+              const shadowX = 65;
+              const shadowY = locationY + 25;
+              ctx.fillText(location.toUpperCase(), shadowX, shadowY); // Offset by +5x, +5y for lag effect
+              
+              // Draw main location text on top - same as standard/mirrored layouts
+              ctx.fillStyle = locationColor;
+              const mainX = 40;
+              const mainY = locationY;
+              ctx.fillText(location.toUpperCase(), mainX, mainY);
+              
+              // Draw location cursor if editing location - same as standard/mirrored layouts
+              if (cursorPosition && 'isLocation' in cursorPosition && cursorVisible) {
+                const characterIndex = cursorPosition.characterIndex;
+                const locationText = location.toUpperCase();
+                
+                // Calculate cursor position in location text
+                let cursorX = mainX;
+                if (characterIndex > 0 && locationText.length > 0) {
+                  const textBeforeCursor = locationText.substring(0, Math.min(characterIndex, locationText.length));
+                  const textMetrics = ctx.measureText(textBeforeCursor);
+                  cursorX = mainX + textMetrics.width;
+                }
+                
+                // Draw blinking cursor for location
+                ctx.save();
+                ctx.fillStyle = '#000000'; // Black cursor
+                ctx.globalAlpha = cursorVisible ? 1.0 : 0.3;
+                ctx.fillRect(cursorX, mainY - maxLocationFontSize * 0.8, 8, maxLocationFontSize); // 8px wide cursor
+                ctx.restore();
+              }
+              
+              ctx.restore();
+            } catch (err) {
+              console.error('Error drawing location in simple mode:', err);
+            }
+          }
+          
+          // Render simple text flow
+          renderSimpleTextFlow(ctx);
+          
+          // Update clickable areas for simple mode
+          const dateTextBaselineOffset = maxDateFontSize * 0.2;
+          const minSpacingBetweenElements = -40;
+          const locationY = 190 + dateTextBaselineOffset + minSpacingBetweenElements + 15;
+          
+          setClickableAreas([
+            {
+              type: 'location',
+              x: 40,
+              y: locationY - 30, // Approximate location area
+              width: canvas.width - 80,
+              height: 60,
+              text: location
+            }
+          ]);
+          
+          return; // Exit early for simple mode
+        } catch (err) {
+          console.error('Error in simple layout mode:', err);
+        }
+      }
+      
       // Calculate dimensions to use full page height
-      const topMargin = 80; // Doubled from 20
+      const topMargin = 0; // Reduced from 80 to move everything higher
       const minSpacingBetweenElements = -40; // Doubled from 10
       let currentYPosition = topMargin + 100; // Moved down to be closer to location
       const headerHeight = 360; // Doubled from 180
@@ -810,13 +1100,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Row 2 - Location spans full width (moved closer to date)
           { type: 'location', x: -10, y: currentYPosition + 10, width: fullWidth, height: 0 },
           // Row 3 - Left image, right text
-          { type: 'image', x: 30, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
+          { type: 'image', x: (imageColumnWidth - 70) / 2, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight, width: textColumnWidth + 100, height: rowHeight },
           // Row 4 - Left text, right image
           { type: 'text', x: 0, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 85, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 50, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
+          { type: 'image', x: textColumnWidth + (imageColumnWidth - 70) / 2, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
           // Row 5 - Third image with consistent margins
-          { type: 'image', x: 30, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 },
+          { type: 'image', x: (imageColumnWidth - 40) / 2, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 },
           { type: 'text', x: imageColumnWidth - 40, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: fullWidth - imageColumnWidth + 90, height: rowHeight + 100 }
         ];
       } else {
@@ -828,13 +1118,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           { type: 'location', x: -10, y: currentYPosition + 10, width: fullWidth, height: 0 },
           // Row 3 - Left text, right image (mirroring Row 3 of Style 1)
           { type: 'text', x: -10, y: topMargin + headerHeight, width: textColumnWidth + 90, height: rowHeight },
-          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
+          { type: 'image', x: textColumnWidth + (imageColumnWidth - 70) / 2, y: topMargin + headerHeight + 115, width: imageColumnWidth - 70, height: rowHeight - 30 },
           // Row 4 - Left image, right text (mirroring Row 4 of Style 1)
-          { type: 'image', x: 30, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
+          { type: 'image', x: (imageColumnWidth - 70) / 2, y: topMargin - 30 + headerHeight + rowHeight + 60, width: imageColumnWidth - 70, height: rowHeight + 70 },
           { type: 'text', x: imageColumnWidth - 50, y: topMargin + headerHeight + rowHeight + 10, width: textColumnWidth + 100, height: rowHeight },
           // Row 5 - Left text, right image (mirroring Row 5 of Style 1)
           { type: 'text', x: -10, y: topMargin + headerHeight + (rowHeight * 2) + 20, width: textColumnWidth + 90, height: rowHeight + 100 },
-          { type: 'image', x: textColumnWidth + 50, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 }
+          { type: 'image', x: textColumnWidth + (imageColumnWidth - 40) / 2, y: topMargin + headerHeight + (rowHeight * 2) + 40, width: imageColumnWidth - 40, height: rowHeight + 20 }
         ];
       }
       
@@ -856,33 +1146,33 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Track clickable areas for interactivity
       const newClickableAreas: ClickableTextArea[] = [];
       
-      // Draw date at the top with proper alignment and font size
+      // Draw date at the top with proper alignment and font size - use exact same positioning as freeflow
       const dateCell = gridLayout.find(cell => cell.type === 'date');
       if (dateCell) {
         const dateText = formatDate(date);
         try {
-          // Find optimal font size for date
+          // Find optimal font size for date - same as freeflow layout
           const maxDateFontSize = calculateOptimalFontSize(
             ctx, 
             dateText, 
-            dateCell.width - 40,
+            canvas.width - 80, // Use same width calculation as freeflow
             "'TitleFont', sans-serif",
             120,
             300
           );
           
-          // Set font and color - always black for date text
+          // Set font and color - always black for date text - identical to freeflow layout
           ctx.font = `${maxDateFontSize}px 'TitleFont', sans-serif`;
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'left';
           
-          // Remove all shadow effects for clean, crisp text
+          // Remove all shadow effects for clean, crisp text - same as freeflow layout
           ctx.shadowColor = 'rgba(0,0,0,0)';
           ctx.shadowBlur = 0;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
           
-          // Calculate metrics for the date text
+          // Calculate metrics for the date text - same as freeflow layout
           const dateMetrics = ctx.measureText(dateText);
           let dateTextBaselineOffset;
           if (dateMetrics.fontBoundingBoxDescent) {
@@ -891,18 +1181,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             dateTextBaselineOffset = maxDateFontSize * 0.2;
           }
           
-          // Draw the date text (moved down)
-          const dateX = dateCell.x + 20;
-          const dateY = dateCell.y + 25;
-          ctx.fillText(dateText, dateX, dateY);
+          // Draw the date text - use exact same positioning as freeflow (40, 190)
+          ctx.fillText(dateText, 40, 190);
           
-          // Calculate the Y position for the location with minimal spacing
-          currentYPosition = dateCell.y + dateTextBaselineOffset + minSpacingBetweenElements + 15; // Increased spacing
+          // Calculate the Y position for the location - use exact same calculation as freeflow
+          const minSpacingBetweenElements = -40;
+          const locationY = 190 + dateTextBaselineOffset + minSpacingBetweenElements + 15;
           
-          // Update the location cell's Y position
+          // Update the location cell's Y position to match freeflow
           const locationCell = gridLayout.find(cell => cell.type === 'location');
           if (locationCell) {
-            locationCell.y = currentYPosition;
+            locationCell.y = locationY;
           }
         } catch (err) {
           console.error('Error drawing date:', err);
@@ -950,7 +1239,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Function to count lines with our reference text (98 words)
           const countReferenceLines = (size: number): number => {
             try {
-              const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`;
+              const testFontString = `900 ${size}px ZainCustomFont, Arial, sans-serif`;
               ctx.font = testFontString;
               
               const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
@@ -1007,11 +1296,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           fontSize = Math.max(minFontSize, fontSize * 0.85);
           
           // Set the font with our precisely determined size for content text
-          // Use normal font weight for clean, crisp text
-          const fontWeight = '400'; // Normal weight for clean appearance
+          // Use extra bold font weight for maximum thickness
+          const fontWeight = '900'; // Extra bold weight for maximum thickness
           const fontString = `${fontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
           ctx.font = fontString;
           ctx.fillStyle = '#000000';
+          
+          // Add text stroke for extra boldness
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 1.5;
           
           // COMPLETELY disable all shadow effects for journal text
           ctx.shadowColor = 'transparent';
@@ -1090,8 +1383,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.shadowOffsetX = 0;
                   ctx.shadowOffsetY = 0;
                   
-                  // Draw text cleanly with just the font weight
-                  ctx.fillText(currentLine, areaX, currentY);
+                  // Add stroke for extra boldness
+                  ctx.strokeStyle = '#000000';
+                  ctx.lineWidth = 1.5;
+                  
+                  // Draw text with stroke for extra boldness
+                  drawTextWithCustomTKerning(ctx, currentLine, areaX, currentY, 8);
+                  drawTextWithCustomTKerning(ctx, currentLine, areaX, currentY, 8);
                   
                   ctx.restore();
                   currentLine = '';
@@ -1117,8 +1415,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   ctx.shadowOffsetX = 0;
                   ctx.shadowOffsetY = 0;
                   
-                  // Draw text cleanly with just the font weight
-                  ctx.fillText(currentLine, areaX, currentY);
+                  // Add stroke for extra boldness
+                  ctx.strokeStyle = '#000000';
+                  ctx.lineWidth = 1.5;
+                  
+                  // Draw text with stroke for extra boldness
+                  drawTextWithCustomTKerning(ctx, currentLine, areaX, currentY, 8);
+                  drawTextWithCustomTKerning(ctx, currentLine, areaX, currentY, 8);
                   
                   ctx.restore();
                   currentLine = '';
@@ -1130,6 +1433,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           console.error('Error drawing journal text:', err);
         }
       }
+      
+
       
       // Draw cursor if enabled - always show when focused, blink with cursorVisible
       if (showCursor && cursorPosition) {
@@ -1200,7 +1505,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             const countReferenceLines = (size: number): number => {
               try {
-                const testFontString = `${size}px ZainCustomFont, Arial, sans-serif`;
+                const testFontString = `900 ${size}px ZainCustomFont, Arial, sans-serif`;
                 ctx.font = testFontString;
                 
                 const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
@@ -1254,7 +1559,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             fontSize = Math.max(minFontSize, fontSize * 0.85);
             
             // Set font for cursor positioning
-            const cursorFontWeight = '400'; // Normal weight to match text
+            const cursorFontWeight = '900'; // Extra bold weight to match text
             ctx.font = `${cursorFontWeight} ${fontSize}px ZainCustomFont, Arial, sans-serif`;
             
             // Get text areas and calculate cursor position
@@ -1411,18 +1716,33 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             text: '',
             index: i
           });
+          
+          // Draw delete button if image is hovered and in edit mode
+          if (props.editMode && hoveredImage === i && layoutMode === 'freeflow') {
+            const deleteBtnX = position.x + position.width - 20;
+            const deleteBtnY = position.y + 20;
+            drawSFSymbolButton(
+              ctx,
+              deleteBtnX,
+              deleteBtnY,
+              '#ff4444', // Red background
+              'delete',
+              40, // Larger radius for image delete buttons
+              false
+            );
+          }
         }
       } catch (err) {
         console.error('Error drawing images:', err);
       }
       
-      // Draw location LAST (after all other elements) to ensure it's on top of everything
+      // Draw location LAST (after all other elements) to ensure it's on top of everything - identical to freeflow layout
       if (locationCell && location) {
         try {
-          // Get the default font size for 12 characters
+          // Get the default font size for 12 characters - same as freeflow layout
           const defaultFontSize = getDefaultLocationFontSize(ctx, canvas.width);
           
-          // Use this as the maximum font size
+          // Use this as the maximum font size - same calculation as freeflow layout
           const maxLocationFontSize = Math.min(
             defaultFontSize,
             calculateOptimalFontSize(
@@ -1435,7 +1755,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             )
           );
           
-          // Determine colors - use direct selection if provided, otherwise use default  
+          // Determine colors - use direct selection if provided, otherwise use default - same as freeflow layout
           const locationColor = window.FORCE_CANVAS_REDRAW 
             ? window.CURRENT_COLORS.locationColor 
             : (textColors.locationColor || '#3498DB');
@@ -1443,7 +1763,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             ? window.CURRENT_COLORS.locationShadowColor 
             : (textColors.locationShadowColor || '#AED6F1');
               
-          // Reset any existing filters or shadow settings
+          // Reset any existing filters or shadow settings - same as freeflow layout
           ctx.filter = 'none';
           ctx.shadowColor = 'rgba(0,0,0,0)';
           ctx.shadowBlur = 0;
@@ -1456,13 +1776,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             shadowColor: locationShadowColor
           });
           
+          // Set font - identical to freeflow layout
           ctx.font = `${maxLocationFontSize}px 'TitleFont', sans-serif`;
           ctx.textAlign = 'left'; // Ensure text is left-aligned
           
           // For the location, we'll ensure it's drawn last (on top of all other elements)
           ctx.save();
           
-          // Calculate the text metrics for proper positioning
+          // Calculate the text metrics for proper positioning - same as freeflow layout
           const locationMetrics = ctx.measureText(location.toUpperCase());
           let locationBaseline;
           if (locationMetrics.fontBoundingBoxAscent) {
@@ -1472,23 +1793,28 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             locationBaseline = maxLocationFontSize * 0.8;
           }
           
-          // Position the location baseline for tight spacing
-          const yPosition = locationCell.y + locationBaseline;
+          // Calculate location position - use exact same calculation as freeflow
+          const dateTextBaselineOffset = 300 * 0.2; // Use approximate date font size
+          const minSpacingBetweenElements = -40;
+          const locationY = 190 + dateTextBaselineOffset + minSpacingBetweenElements + 15 + locationBaseline;
+          
+          // Position the location baseline - use exact same positioning as freeflow
+          const yPosition = locationY;
           
           // Clear any previous text in this area to prevent ghosting
           ctx.save();
           ctx.fillStyle = "#ffffff";
           ctx.globalAlpha = 0; // Make it invisible
-          ctx.fillRect(locationCell.x, locationCell.y - maxLocationFontSize, locationCell.width, maxLocationFontSize * 2);
+          ctx.fillRect(0, locationY - maxLocationFontSize, canvas.width, maxLocationFontSize * 2);
           ctx.restore();
           
-          // Create graffiti lag effect for location text - draw shadow first
+          // Create graffiti lag effect for location text - draw shadow first - same as freeflow
           ctx.fillStyle = locationShadowColor;
           const shadowX = 65;
           const shadowY = yPosition + 25;
           ctx.fillText(location.toUpperCase(), shadowX, shadowY); // Offset by +5x, +5y for lag effect
           
-          // Draw main location text on top
+          // Draw main location text on top - same as freeflow
           ctx.fillStyle = locationColor;
           const mainX = 40;
           const mainY = yPosition;
@@ -1527,6 +1853,34 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.restore();
         } catch (err) {
           console.error('Error drawing location:', err);
+        }
+      }
+      
+      // Draw inspiration question in ghost white if enabled
+      if (needInspiration && inspirationQuestion && inspirationQuestion.trim()) {
+        try {
+          // Get the text areas to find a good position for the inspiration question
+          const textAreas = gridLayout.filter((item: GridLayoutItem) => item.type === 'text');
+          if (textAreas.length > 0) {
+            // Use the last text area for the inspiration question
+            const lastTextArea = textAreas[textAreas.length - 1];
+            const areaX = lastTextArea.x + 60;
+            const areaY = lastTextArea.y + lastTextArea.height + 40; // Position below the last text area
+            
+            // Set font for inspiration question
+            const inspirationFontSize = 24; // Smaller than main text
+            ctx.font = `900 ${inspirationFontSize}px ZainCustomFont, Arial, sans-serif`;
+            ctx.textAlign = 'left';
+            
+            // Draw inspiration question in ghost white (semi-transparent white)
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; // Ghost white with 60% opacity
+            ctx.globalAlpha = 0.8; // Additional transparency
+            ctx.fillText(inspirationQuestion, areaX, areaY);
+            ctx.restore();
+          }
+        } catch (err) {
+          console.error('Error drawing inspiration question:', err);
         }
       }
       
@@ -1626,8 +1980,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 -sticker.width/2, -sticker.height/2, sticker.width, sticker.height // Destination: Apply transforms here
               );
               
-              // Draw border and controls if sticker is active
-              if (activeSticker !== null && stickers[activeSticker] === sticker) {
+              // Draw border and controls if sticker is active (only in freeflow mode)
+              if (activeSticker !== null && stickers[activeSticker] === sticker && layoutMode === 'freeflow') {
                 // iOS-optimized selection border - much more visible like GoodNotes
                 const borderWidth = isIOS() ? 12 : 8; // Thicker on iOS
                 const dashSize = isIOS() ? [30, 20] : [20, 15]; // Bigger dashes on iOS
@@ -1693,8 +2047,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           });
       }
 
-        // After drawing stickers, store button positions for hit detection
-        if (activeSticker !== null && stickers[activeSticker]) {
+        // After drawing stickers, store button positions for hit detection (only in freeflow mode)
+        if (activeSticker !== null && stickers[activeSticker] && layoutMode === 'freeflow') {
           const sticker = stickers[activeSticker];
           const centerX = sticker.x + sticker.width/2;
           const centerY = sticker.y + sticker.height/2;
@@ -1751,7 +2105,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
     
     renderCanvas();
-  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender]);
+  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender, simpleImagePositions, selectedImage]);
 
   // iOS-optimized ultra-high-quality export function
   const exportUltraHDPDF = () => {
@@ -1760,6 +2114,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Force high quality mode for export
     const wasHighQuality = isHighQualityMode;
     const wasDragging = isDraggingSticker;
+    
+    // Clear any image selection before export to hide handles
+    const wasSelectedImage = selectedImage;
+    setSelectedImage(null);
     
     setIsHighQualityMode(true);
     setIsDraggingSticker(false);
@@ -1895,6 +2253,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Restore original quality settings after export
     setIsHighQualityMode(wasHighQuality);
     setIsDraggingSticker(wasDragging);
+    setSelectedImage(wasSelectedImage);
   }
   };
 
@@ -1955,6 +2314,456 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Helper to get max zIndex
   const getMaxStickerZ = () => stickers.length > 0 ? Math.max(...stickers.map(s => s.zIndex)) : 0;
 
+  // Function to render simple text flow with dynamic image wrapping
+  // Helper function to calculate text wrapping around images with precise dimensions
+  const calculateTextWrapping = (
+    currentY: number, 
+    fontSize: number, 
+    imagePositions: Array<{x: number, y: number, width: number, height: number}>,
+    canvas: HTMLCanvasElement,
+    textWidth: number,
+    leftMargin: number,
+    rightMargin: number
+  ) => {
+    let availableWidth = textWidth;
+    let startX = leftMargin;
+    
+    // Calculate text line height (approximate)
+    const lineHeight = fontSize * 1.2; // Rough estimate of line height
+    const textTop = currentY - lineHeight * 0.8; // Text baseline is roughly 80% down from top
+    const textBottom = currentY + lineHeight * 0.2; // Text extends a bit below baseline
+    
+    // Check if any images overlap with this text line
+    const overlappingImages = imagePositions.filter(imagePos => {
+      const imageTop = imagePos.y;
+      const imageBottom = imagePos.y + imagePos.height;
+      
+      // Check if the text line overlaps with the image vertically
+      const verticalOverlap = textBottom > imageTop && textTop < imageBottom;
+      
+      if (!verticalOverlap) return false;
+      
+      // Check if the image blocks the text horizontally within the text area
+      const imageLeft = imagePos.x;
+      const imageRight = imagePos.x + imagePos.width;
+      const textAreaLeft = leftMargin;
+      const textAreaRight = canvas.width - rightMargin;
+      
+      // Check if image intersects with the text area
+      const horizontalOverlap = imageRight > textAreaLeft && imageLeft < textAreaRight;
+      
+      return horizontalOverlap;
+    });
+    
+    if (overlappingImages.length > 0) {
+      // Sort images by x position to handle multiple images on the same line
+      overlappingImages.sort((a, b) => a.x - b.x);
+      
+      // Find all available text segments on this line
+      const textSegments = [];
+      
+      // Check space before the first image
+      const firstImage = overlappingImages[0];
+      const spaceBeforeFirst = firstImage.x - leftMargin;
+      if (spaceBeforeFirst > 100) { // At least 100px for meaningful text
+        textSegments.push({
+          start: leftMargin,
+          end: firstImage.x - 20, // 20px gap
+          width: firstImage.x - leftMargin - 20
+        });
+      }
+      
+      // Check spaces between images
+      for (let i = 0; i < overlappingImages.length - 1; i++) {
+        const currentImage = overlappingImages[i];
+        const nextImage = overlappingImages[i + 1];
+        const gapStart = currentImage.x + currentImage.width + 20; // 20px gap
+        const gapEnd = nextImage.x - 20; // 20px gap
+        
+        if (gapEnd > gapStart && gapEnd - gapStart > 100) { // At least 100px for text
+          textSegments.push({
+            start: gapStart,
+            end: gapEnd,
+            width: gapEnd - gapStart
+          });
+        }
+      }
+      
+      // Check space after the last image
+      const lastImage = overlappingImages[overlappingImages.length - 1];
+      const spaceAfterLast = (canvas.width - rightMargin) - (lastImage.x + lastImage.width);
+      if (spaceAfterLast > 100) { // At least 100px for meaningful text
+        textSegments.push({
+          start: lastImage.x + lastImage.width + 20, // 20px gap
+          end: canvas.width - rightMargin,
+          width: spaceAfterLast - 20
+        });
+      }
+      
+      // Find the best text segment (widest available space)
+      if (textSegments.length > 0) {
+        // Sort by width to find the widest segment
+        textSegments.sort((a, b) => b.width - a.width);
+        const bestSegment = textSegments[0];
+        
+        startX = bestSegment.start;
+        availableWidth = bestSegment.width;
+        
+        // If the best segment is too narrow, try to use multiple segments
+        if (availableWidth < 300 && textSegments.length > 1) {
+          // Try to combine adjacent segments
+          for (let i = 0; i < textSegments.length - 1; i++) {
+            const current = textSegments[i];
+            const next = textSegments[i + 1];
+            
+            // Check if segments are close enough to combine (less than 200px gap)
+            if (next.start - current.end < 200) {
+              const combinedWidth = next.end - current.start;
+              if (combinedWidth > availableWidth) {
+                startX = current.start;
+                availableWidth = combinedWidth;
+              }
+            }
+          }
+        }
+      } else {
+        // No good segments found - this line is effectively blocked
+        availableWidth = 0;
+        startX = leftMargin;
+      }
+    }
+    
+    // Ensure minimum width for readability
+    if (availableWidth < 150) {
+      availableWidth = 0; // No meaningful space available
+    }
+    
+    return { availableWidth, startX };
+  };
+
+  const renderSimpleTextFlow = (ctx: CanvasRenderingContext2D) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Use the existing hardcoded line coordinates that match the template
+    const journalLineYCoords = [
+      700, 890, 1070, 1250, 1430, 1610, 1800, 1980, 2160, 2340, 
+      2520, 2700, 2880, 3060, 3240, 3440, 3620, 3800, 3990, 4160, 4330
+    ];
+    
+    // Get images for simple layout (max 3)
+    const simpleImages = images.slice(0, 3);
+    
+    // Text area setup - use full width with margins
+    const leftMargin = 80;
+    const rightMargin = 80;
+    const textWidth = canvas.width - leftMargin - rightMargin; // 2940px available width
+    
+    // Get combined text
+    const journalText = getCombinedText();
+    // For freeflow layout, render even if there's no text (to show images)
+    if (!journalText && simpleImagePositions.length === 0) return;
+    
+    // Font size bounds
+    const minFontSize = 28;
+    const maxFontSize = 140;
+    
+    // Calculate line spacing (distance between lines)
+    const lineSpacing = journalLineYCoords.length > 1 ? 
+      journalLineYCoords[1] - journalLineYCoords[0] : 190; // Default spacing
+    
+    // Calculate how many additional lines we can fit below the last hardcoded line
+    const lastHardcodedLineY = journalLineYCoords[journalLineYCoords.length - 1]; // 4330
+    const bottomMargin = 0; // No margin - go all the way to the bottom
+    const availableHeightBelow = canvas.height - lastHardcodedLineY - bottomMargin; // 4370 - 4330 = 40
+    const additionalLines = Math.max(0, Math.floor(availableHeightBelow / lineSpacing));
+    
+    // Total lines available (hardcoded + additional)
+    const totalLines = journalLineYCoords.length + additionalLines;
+    
+    // Use state-managed image positions for simple layout
+    const imagePositions = simpleImagePositions;
+
+    // Optimistic font sizing: start large, only shrink if needed
+    let fontSize = maxFontSize;
+    let fits = false;
+    while (fontSize >= minFontSize && !fits) {
+      ctx.font = `900 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+      const words = journalText.split(' ');
+      let currentWord = 0;
+      let usedLines = 0;
+      
+          // Simulate text flow to see if all words fit using ALL available lines
+    for (let lineIndex = 0; lineIndex < totalLines && currentWord < words.length; lineIndex++) {
+      let currentLine = '';
+      const currentY = lineIndex < journalLineYCoords.length ? 
+        journalLineYCoords[lineIndex] : 
+        lastHardcodedLineY + (lineIndex - journalLineYCoords.length + 1) * lineSpacing;
+      
+      // Calculate available width for this line (accounting for images)
+      const { availableWidth, startX } = calculateTextWrapping(currentY, fontSize, imagePositions, canvas, textWidth, leftMargin, rightMargin);
+      
+      // Fill this line with as many words as possible
+      if (availableWidth > 0) { // Only try to add words if there's space available
+        while (currentWord < words.length) {
+          const nextWord = words[currentWord];
+          const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
+          const metrics = ctx.measureText(testLine);
+          
+          if (metrics.width > availableWidth && currentLine) {
+            // Word doesn't fit on this line, break to next line
+            break;
+          } else {
+            // Word fits on this line
+            currentLine = testLine;
+            currentWord++;
+          }
+        }
+        
+        // Only count this line as used if we actually put text on it
+        if (currentLine) {
+          usedLines++;
+        }
+      }
+      // If no space available on this line, don't count it as used and skip to next line
+      
+      // If we've used all words, we're done
+      if (currentWord >= words.length) {
+        break;
+      }
+    }
+      
+      // Only shrink if there are still words left after using ALL available lines
+      // This ensures we use the very last line completely before shrinking
+      fits = currentWord >= words.length;
+      
+      if (!fits) {
+        fontSize -= 0.5; // More conservative font size reduction
+      }
+    }
+    fontSize = Math.max(minFontSize, fontSize);
+    ctx.font = `900 ${fontSize}px ZainCustomFont, Arial, sans-serif`;
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // Render the text on ALL available lines (hardcoded + additional)
+    const words = journalText.split(' ');
+    let currentWord = 0;
+    let currentLine = '';
+    
+    // First, render on hardcoded lines
+    for (let lineIndex = 0; lineIndex < journalLineYCoords.length && currentWord < words.length; lineIndex++) {
+      const currentY = journalLineYCoords[lineIndex];
+      
+      // Clear the current line for this iteration
+      currentLine = '';
+      
+      // Calculate available width for this line (accounting for images)
+      const { availableWidth, startX } = calculateTextWrapping(currentY, fontSize, imagePositions, canvas, textWidth, leftMargin, rightMargin);
+      
+      // Fill this line with as many words as possible
+      if (availableWidth > 0) { // Only try to add words if there's space available
+        while (currentWord < words.length) {
+          const nextWord = words[currentWord];
+          const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
+          const metrics = ctx.measureText(testLine);
+          
+          // If this word would make the line too long, break to next line
+          if (metrics.width > availableWidth && currentLine) {
+            break;
+          } else {
+            currentLine = testLine;
+            currentWord++;
+          }
+        }
+      }
+      // If no space available on this line, skip to next line without using any words
+      
+      // Draw the line if it has content
+      if (currentLine) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.direction = 'ltr';
+        ctx.fillStyle = '#000000';
+        ctx.globalAlpha = 1.0;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Add stroke for extra boldness
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.5;
+        
+        // Draw text with stroke for extra boldness
+        drawTextWithCustomTKerning(ctx, currentLine, startX, currentY, 8);
+        drawTextWithCustomTKerning(ctx, currentLine, startX, currentY, 8);
+        ctx.restore();
+      }
+      
+      // If we've used all words, we're done
+      if (currentWord >= words.length) {
+        break;
+      }
+    }
+    
+    // Then, continue rendering on additional lines below the last hardcoded line
+    for (let additionalLineIndex = 0; additionalLineIndex < additionalLines && currentWord < words.length; additionalLineIndex++) {
+      const currentY = lastHardcodedLineY + (additionalLineIndex + 1) * lineSpacing;
+      
+      // Clear the current line for this iteration
+      currentLine = '';
+      
+      // Calculate available width for this line (accounting for images)
+      const { availableWidth, startX } = calculateTextWrapping(currentY, fontSize, imagePositions, canvas, textWidth, leftMargin, rightMargin);
+      
+      // Fill this line with as many words as possible
+      if (availableWidth > 0) { // Only try to add words if there's space available
+        while (currentWord < words.length) {
+          const nextWord = words[currentWord];
+          const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
+          const metrics = ctx.measureText(testLine);
+          
+          // If this word would make the line too long, break to next line
+          if (metrics.width > availableWidth && currentLine) {
+            break;
+          } else {
+            currentLine = testLine;
+            currentWord++;
+          }
+        }
+      }
+      // If no space available on this line, skip to next line without using any words
+      
+      // Draw the line if it has content
+      if (currentLine) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.direction = 'ltr';
+        ctx.fillStyle = '#000000';
+        ctx.globalAlpha = 1.0;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Add stroke for extra boldness
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.5;
+        
+        // Draw text with stroke for extra boldness
+        drawTextWithCustomTKerning(ctx, currentLine, startX, currentY, 8);
+        drawTextWithCustomTKerning(ctx, currentLine, startX, currentY, 8);
+        ctx.restore();
+      }
+      
+      // If we've used all words, we're done
+      if (currentWord >= words.length) {
+        break;
+      }
+    }
+    
+    // Draw images for freeflow layout
+    if (imagePositions.length > 0 && imageObjects.length > 0) {
+      imagePositions.forEach((imagePos, index) => {
+        // Use the pre-loaded image objects from imageObjects array
+        if (imageObjects[index]) {
+          const img = imageObjects[index];
+          
+          // Draw the image
+          ctx.save();
+          ctx.drawImage(img, imagePos.x, imagePos.y, imagePos.width, imagePos.height);
+          
+          // Draw border and controls if in edit mode and image is selected
+          if (props.editMode && selectedImage === index) {
+            // Draw subtle border
+            ctx.strokeStyle = draggedSimpleImage === index ? '#007AFF' : 'rgba(0, 122, 255, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(imagePos.x, imagePos.y, imagePos.width, imagePos.height);
+            
+            // Draw delete button (top-left) - elegant design
+            const deleteBtnX = imagePos.x + 30;
+            const deleteBtnY = imagePos.y + 30;
+            const deleteBtnRadius = 28;
+            
+            // Draw delete button with shadow
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Delete button background
+            ctx.fillStyle = '#FF3B30';
+            ctx.beginPath();
+            ctx.arc(deleteBtnX, deleteBtnY, deleteBtnRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Draw elegant X icon
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(deleteBtnX - 9, deleteBtnY - 9);
+            ctx.lineTo(deleteBtnX + 9, deleteBtnY + 9);
+            ctx.moveTo(deleteBtnX + 9, deleteBtnY - 9);
+            ctx.lineTo(deleteBtnX - 9, deleteBtnY + 9);
+            ctx.stroke();
+            
+            // Draw resize handle (bottom-right) - elegant design
+            const resizeBtnX = imagePos.x + imagePos.width - 30;
+            const resizeBtnY = imagePos.y + imagePos.height - 30;
+            const resizeBtnRadius = 28;
+            const isResizing = resizingSimpleImage === index;
+            
+            // Draw resize button with shadow
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Resize button background
+            ctx.fillStyle = isResizing ? '#0056CC' : '#007AFF';
+            ctx.beginPath();
+            ctx.arc(resizeBtnX, resizeBtnY, resizeBtnRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Draw elegant resize icon (corner arrows)
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            
+            // Draw corner arrows pointing outward
+            ctx.beginPath();
+            // Top arrow
+            ctx.moveTo(resizeBtnX - 6, resizeBtnY - 12);
+            ctx.lineTo(resizeBtnX - 6, resizeBtnY - 3);
+            ctx.moveTo(resizeBtnX - 12, resizeBtnY - 6);
+            ctx.lineTo(resizeBtnX - 3, resizeBtnY - 6);
+            // Bottom arrow
+            ctx.moveTo(resizeBtnX + 6, resizeBtnY + 12);
+            ctx.lineTo(resizeBtnX + 6, resizeBtnY + 3);
+            ctx.moveTo(resizeBtnX + 12, resizeBtnY + 6);
+            ctx.lineTo(resizeBtnX + 3, resizeBtnY + 6);
+            ctx.stroke();
+          }
+          
+          ctx.restore();
+        }
+      });
+    }
+  };
+
   // Add click handler for sticker selection
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
@@ -1966,6 +2775,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const mouseY = (e.clientY - rect.top) * scaleY;
 
     console.log("Canvas clicked at:", mouseX, mouseY);
+
+    // First check for image delete button clicks
+    if (props.editMode && hoveredImage !== null && imagePositionsRef.current[hoveredImage]) {
+      const position = imagePositionsRef.current[hoveredImage];
+      const deleteBtnX = position.x + position.width - 20;
+      const deleteBtnY = position.y + 20;
+      const btnRadius = 20;
+      
+      // Check if delete button was clicked
+      if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= btnRadius) {
+        console.log("Deleting image:", hoveredImage);
+        if (props.onImageDelete) {
+          props.onImageDelete(hoveredImage);
+        }
+        setHoveredImage(null);
+        return;
+      }
+    }
 
     // First check for button clicks if a sticker is active
     if (activeSticker !== null && stickerButtonsData.deleteBtn) {
@@ -2037,6 +2864,99 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
+    // Check if we clicked on a freeflow layout image
+    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      let clickedOnImage = false;
+      
+      for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+        const imagePos = simpleImagePositions[i];
+        
+        // Check if click is inside image bounds
+        if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+            y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+          
+          clickedOnImage = true;
+          
+          // Check if delete button was clicked (only if image is selected)
+          if (selectedImage === i) {
+            const deleteBtnX = imagePos.x + 30;
+            const deleteBtnY = imagePos.y + 30;
+            const deleteBtnRadius = 35; // Larger hit area for easier clicking
+            
+            if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
+              // Delete the image
+              const newPositions = simpleImagePositions.filter((_, index) => index !== i);
+              setSimpleImagePositions(newPositions);
+              setSelectedImage(null); // Clear selection after deletion
+              if (props.onImageDelete) {
+                props.onImageDelete(i);
+              }
+              return;
+            }
+            
+            // Check if resize handle was clicked (bottom-right corner)
+            const resizeBtnX = imagePos.x + imagePos.width - 30;
+            const resizeBtnY = imagePos.y + imagePos.height - 30;
+            const resizeBtnRadius = 35; // Larger hit area for easier interaction
+            
+            if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
+              // Start resizing the image
+              setResizingSimpleImage(i);
+              setResizeStartData({
+                startX: x,
+                startY: y,
+                startWidth: imagePos.width,
+                startHeight: imagePos.height,
+                startImageX: imagePos.x,
+                startImageY: imagePos.y
+              });
+              setCanvasCursor('nwse-resize');
+              return;
+            }
+            
+            // Check if clicking on image edges for resizing (alternative method)
+            const edgeThreshold = 20; // Slightly smaller threshold for cleaner interaction
+            const isNearRightEdge = Math.abs(x - (imagePos.x + imagePos.width)) <= edgeThreshold;
+            const isNearBottomEdge = Math.abs(y - (imagePos.y + imagePos.height)) <= edgeThreshold;
+            
+            if (isNearRightEdge && isNearBottomEdge) {
+              // Start resizing the image
+              setResizingSimpleImage(i);
+              setResizeStartData({
+                startX: x,
+                startY: y,
+                startWidth: imagePos.width,
+                startHeight: imagePos.height,
+                startImageX: imagePos.x,
+                startImageY: imagePos.y
+              });
+              setCanvasCursor('nwse-resize');
+              return;
+            }
+          }
+          
+          // Select the image if it wasn't already selected
+          if (selectedImage !== i) {
+            setSelectedImage(i);
+            return;
+          }
+          
+          // Start dragging the image (if already selected)
+          setDraggedSimpleImage(i);
+          setDragOffset({
+            x: x - imagePos.x,
+            y: y - imagePos.y
+          });
+          return;
+        }
+      }
+      
+      // If we didn't click on any image, deselect the current selection
+      if (!clickedOnImage && selectedImage !== null) {
+        setSelectedImage(null);
+      }
+    }
+
     // Check if we clicked on a sticker
     if (activeSticker !== null) {
       const sticker = stickers[activeSticker];
@@ -2075,11 +2995,78 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const scaleY = canvasRef.current.height / rect.height;
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
+      
+      // Handle freeflow layout image dragging and resizing
+      if (layoutMode === 'freeflow') {
+        if (draggedSimpleImage !== null) {
+          const newPositions = [...simpleImagePositions];
+          const newX = x - dragOffset.x;
+          const newY = y - dragOffset.y;
+          
+          // Constrain to canvas bounds
+          const constrainedX = Math.max(0, Math.min(canvasRef.current.width - newPositions[draggedSimpleImage].width, newX));
+          const constrainedY = Math.max(0, Math.min(canvasRef.current.height - newPositions[draggedSimpleImage].height, newY));
+          
+          newPositions[draggedSimpleImage] = {
+            ...newPositions[draggedSimpleImage],
+            x: constrainedX,
+            y: constrainedY
+          };
+          
+          setSimpleImagePositions(newPositions);
+          
+          // Call the onImageDrag callback if provided
+          if (props.onImageDrag) {
+            props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
+          }
+          
+          return;
+        }
+        
+        if (resizingSimpleImage !== null && resizeStartData) {
+          const newPositions = [...simpleImagePositions];
+          const deltaX = x - resizeStartData.startX;
+          const deltaY = y - resizeStartData.startY;
+          
+          // Calculate new size (maintain aspect ratio)
+          const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+          const newWidth = Math.max(100, resizeStartData.startWidth + deltaX);
+          const newHeight = newWidth / aspectRatio;
+          
+          // Constrain to canvas bounds
+          const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
+          const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
+          const constrainedWidth = Math.min(newWidth, maxWidth);
+          const constrainedHeight = Math.min(newHeight, maxHeight);
+          
+          // Ensure minimum size for usability
+          const minSize = 80;
+          const finalWidth = Math.max(minSize, constrainedWidth);
+          const finalHeight = Math.max(minSize, constrainedHeight);
+          
+          newPositions[resizingSimpleImage] = {
+            ...newPositions[resizingSimpleImage],
+            width: finalWidth,
+            height: finalHeight
+          };
+          
+          setSimpleImagePositions(newPositions);
+          
+          // Call the onImageResize callback if provided
+          if (props.onImageResize) {
+            props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+          }
+          
+          // Force a re-render to update text wrapping
+          debouncedRender();
+          return;
+        }
+      }
     
     // Check for button hover if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 44;
+      const btnRadius = 140; // Much larger radius for better visibility and touch targets
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -2089,20 +3076,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
-      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
+      const deleteOffsetX = -sticker.width/2 - 100; // Much larger offset for bigger buttons
+      const deleteOffsetY = -sticker.height/2 - 100; // Much larger offset for bigger buttons
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
+      const rotateOffsetY = -sticker.height/2 - 200; // Much larger offset for bigger buttons
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
-      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
+      const resizeOffsetX = sticker.width/2 + 100; // Much larger offset for bigger buttons
+      const resizeOffsetY = sticker.height/2 + 100; // Much larger offset for bigger buttons
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
@@ -2146,6 +3133,110 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           setCanvasCursor('default');
         }
         
+        debouncedRender();
+      }
+    }
+    
+    // Check for image hover (freeflow layout) - only for selected images
+    if (props.editMode && layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      let foundHoveredImage = false;
+      
+      // Check each image for hover
+      for (let i = 0; i < simpleImagePositions.length; i++) {
+        const position = simpleImagePositions[i];
+        
+        // Check if mouse is within image bounds
+        if (x >= position.x && x <= position.x + position.width &&
+            y >= position.y && y <= position.y + position.height) {
+          
+          // Only show hover effects for selected images
+          if (selectedImage === i) {
+            // Check if hovering over delete button (top-left)
+            const deleteBtnX = position.x + 30;
+            const deleteBtnY = position.y + 30;
+            const deleteBtnRadius = 40; // Larger for better visibility
+            
+            if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
+              setCanvasCursor('pointer');
+            } else {
+              // Check if hovering over resize handle (bottom-right)
+              const resizeBtnX = position.x + position.width - 30;
+              const resizeBtnY = position.y + position.height - 30;
+              const resizeBtnRadius = 40; // Larger for better visibility
+              
+              if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
+                setCanvasCursor('nwse-resize');
+              } else {
+                // Check if near edges for resizing
+                const edgeThreshold = 15;
+                const isNearRightEdge = Math.abs(x - (position.x + position.width)) <= edgeThreshold;
+                const isNearBottomEdge = Math.abs(y - (position.y + position.height)) <= edgeThreshold;
+                
+                if (isNearRightEdge && isNearBottomEdge) {
+                  setCanvasCursor('nwse-resize');
+                } else {
+                  setCanvasCursor('grab');
+                }
+              }
+            }
+          } else {
+            // For non-selected images, show pointer cursor to indicate they can be clicked
+            setCanvasCursor('pointer');
+          }
+          
+          if (hoveredImage !== i) {
+            setHoveredImage(i);
+            debouncedRender();
+          }
+          foundHoveredImage = true;
+          break;
+        }
+      }
+      
+      // If not hovering over any image, clear hover state
+      if (!foundHoveredImage && hoveredImage !== null) {
+        setHoveredImage(null);
+        setCanvasCursor('default');
+        debouncedRender();
+      }
+    }
+    
+    // Check for image hover (other layouts)
+    if (props.editMode && layoutMode !== 'freeflow' && imagePositionsRef.current.length > 0) {
+      let foundHoveredImage = false;
+      
+      // Check each image for hover
+      for (let i = 0; i < imagePositionsRef.current.length; i++) {
+        const position = imagePositionsRef.current[i];
+        
+        // Check if mouse is within image bounds
+        if (x >= position.x && x <= position.x + position.width &&
+            y >= position.y && y <= position.y + position.height) {
+          
+          // Check if hovering over delete button
+          const deleteBtnX = position.x + position.width - 20;
+          const deleteBtnY = position.y + 20;
+          const btnRadius = 40; // Larger radius for image delete buttons
+          
+          if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius) {
+            setCanvasCursor('pointer');
+          } else {
+            setCanvasCursor('default');
+          }
+          
+          if (hoveredImage !== i) {
+            setHoveredImage(i);
+            debouncedRender();
+          }
+          foundHoveredImage = true;
+          break;
+        }
+      }
+      
+      // If not hovering over any image, clear hover state
+      if (!foundHoveredImage && hoveredImage !== null) {
+        setHoveredImage(null);
+        setCanvasCursor('default');
         debouncedRender();
       }
     }
@@ -2269,6 +3360,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Update handleMouseUp to handle dragging
   const handleMouseUp = () => {
+    // Stop simple layout image dragging
+    if (draggedSimpleImage !== null) {
+      setDraggedSimpleImage(null);
+      setDragOffset({x: 0, y: 0});
+    }
+    
+    // Stop simple layout image resizing
+    if (resizingSimpleImage !== null) {
+      setResizingSimpleImage(null);
+      setResizeStartData(null);
+    }
+    
     setStickerAction(null);
     setStickerDragOffset(null);
     setIsDragging(false);
@@ -2312,6 +3415,99 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       delete window.forceCanvasRedraw;
     };
   }, [forceRedraw]);
+  
+  // Update simple image positions when images prop changes
+  useEffect(() => {
+    if (layoutMode === 'freeflow' && images.length > 0) {
+      console.log('🖼️ Images changed, updating positions. Images count:', images.length);
+      console.log('🖼️ Saved positions:', props.savedImagePositions);
+      
+      // Preserve existing positions and only add new ones for new images
+      setSimpleImagePositions(prevPositions => {
+        console.log('🖼️ Previous positions:', prevPositions);
+        
+        const newImagePositions: Array<{
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          image: string | Blob;
+        }> = [];
+        
+        const imageWidth = 1200; // Much larger width for freeflow layout to match other styles
+        const imageHeight = 900; // Much larger height for freeflow layout to match other styles
+        const canvasWidth = 3100; // Canvas width
+        const canvasHeight = 4370; // Canvas height
+        
+        images.forEach((image, index) => {
+          // Check if we already have a position for this image index
+          const existingPosition = prevPositions[index];
+          
+          if (existingPosition) {
+            console.log(`🖼️ Preserving position for image ${index}:`, existingPosition);
+            // Preserve existing position and size, but update the image reference
+            newImagePositions.push({
+              ...existingPosition,
+              image
+            });
+          } else {
+            console.log(`🖼️ Creating new position for image ${index}`);
+            // This is a new image, calculate default position
+            let x = 0, y = 0;
+            
+            // Check if we have saved positions for this image
+            if (props.savedImagePositions && props.savedImagePositions[index]) {
+              // Use saved position
+              x = props.savedImagePositions[index].x;
+              y = props.savedImagePositions[index].y;
+              console.log(`🖼️ Using saved position for image ${index}:`, { x, y });
+            } else {
+              // Center all images on the page
+              const centerX = (canvasWidth - imageWidth) / 2;
+              const centerY = (canvasHeight - imageHeight) / 2;
+              
+              // For the first image, place it in the center of the page
+              if (index === 0) {
+                x = centerX;
+                y = centerY;
+              } else {
+                // For additional images, create a grid layout to handle many images
+                const imagesPerRow = 2; // Show 2 images per row
+                const spacing = 100; // Space between images
+                const row = Math.floor(index / imagesPerRow);
+                const col = index % imagesPerRow;
+                
+                // Calculate grid position
+                const gridWidth = (imagesPerRow * imageWidth) + ((imagesPerRow - 1) * spacing);
+                const gridStartX = (canvasWidth - gridWidth) / 2;
+                
+                x = gridStartX + (col * (imageWidth + spacing));
+                y = centerY + (row * (imageHeight + spacing));
+              }
+              console.log(`🖼️ Using default position for image ${index}:`, { x, y });
+            }
+            
+            newImagePositions.push({
+              x,
+              y,
+              width: imageWidth,
+              height: imageHeight,
+              image
+            });
+          }
+        });
+        
+        console.log('🖼️ Final new positions:', newImagePositions);
+        return newImagePositions;
+      });
+      
+      // Force a re-render when images are added to freeflow layout
+      renderJournal();
+    } else if (layoutMode !== 'freeflow') {
+      // Clear positions when not in freeflow mode
+      setSimpleImagePositions([]);
+    }
+  }, [images, layoutMode, renderJournal, props.savedImagePositions]);
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
@@ -2420,6 +3616,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         console.error("Error adding multiple stickers:", err);
         return false;
       }
+    },
+    exportUltraHDPDF: exportUltraHDPDF,
+    clearStickers: () => {
+      console.log("Clearing all stickers");
+      // Revoke object URLs to prevent memory leaks
+      stickers.forEach(sticker => {
+        if (sticker.originalUrl) {
+          URL.revokeObjectURL(sticker.originalUrl);
+        }
+      });
+      setStickers([]);
+      // Clear from localStorage
+      try {
+        const stickerKey = `stickers_${date.toISOString().split('T')[0]}_${location}`;
+        localStorage.removeItem(stickerKey);
+      } catch (error) {
+        console.error("Failed to clear stickers from localStorage:", error);
+      }
     }
   }));
 
@@ -2430,7 +3644,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     y: number,
     color: string, // fill color
     icon: 'delete' | 'rotate' | 'resize',
-    btnRadius = 44, // Doubled from 22
+    btnRadius = 140, // Much larger radius for better visibility and touch targets
     isHovered = false
   ) {
     if (!ctx) return;
@@ -2439,9 +3653,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.beginPath();
     ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 16; // Doubled from 8
-    ctx.shadowOffsetX = 4; // Doubled from 2
-    ctx.shadowOffsetY = 4; // Doubled from 2
+    ctx.shadowBlur = 48; // Much larger shadow for bigger buttons
+    ctx.shadowOffsetX = 12; // Much larger offset for bigger buttons
+    ctx.shadowOffsetY = 12; // Much larger offset for bigger buttons
     
     // Make button brighter if hovered
     const btnColor = isHovered ? adjustColor(color, 20) : color;
@@ -2449,7 +3663,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.fill();
     
     // Add white border
-    ctx.lineWidth = 6; // Doubled from 3
+    ctx.lineWidth = 18; // Much thicker border for bigger buttons
     ctx.strokeStyle = '#fff';
     ctx.stroke();
     ctx.restore();
@@ -2462,7 +3676,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     ctx.translate(x, y);
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = isHovered ? 10 : 8; // Doubled from 5/4
+    ctx.lineWidth = isHovered ? 32 : 28; // Much thicker lines for bigger buttons
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -2536,7 +3750,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Implement a separate handler specifically for button clicks
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !props.editMode) return;
+    if (!canvasRef.current || !props.editMode || layoutMode !== 'freeflow') return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
@@ -2547,7 +3761,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button clicks if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      const btnRadius = 44; // Doubled from 22
+      const btnRadius = 140; // Much larger radius for better visibility and touch targets
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -2557,20 +3771,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // Delete button position (top-left)
-      const deleteOffsetX = -sticker.width/2 - 32; // Doubled from 16
-      const deleteOffsetY = -sticker.height/2 - 32; // Doubled from 16
+      const deleteOffsetX = -sticker.width/2 - 100; // Much larger offset for bigger buttons
+      const deleteOffsetY = -sticker.height/2 - 100; // Much larger offset for bigger buttons
       const deleteBtnX = centerX + deleteOffsetX * cos - deleteOffsetY * sin;
       const deleteBtnY = centerY + deleteOffsetX * sin + deleteOffsetY * cos;
       
       // Rotate button position (top-center)
       const rotateOffsetX = 0;
-      const rotateOffsetY = -sticker.height/2 - 76; // Doubled from 38
+      const rotateOffsetY = -sticker.height/2 - 200; // Much larger offset for bigger buttons
       const rotateBtnX = centerX + rotateOffsetX * cos - rotateOffsetY * sin;
       const rotateBtnY = centerY + rotateOffsetX * sin + rotateOffsetY * cos;
       
       // Resize button position (bottom-right)
-      const resizeOffsetX = sticker.width/2 + 32; // Doubled from 16
-      const resizeOffsetY = sticker.height/2 + 32; // Doubled from 16
+      const resizeOffsetX = sticker.width/2 + 100; // Much larger offset for bigger buttons
+      const resizeOffsetY = sticker.height/2 + 100; // Much larger offset for bigger buttons
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
@@ -2617,7 +3831,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Touch event handlers for mobile devices
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !props.editMode) return;
+    if (!canvasRef.current || !props.editMode || layoutMode !== 'freeflow') return;
     
     // iOS-specific touch optimizations
     e.preventDefault();
@@ -2666,7 +3880,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
       // iOS-optimized button radius and hit areas
-      const btnRadius = isIOS() ? 80 : 60;
+      const btnRadius = isIOS() ? 160 : 140; // Much larger radius for better visibility and touch targets
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -2676,8 +3890,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sin = Math.sin(angle);
       
       // iOS-optimized button positioning
-      const buttonOffset = isIOS() ? 60 : 35;
-      const topButtonOffset = isIOS() ? 120 : 80;
+      const buttonOffset = isIOS() ? 140 : 100; // Much larger offset for bigger buttons
+      const topButtonOffset = isIOS() ? 240 : 200; // Much larger offset for bigger buttons
       
       // Delete button position (top-left)
       const deleteOffsetX = -sticker.width/2 - buttonOffset;
@@ -2728,8 +3942,80 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
     }
     
-    // If we're not handling button clicks, check if touch is on a sticker
+    // If we're not handling button clicks, check if touch is on a sticker or simple layout image
     if (!buttonClickHandling) {
+      // Check for freeflow layout image touch first
+      if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+        let touchedImage = false;
+        
+        for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+          const imagePos = simpleImagePositions[i];
+          
+          // Check if touch is inside image bounds
+          if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+              y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+            
+            touchedImage = true;
+            
+            // Check if touching delete button (only if image is selected)
+            if (selectedImage === i) {
+              const deleteBtnX = imagePos.x + 30;
+              const deleteBtnY = imagePos.y + 30;
+              const deleteBtnRadius = 45; // Larger for touch interaction
+              
+              if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
+                // Delete the image
+                const newPositions = simpleImagePositions.filter((_, index) => index !== i);
+                setSimpleImagePositions(newPositions);
+                setSelectedImage(null); // Clear selection after deletion
+                if (props.onImageDelete) {
+                  props.onImageDelete(i);
+                }
+                return;
+              }
+              
+              // Check if touching resize handle
+              const resizeBtnX = imagePos.x + imagePos.width - 30;
+              const resizeBtnY = imagePos.y + imagePos.height - 30;
+              const resizeBtnRadius = 45; // Larger for touch interaction
+              
+              if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
+                // Start resizing the image
+                setResizingSimpleImage(i);
+                setResizeStartData({
+                  startX: x,
+                  startY: y,
+                  startWidth: imagePos.width,
+                  startHeight: imagePos.height,
+                  startImageX: imagePos.x,
+                  startImageY: imagePos.y
+                });
+                return;
+              }
+            }
+            
+            // Select the image if it wasn't already selected
+            if (selectedImage !== i) {
+              setSelectedImage(i);
+              return;
+            }
+            
+            // Start dragging the image (if already selected)
+            setDraggedSimpleImage(i);
+            setDragOffset({
+              x: x - imagePos.x,
+              y: y - imagePos.y
+            });
+            return;
+          }
+        }
+        
+        // If we didn't touch any image, deselect the current selection
+        if (!touchedImage && selectedImage !== null) {
+          setSelectedImage(null);
+        }
+      }
+      
       // Check if touch is on any sticker - starting with highest z-index
       const sortedStickerIndices = stickers
         .map((sticker, index) => ({ index, zIndex: sticker.zIndex }))
@@ -2836,6 +4122,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       renderJournal();
       return;
     }
+    
+
     
     // Handle pinch-to-zoom gesture for resizing stickers
     if (e.touches.length === 2 && activeSticker !== null) {
@@ -2953,6 +4241,73 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
     
+    // Handle freeflow layout image dragging and resizing
+    if (layoutMode === 'freeflow') {
+      if (draggedSimpleImage !== null) {
+        const newPositions = [...simpleImagePositions];
+        const newX = x - dragOffset.x;
+        const newY = y - dragOffset.y;
+        
+        // Constrain to canvas bounds
+        const constrainedX = Math.max(0, Math.min(canvasRef.current.width - newPositions[draggedSimpleImage].width, newX));
+        const constrainedY = Math.max(0, Math.min(canvasRef.current.height - newPositions[draggedSimpleImage].height, newY));
+        
+        newPositions[draggedSimpleImage] = {
+          ...newPositions[draggedSimpleImage],
+          x: constrainedX,
+          y: constrainedY
+        };
+        
+        setSimpleImagePositions(newPositions);
+        
+        // Call the onImageDrag callback if provided
+        if (props.onImageDrag) {
+          props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
+        }
+        
+        return;
+      }
+      
+      if (resizingSimpleImage !== null && resizeStartData) {
+        const newPositions = [...simpleImagePositions];
+        const deltaX = x - resizeStartData.startX;
+        const deltaY = y - resizeStartData.startY;
+        
+        // Calculate new size (maintain aspect ratio)
+        const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+        const newWidth = Math.max(100, resizeStartData.startWidth + deltaX);
+        const newHeight = newWidth / aspectRatio;
+        
+        // Constrain to canvas bounds
+        const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
+        const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
+        const constrainedWidth = Math.min(newWidth, maxWidth);
+        const constrainedHeight = Math.min(newHeight, maxHeight);
+        
+        // Ensure minimum size for usability
+        const minSize = 80;
+        const finalWidth = Math.max(minSize, constrainedWidth);
+        const finalHeight = Math.max(minSize, constrainedHeight);
+        
+        newPositions[resizingSimpleImage] = {
+          ...newPositions[resizingSimpleImage],
+          width: finalWidth,
+          height: finalHeight
+        };
+        
+        setSimpleImagePositions(newPositions);
+        
+        // Call the onImageResize callback if provided
+        if (props.onImageResize) {
+          props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+        }
+        
+        // Force a re-render to update text wrapping
+        debouncedRender();
+        return;
+      }
+    }
+    
     // Handle sticker actions
     if (activeSticker !== null && stickerAction && stickerDragOffset) {
       const activeStickObj = stickers[activeSticker];
@@ -3069,6 +4424,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setStickerDragOffset(null);
     setIsDragging(false);
     setIsDraggingSticker(false);
+    
+    // Reset simple layout image states
+    setDraggedSimpleImage(null);
+    setResizingSimpleImage(null);
+    setResizeStartData(null);
     
     // iOS-specific: Restore high quality mode and body settings after drag ends
     if (isIOS()) {
@@ -3268,6 +4628,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }, [stickers, updateStickerOptimized]);
 
+  // Helper function to draw a line of text with custom kerning for 'T'
+  function drawTextWithCustomTKerning(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, kerning: number = -8) {
+    let currentX = x;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      ctx.strokeText(char, currentX, y);
+      ctx.fillText(char, currentX, y);
+      const charWidth = ctx.measureText(char).width;
+      if (char === 'T' && i < text.length - 1) {
+        currentX += charWidth - kerning;
+      } else {
+        currentX += charWidth;
+      }
+    }
+  }
+
   return (
     <div className="relative w-full overflow-hidden">
       {isLoading ? (
@@ -3299,9 +4675,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               willChange: 'auto' // Don't hint for transforms
             }}
             whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
-            onMouseDown={handleCanvasMouseDown}
+            onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
-            onMouseUp={handleCanvasMouseUp}
+            onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
             onClick={handleCanvasClick}
             onTouchStart={handleTouchStart}
