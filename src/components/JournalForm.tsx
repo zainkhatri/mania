@@ -72,11 +72,14 @@ const datePickerStyles = `
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     border-radius: 0.5rem !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8) !important;
+    padding: 8px !important; /* Reduce overall padding */
   }
   
   .react-datepicker__header {
     background-color: #000000 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding-top: 8px !important; /* Reduce top padding */
+    padding-bottom: 8px !important; /* Reduce bottom padding */
   }
   
   .react-datepicker__current-month, 
@@ -85,6 +88,12 @@ const datePickerStyles = `
   .react-datepicker__time-name {
     color: white !important;
     font-family: 'ZainCustomFont', 'zain.ttf', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  }
+  
+  .react-datepicker__current-month {
+    margin: 0 !important; /* Remove default margins */
+    padding: 0 !important; /* Remove default padding */
+    line-height: 1.2 !important; /* Tighter line height */
   }
   
   .react-datepicker__day:hover, 

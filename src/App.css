@@ -490,6 +490,18 @@ button, a {
   /* Improve mobile date picker */
   .react-datepicker {
     font-size: 16px !important;
+    padding: 8px !important; /* Reduce overall padding */
+  }
+  
+  .react-datepicker__header {
+    padding-top: 8px !important; /* Reduce top padding */
+    padding-bottom: 8px !important; /* Reduce bottom padding */
+  }
+  
+  .react-datepicker__current-month {
+    margin: 0 !important; /* Remove default margins */
+    padding: 0 !important; /* Remove default padding */
+    line-height: 1.2 !important; /* Tighter line height */
   }
 
   /* Mobile form optimization - allow scrolling */
