@@ -423,6 +423,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const lastDragUpdateRef = useRef<number>(0);
   const [isDraggingSticker, setIsDraggingSticker] = useState(false);
   const [isHighQualityMode, setIsHighQualityMode] = useState(true);
+  const [isImageInteraction, setIsImageInteraction] = useState(false);
   const previousCanvasDataRef = useRef<ImageData | null>(null);
   
   // Function to trigger a re-render when needed
@@ -1703,13 +1704,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           if (props.editMode && hoveredImage === i && layoutMode === 'freeflow') {
             const deleteBtnX = position.x + position.width - 20;
             const deleteBtnY = position.y + 20;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
             drawSFSymbolButton(
               ctx,
               deleteBtnX,
               deleteBtnY,
               '#ff4444', // Red background
               'delete',
-              40, // Larger radius for image delete buttons
+              isMobile ? 200 : 150, // REASONABLE but much bigger buttons
               false
             );
           }
@@ -1987,39 +1989,41 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 const btnRadius = isIOS() ? 80 : 60; // Much bigger on iOS for easy touch
                 
                 // iOS-optimized button positioning - further out for easier touch
-                const buttonOffset = isIOS() ? 60 : 35; // Much further on iOS
-                const topButtonOffset = isIOS() ? 120 : 80; // Even further for top button
+                // Mobile-optimized button positioning - VISUALLY MUCH BIGGER
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+                const buttonOffset = isMobile ? 200 : (isIOS() ? 100 : 60); // Much further on all devices (mobile: 200, iOS: 100, desktop: 60)
+                const topButtonOffset = isMobile ? 300 : (isIOS() ? 200 : 150); // Even further for top button on all devices (mobile: 300, iOS: 200, desktop: 150)
                 
-                // Delete (bright red, white X) - top-left
+                // Delete (bright red, white X) - top-left - FORCE HUGE
                 drawSFSymbolButton(
                   ctx, 
                   -sticker.width/2 - buttonOffset,
                   -sticker.height/2 - buttonOffset,
                   '#ef4444', // Bright red
                   'delete', 
-                  btnRadius,
+                  isMobile ? 200 : 150, // REASONABLE but much bigger buttons
                   hoveredButton === 'delete'
                 );
                 
-                // Rotate (bright blue, white arrow) - top-center
+                // Rotate (bright blue, white arrow) - top-center - FORCE HUGE
                 drawSFSymbolButton(
                   ctx, 
                   0, 
                   -sticker.height/2 - topButtonOffset,
                   '#3b82f6', // Brighter blue
                   'rotate', 
-                  btnRadius,
+                  isMobile ? 200 : 150, // REASONABLE but much bigger buttons
                   hoveredButton === 'rotate'
                 );
                 
-                // Resize (bright green, white diagonal) - bottom-right
+                // Resize (bright green, white diagonal) - bottom-right - FORCE HUGE
                 drawSFSymbolButton(
                   ctx, 
                   sticker.width/2 + buttonOffset,
                   sticker.height/2 + buttonOffset,
                   '#10b981', // Green for resize (more intuitive)
                   'resize', 
-                  btnRadius,
+                  isMobile ? 200 : 150, // REASONABLE but much bigger buttons
                   hoveredButton === 'resize'
                 );
               }
@@ -2038,9 +2042,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const cos = Math.cos(angle);
           const sin = Math.sin(angle);
           
-          // iOS-optimized button positioning
-          const buttonOffset = isIOS() ? 60 : 35;
-          const topButtonOffset = isIOS() ? 120 : 80;
+          // Mobile-optimized button positioning - VISUALLY MUCH BIGGER
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+          const buttonOffset = isMobile ? 200 : (isIOS() ? 100 : 60); // Increased for all devices (mobile: 200, iOS: 100, desktop: 60)
+          const topButtonOffset = isMobile ? 300 : (isIOS() ? 200 : 150); // Increased for all devices (mobile: 300, iOS: 200, desktop: 150)
           
           // Calculate rotation-adjusted button positions
           const deleteOffsetX = -sticker.width/2 - buttonOffset;
@@ -2087,7 +2092,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
     
     renderCanvas();
-  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender, simpleImagePositions, selectedImage]);
+  }, [date, location, textSections, imageObjects, isLoading, templateImage, fontLoaded, getCombinedText, textColors, forceRender, props.forceUpdate, renderCount, layoutMode, stickers, activeSticker, stickerDragOffset, stickerAction, hoveredButton, debounceRender, simpleImagePositions, selectedImage, Date.now()]); // Added timestamp to force refresh
 
   // iOS-optimized ultra-high-quality export function
   const exportUltraHDPDF = () => {
@@ -2671,7 +2676,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             // Draw delete button (top-left) - elegant design
             const deleteBtnX = imagePos.x + 30;
             const deleteBtnY = imagePos.y + 30;
-            const deleteBtnRadius = 28;
+            const deleteBtnRadius = 200; // Match visual button size for full clickable area
             
             // Draw delete button with shadow
             ctx.save();
@@ -2690,19 +2695,19 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             // Draw elegant X icon
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 3.5;
+            ctx.lineWidth = 20; // REASONABLE line width
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(deleteBtnX - 9, deleteBtnY - 9);
-            ctx.lineTo(deleteBtnX + 9, deleteBtnY + 9);
-            ctx.moveTo(deleteBtnX + 9, deleteBtnY - 9);
-            ctx.lineTo(deleteBtnX - 9, deleteBtnY + 9);
+            ctx.moveTo(deleteBtnX - 60, deleteBtnY - 60);
+            ctx.lineTo(deleteBtnX + 60, deleteBtnY + 60);
+            ctx.moveTo(deleteBtnX + 60, deleteBtnY - 60);
+            ctx.lineTo(deleteBtnX - 60, deleteBtnY + 60);
             ctx.stroke();
             
             // Draw resize handle (bottom-right) - elegant design
             const resizeBtnX = imagePos.x + imagePos.width - 30;
             const resizeBtnY = imagePos.y + imagePos.height - 30;
-            const resizeBtnRadius = 28;
+            const resizeBtnRadius = 200; // Match visual button size for full clickable area
             const isResizing = resizingSimpleImage === index;
             
             // Draw resize button with shadow
@@ -2720,23 +2725,38 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             ctx.restore();
             
-            // Draw elegant resize icon (corner arrows)
+            // Draw GoodNotes-style scaling icon (corner handles) - BIG SIZE
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 20; // Much thicker to match delete button
             ctx.lineCap = 'round';
             
-            // Draw corner arrows pointing outward
+            // Draw corner handles like GoodNotes - BIG SIZE
             ctx.beginPath();
-            // Top arrow
-            ctx.moveTo(resizeBtnX - 6, resizeBtnY - 12);
-            ctx.lineTo(resizeBtnX - 6, resizeBtnY - 3);
-            ctx.moveTo(resizeBtnX - 12, resizeBtnY - 6);
-            ctx.lineTo(resizeBtnX - 3, resizeBtnY - 6);
-            // Bottom arrow
-            ctx.moveTo(resizeBtnX + 6, resizeBtnY + 12);
-            ctx.lineTo(resizeBtnX + 6, resizeBtnY + 3);
-            ctx.moveTo(resizeBtnX + 12, resizeBtnY + 6);
-            ctx.lineTo(resizeBtnX + 3, resizeBtnY + 6);
+            
+            // Top-left corner handle
+            ctx.moveTo(resizeBtnX - 60, resizeBtnY - 45);
+            ctx.lineTo(resizeBtnX - 60, resizeBtnY - 75);
+            ctx.moveTo(resizeBtnX - 60, resizeBtnY - 75);
+            ctx.lineTo(resizeBtnX - 30, resizeBtnY - 75);
+            
+            // Bottom-right corner handle
+            ctx.moveTo(resizeBtnX + 60, resizeBtnY + 45);
+            ctx.lineTo(resizeBtnX + 60, resizeBtnY + 75);
+            ctx.moveTo(resizeBtnX + 60, resizeBtnY + 75);
+            ctx.lineTo(resizeBtnX + 30, resizeBtnY + 75);
+            
+            // Top-right corner handle
+            ctx.moveTo(resizeBtnX + 60, resizeBtnY - 45);
+            ctx.lineTo(resizeBtnX + 60, resizeBtnY - 75);
+            ctx.moveTo(resizeBtnX + 60, resizeBtnY - 75);
+            ctx.lineTo(resizeBtnX + 30, resizeBtnY - 75);
+            
+            // Bottom-left corner handle
+            ctx.moveTo(resizeBtnX - 60, resizeBtnY + 45);
+            ctx.lineTo(resizeBtnX - 60, resizeBtnY + 75);
+            ctx.moveTo(resizeBtnX - 60, resizeBtnY + 75);
+            ctx.lineTo(resizeBtnX - 30, resizeBtnY + 75);
+            
             ctx.stroke();
           }
           
@@ -2863,7 +2883,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           if (selectedImage === i) {
             const deleteBtnX = imagePos.x + 30;
             const deleteBtnY = imagePos.y + 30;
-            const deleteBtnRadius = 35; // Larger hit area for easier clicking
+            const deleteBtnRadius = 200; // Match visual button size for full clickable area
             
             if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
               // Delete the image
@@ -2879,7 +2899,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             // Check if resize handle was clicked (bottom-right corner)
             const resizeBtnX = imagePos.x + imagePos.width - 30;
             const resizeBtnY = imagePos.y + imagePos.height - 30;
-            const resizeBtnRadius = 35; // Larger hit area for easier interaction
+            const resizeBtnRadius = 200; // Match visual button size for full clickable area
             
             if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
               // Start resizing the image
@@ -3186,7 +3206,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             // Check if hovering over delete button (top-left)
             const deleteBtnX = position.x + 30;
             const deleteBtnY = position.y + 30;
-            const deleteBtnRadius = 40; // Larger for better visibility
+            const deleteBtnRadius = 200; // Match visual button size for full clickable area
             
             if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
               setCanvasCursor('pointer');
@@ -3194,7 +3214,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               // Check if hovering over resize handle (bottom-right)
               const resizeBtnX = position.x + position.width - 30;
               const resizeBtnY = position.y + position.height - 30;
-              const resizeBtnRadius = 40; // Larger for better visibility
+              const resizeBtnRadius = 200; // Match visual button size for full clickable area
               
               if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
                 setCanvasCursor('nwse-resize');
@@ -3784,39 +3804,45 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     y: number,
     color: string, // fill color
     icon: 'delete' | 'rotate' | 'resize',
-    btnRadius = 140, // Much larger radius for better visibility and touch targets
+    btnRadius = 180, // Increased base radius from 140 to 180 for desktop
     isHovered = false
   ) {
+    // Force much larger buttons for testing - VISUALLY HUGE
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    const mobileBtnRadius = isMobile ? 200 : 150; // REASONABLE but much bigger buttons (mobile: 200px, desktop: 150px)
+    const actualRadius = isMobile ? mobileBtnRadius : btnRadius;
+    console.log(`Drawing button with radius: ${actualRadius}px (mobile: ${isMobile})`); // DEBUG: Verify button size
+    console.log(`Button position: x=${x}, y=${y}, canvas size: ${ctx?.canvas.width}x${ctx?.canvas.height}`); // DEBUG: Button position
     if (!ctx) return;
     // Draw drop shadowed button
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 48; // Much larger shadow for bigger buttons
-    ctx.shadowOffsetX = 12; // Much larger offset for bigger buttons
-    ctx.shadowOffsetY = 12; // Much larger offset for bigger buttons
+    ctx.arc(x, y, actualRadius, 0, 2 * Math.PI);
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'; // Darker shadow for better visibility
+    ctx.shadowBlur = isMobile ? 80 : 60; // Much larger shadow on mobile
+    ctx.shadowOffsetX = isMobile ? 20 : 16; // Much larger offset on mobile
+    ctx.shadowOffsetY = isMobile ? 20 : 16; // Much larger offset on mobile
     
-    // Make button brighter if hovered
-    const btnColor = isHovered ? adjustColor(color, 20) : color;
+    // Make button brighter if hovered or on mobile for better visibility
+    const btnColor = (isHovered || isMobile) ? adjustColor(color, 25) : color;
     ctx.fillStyle = btnColor;
     ctx.fill();
     
-    // Add white border
-    ctx.lineWidth = 18; // Much thicker border for bigger buttons
+    // Add white border - much thicker on mobile
+    ctx.lineWidth = isMobile ? 100 : 80; // MASSIVE border on mobile
     ctx.strokeStyle = '#fff';
     ctx.stroke();
     ctx.restore();
 
-    // Set icon size relative to button radius (70-80% of button)
-    const iconSize = btnRadius * (isHovered ? 1.4 : 1.3); // Slightly bigger when hovered
+    // Set icon size relative to button radius (70-80% of button) - much larger on mobile
+    const iconSize = actualRadius * (isHovered ? 1.4 : (isMobile ? 1.6 : 1.3)); // Much bigger on mobile
     
     // Draw the icon directly using canvas primitives for perfect control
     ctx.save();
     ctx.translate(x, y);
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = isHovered ? 32 : 28; // Much thicker lines for bigger buttons
+    ctx.lineWidth = isHovered ? (isMobile ? 150 : 120) : (isMobile ? 120 : 100); // MASSIVE lines on mobile
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -3969,20 +3995,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     handleMouseUp();
   };
 
+  // Add/remove image interaction class to body for CSS scroll prevention
+  useEffect(() => {
+    if (isImageInteraction || activeSticker !== null || draggedSimpleImage !== null || resizingSimpleImage !== null) {
+      document.body.classList.add('image-interaction-active');
+    } else {
+      document.body.classList.remove('image-interaction-active');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('image-interaction-active');
+    };
+  }, [isImageInteraction, activeSticker, draggedSimpleImage, resizingSimpleImage]);
+
   // Touch event handlers for mobile devices
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
-    
-    // Prevent scrolling when interacting with images
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Prevent zoom and scrolling on all mobile devices
-    document.body.style.touchAction = 'none';
-    document.body.style.overflow = 'hidden';
-    
-    // Only proceed with freeflow layout for image interactions
-    if (layoutMode !== 'freeflow') return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
@@ -3990,6 +4019,52 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const touch = e.touches[0];
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
+    
+    // Check if touch is on an image or button (only prevent scroll for image interactions)
+    let isImageInteraction = false;
+    
+    // Check if touching an image in freeflow mode
+    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+        const imagePos = simpleImagePositions[i];
+        if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+            y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+          isImageInteraction = true;
+          break;
+        }
+      }
+    }
+    
+    // Check if touching a sticker
+    if (stickers.length > 0) {
+      for (let i = stickers.length - 1; i >= 0; i--) {
+        const sticker = stickers[i];
+        const centerX = sticker.x + sticker.width/2;
+        const centerY = sticker.y + sticker.height/2;
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const angle = -sticker.rotation * Math.PI / 180;
+        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+        
+        if (Math.abs(localX) <= sticker.width/2 && Math.abs(localY) <= sticker.height/2) {
+          isImageInteraction = true;
+          break;
+        }
+      }
+    }
+    
+    // Only prevent scrolling if we're interacting with images
+    if (isImageInteraction) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.body.style.touchAction = 'none';
+      document.body.style.overflow = 'hidden';
+      setIsImageInteraction(true);
+    }
+    
+    // Only proceed with freeflow layout for image interactions
+    if (layoutMode !== 'freeflow') return;
     
     // Store multi-touch initial state for rotation detection
     if (e.touches.length === 2 && activeSticker !== null) {
@@ -4020,8 +4095,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Check for button touches if we have an active sticker
     if (activeSticker !== null && stickers[activeSticker]) {
       const sticker = stickers[activeSticker];
-      // iOS-optimized button radius and hit areas
-      const btnRadius = isIOS() ? 160 : 140; // Much larger radius for better visibility and touch targets
+      // Mobile-optimized button radius and hit areas - VISUALLY MUCH BIGGER
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      const btnRadius = isMobile ? 200 : (isIOS() ? 150 : 120); // REASONABLE radius to match visual button size (mobile: 200, iOS: 150, desktop: 120)
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
       
@@ -4030,9 +4106,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       
-      // iOS-optimized button positioning
-      const buttonOffset = isIOS() ? 140 : 100; // Much larger offset for bigger buttons
-      const topButtonOffset = isIOS() ? 240 : 200; // Much larger offset for bigger buttons
+      // Mobile-optimized button positioning - VISUALLY MUCH BIGGER
+      const buttonOffset = isMobile ? 300 : (isIOS() ? 200 : 150); // Much larger offset for all devices (mobile: 300, iOS: 200, desktop: 150)
+      const topButtonOffset = isMobile ? 420 : (isIOS() ? 320 : 280); // Much larger offset for all devices (mobile: 420, iOS: 320, desktop: 280)
       
       // Delete button position (top-left)
       const deleteOffsetX = -sticker.width/2 - buttonOffset;
@@ -4052,10 +4128,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const resizeBtnX = centerX + resizeOffsetX * cos - resizeOffsetY * sin;
       const resizeBtnY = centerY + resizeOffsetX * sin + resizeOffsetY * cos;
       
-      // iOS-optimized hit areas - much larger for easier touch
-      const hitMultiplier = isIOS() ? 1.5 : 1.2; // Even bigger hit area on iOS
+      // Mobile-optimized hit areas - EVEN BIGGER for easier touch
+      const hitMultiplier = isMobile ? 2.2 : (isIOS() ? 1.5 : 1.2); // Even bigger hit area on mobile (increased from 1.8 to 2.2)
       if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * hitMultiplier) {
-        console.log("iOS: Delete button tapped!");
+        console.log("Mobile: Delete button tapped!");
+        // Haptic feedback for mobile
+        if (navigator.vibrate) {
+          navigator.vibrate(50); // Short vibration for button press
+        }
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         updateStickersOptimized(newStickers);
@@ -4066,7 +4146,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Handle rotate button touch
       if (Math.sqrt((x - rotateBtnX) ** 2 + (y - rotateBtnY) ** 2) <= btnRadius * hitMultiplier) {
-        console.log("iOS: Rotate button tapped!");
+        console.log("Mobile: Rotate button tapped!");
+        // Haptic feedback for mobile
+        if (navigator.vibrate) {
+          navigator.vibrate(30); // Short vibration for button press
+        }
         setStickerAction('rotate');
         setStickerDragOffset({x: 0, y: 0});
         setButtonClickHandling(true);
@@ -4075,7 +4159,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Handle resize button touch
       if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= btnRadius * hitMultiplier) {
-        console.log("iOS: Resize button tapped!");
+        console.log("Mobile: Resize button tapped!");
+        // Haptic feedback for mobile
+        if (navigator.vibrate) {
+          navigator.vibrate(30); // Short vibration for button press
+        }
         setStickerAction('resize');
         setStickerDragOffset({x: 0, y: 0});
         setButtonClickHandling(true);
@@ -4102,7 +4190,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             if (selectedImage === i) {
               const deleteBtnX = imagePos.x + 30;
               const deleteBtnY = imagePos.y + 30;
-              const deleteBtnRadius = 45; // Larger for touch interaction
+              const deleteBtnRadius = 200; // Match visual button size for full clickable area
               
               if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
                 // Delete the image
@@ -4118,7 +4206,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               // Check if touching resize handle
               const resizeBtnX = imagePos.x + imagePos.width - 30;
               const resizeBtnY = imagePos.y + imagePos.height - 30;
-              const resizeBtnRadius = 45; // Larger for touch interaction
+              const resizeBtnRadius = 200; // Match visual button size for full clickable area
               
               if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
                 // Start resizing the image
@@ -4219,13 +4307,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    // Prevent scrolling when interacting with images
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Keep preventing scroll during touch move
-    document.body.style.touchAction = 'none';
-    document.body.style.overflow = 'hidden';
+    // Only prevent scrolling if we're in an image interaction
+    if (isImageInteraction || activeSticker !== null || draggedSimpleImage !== null || resizingSimpleImage !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.body.style.touchAction = 'none';
+      document.body.style.overflow = 'hidden';
+    }
     
     // Handle two-finger rotation
     if (e.touches.length === 2 && 
@@ -4598,6 +4686,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Restore scrolling for all devices after touch interactions
     document.body.style.touchAction = '';
     document.body.style.overflow = '';
+    setIsImageInteraction(false);
     
     // iOS-specific: Restore high quality mode after drag ends
     if (isIOS()) {

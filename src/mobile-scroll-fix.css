@@ -238,6 +238,39 @@
     -moz-user-select: none !important;
     -ms-user-select: none !important;
     user-select: none !important;
+    /* Improved touch responsiveness */
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+  }
+  
+  /* Prevent scrolling on journal canvas when in edit mode */
+  .journal-canvas-container canvas,
+  #journal-canvas {
+    touch-action: none !important;
+    -webkit-overflow-scrolling: auto !important;
+    overscroll-behavior: none !important;
+    /* Prevent any scrolling behavior */
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    /* Prevent zoom and scroll */
+    -webkit-touch-callout: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
+  /* When image interaction is active, prevent body scrolling */
+  body.image-interaction-active {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+    touch-action: none !important;
   }
   
   /* Prevent zoom on double tap */
@@ -245,11 +278,15 @@
     -webkit-tap-highlight-color: transparent !important;
   }
   
-  /* Larger touch targets for image controls */
+  /* Larger touch targets for image controls - VISUALLY MUCH BIGGER */
   .image-control-button {
-    min-width: 44px !important;
-    min-height: 44px !important;
-    padding: 8px !important;
+    min-width: 120px !important; /* Increased from 100px to 120px */
+    min-height: 120px !important; /* Increased from 100px to 120px */
+    padding: 24px !important; /* Increased from 20px to 24px */
+    border-radius: 24px !important; /* Rounded corners for better touch */
+    background-color: rgba(255, 255, 255, 0.25) !important; /* More visible background */
+    backdrop-filter: blur(10px) !important; /* Modern glass effect */
+    border: 4px solid rgba(255, 255, 255, 0.5) !important; /* More visible border */
   }
   
   /* Prevent text selection during image interactions */
@@ -258,5 +295,35 @@
     -moz-user-select: none !important;
     -ms-user-select: none !important;
     user-select: none !important;
+  }
+  
+  /* Mobile-specific canvas improvements */
+  #journal-canvas {
+    /* Ensure canvas is responsive and touch-friendly */
+    max-width: 100% !important;
+    max-height: 100% !important;
+    touch-action: manipulation !important; /* Optimize for touch */
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+  
+  /* Improve touch feedback for interactive elements */
+  * {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  /* Enhanced button hover states for mobile */
+  button:hover, 
+  .cursor-pointer:hover {
+    transform: scale(1.05) !important;
+    transition: transform 0.1s ease !important;
+  }
+  
+  /* Active state for better touch feedback */
+  button:active, 
+  .cursor-pointer:active {
+    transform: scale(0.95) !important;
+    transition: transform 0.05s ease !important;
   }
 } 
