@@ -6,6 +6,12 @@ interface LayoutToggleProps {
 }
 
 const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }) => {
+  // Detect mobile device
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           window.innerWidth <= 768;
+  };
+  
   return (
     <div className="space-y-1 md:space-y-2">
       <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
@@ -41,7 +47,14 @@ const LayoutToggle: React.FC<LayoutToggleProps> = ({ layoutMode, setLayoutMode }
             </div>
           </div>
           <div className="flex flex-col">
-            <span className="text-sm md:text-base font-medium text-white">Freeflow</span>
+            <span className="text-sm md:text-base font-medium text-white">
+              Freeflow
+              {isMobile() && (
+                <span className="ml-1 text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                  Default
+                </span>
+              )}
+            </span>
             <span className="text-xs text-gray-400">The journal is yours.</span>
           </div>
         </div>

@@ -228,4 +228,35 @@
     min-width: max-content !important;
     width: max-content !important;
   }
+  
+  /* Enhanced touch interactions for images */
+  canvas {
+    touch-action: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    -khtml-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+  }
+  
+  /* Prevent zoom on double tap */
+  canvas {
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
+  /* Larger touch targets for image controls */
+  .image-control-button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 8px !important;
+  }
+  
+  /* Prevent text selection during image interactions */
+  .journal-canvas-container {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+  }
 } 

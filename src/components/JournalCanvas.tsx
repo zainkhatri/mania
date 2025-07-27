@@ -728,7 +728,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       ctx.imageSmoothingQuality = 'high';
       
       // Calculate aspect ratios to maintain proportions
-      const imgAspect = img.width / img.height;
+      const imgAspect = img.naturalWidth / img.naturalHeight;
       const targetAspect = width / height;
       let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
       
@@ -1675,36 +1675,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const img = imageObjects[i];
           const position = imagePositions[i];
           
-          // PERFORMANCE OPTIMIZATION: Use lower quality for main images during sticker dragging
-          const isDragOptimized = isDraggingSticker && !isHighQualityMode;
-          
-          if (isDragOptimized) {
-            // OPTIMIZED rendering during sticker drag - maintain quality
-            ctx.save();
-            ctx.imageSmoothingEnabled = true; // KEEP smoothing for quality
-            ctx.imageSmoothingQuality = 'high'; // Maintain high quality
-            ctx.drawImage(
-              img,
-              position.x, 
-              position.y, 
-              position.width, 
-              position.height
-            );
-            ctx.restore();
-          } else {
-            // Use the high-quality drawing function for static or export mode
-            drawImagePreservingAspectRatio(
-              img,
-              position.x, 
-              position.y, 
-              position.width, 
-              position.height, 
-              true, // Add a subtle border for definition
-              position.rotation,
-              position.flipH,
-              position.flipV
-            );
-          }
+          // ALWAYS use the high-quality drawing function to preserve aspect ratio
+          drawImagePreservingAspectRatio(
+            img,
+            position.x, 
+            position.y, 
+            position.width, 
+            position.height, 
+            true, // Add a subtle border for definition
+            position.rotation,
+            position.flipH,
+            position.flipV
+          );
           
           // Add image to clickable areas for eyedropper functionality
           newClickableAreas.push({
@@ -2985,11 +2967,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   };
 
   // Update handleMouseMove to handle dragging and hover effects
+  // Add smooth animation state for image operations
+  const [isResizing, setIsResizing] = React.useState(false);
+  const lastUpdateTime = React.useRef(0);
+  const THROTTLE_MS = 16; // ~60fps
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    try {
+    // Throttle updates for smooth performance
+    const now = Date.now();
+    if (now - lastUpdateTime.current < THROTTLE_MS) {
+      return;
+    }
+    lastUpdateTime.current = now;
     
+    try {
       const rect = canvasRef.current.getBoundingClientRect();
       const scaleX = canvasRef.current.width / rect.width;
       const scaleY = canvasRef.current.height / rect.height;
@@ -2999,66 +2992,105 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Handle freeflow layout image dragging and resizing
       if (layoutMode === 'freeflow') {
         if (draggedSimpleImage !== null) {
-          const newPositions = [...simpleImagePositions];
-          const newX = x - dragOffset.x;
-          const newY = y - dragOffset.y;
-          
-          // Constrain to canvas bounds
-          const constrainedX = Math.max(0, Math.min(canvasRef.current.width - newPositions[draggedSimpleImage].width, newX));
-          const constrainedY = Math.max(0, Math.min(canvasRef.current.height - newPositions[draggedSimpleImage].height, newY));
-          
-          newPositions[draggedSimpleImage] = {
-            ...newPositions[draggedSimpleImage],
-            x: constrainedX,
-            y: constrainedY
-          };
-          
-          setSimpleImagePositions(newPositions);
-          
-          // Call the onImageDrag callback if provided
-          if (props.onImageDrag) {
-            props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
+          // Cancel any pending animation frame
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
           }
+          
+          // Use requestAnimationFrame for smooth updates
+          animationFrameRef.current = requestAnimationFrame(() => {
+            const newPositions = [...simpleImagePositions];
+            const newX = x - dragOffset.x;
+            const newY = y - dragOffset.y;
+            
+            // Constrain to canvas bounds
+            const constrainedX = Math.max(0, Math.min(canvasRef.current!.width - newPositions[draggedSimpleImage].width, newX));
+            const constrainedY = Math.max(0, Math.min(canvasRef.current!.height - newPositions[draggedSimpleImage].height, newY));
+            
+            newPositions[draggedSimpleImage] = {
+              ...newPositions[draggedSimpleImage],
+              x: constrainedX,
+              y: constrainedY
+            };
+            
+            setSimpleImagePositions(newPositions);
+            setIsDragging(true);
+            
+            // Call the onImageDrag callback if provided
+            if (props.onImageDrag) {
+              props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
+            }
+          });
           
           return;
         }
         
         if (resizingSimpleImage !== null && resizeStartData) {
-          const newPositions = [...simpleImagePositions];
-          const deltaX = x - resizeStartData.startX;
-          const deltaY = y - resizeStartData.startY;
-          
-          // Calculate new size (maintain aspect ratio)
-          const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
-          const newWidth = Math.max(100, resizeStartData.startWidth + deltaX);
-          const newHeight = newWidth / aspectRatio;
-          
-          // Constrain to canvas bounds
-          const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
-          const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
-          const constrainedWidth = Math.min(newWidth, maxWidth);
-          const constrainedHeight = Math.min(newHeight, maxHeight);
-          
-          // Ensure minimum size for usability
-          const minSize = 80;
-          const finalWidth = Math.max(minSize, constrainedWidth);
-          const finalHeight = Math.max(minSize, constrainedHeight);
-          
-          newPositions[resizingSimpleImage] = {
-            ...newPositions[resizingSimpleImage],
-            width: finalWidth,
-            height: finalHeight
-          };
-          
-          setSimpleImagePositions(newPositions);
-          
-          // Call the onImageResize callback if provided
-          if (props.onImageResize) {
-            props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+          // Cancel any pending animation frame
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
           }
           
-          // Force a re-render to update text wrapping
-          debouncedRender();
+          // Use requestAnimationFrame for smooth updates
+          animationFrameRef.current = requestAnimationFrame(() => {
+            const newPositions = [...simpleImagePositions];
+            const deltaX = x - resizeStartData.startX;
+            const deltaY = y - resizeStartData.startY;
+            
+            // STRICT ASPECT RATIO PRESERVATION - NO STRETCHING ALLOWED
+            const originalAspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+            
+            // Calculate new size based on mouse movement (use the larger delta for better UX)
+            const deltaMagnitude = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+            const scaleFactor = deltaMagnitude > 0 ? 
+              (resizeStartData.startWidth + deltaMagnitude) / resizeStartData.startWidth : 1;
+            
+            // Apply scale factor while maintaining aspect ratio
+            let newWidth = Math.max(80, resizeStartData.startWidth * scaleFactor);
+            let newHeight = newWidth / originalAspectRatio;
+            
+            // Ensure minimum height as well
+            if (newHeight < 80) {
+              newHeight = 80;
+              newWidth = newHeight * originalAspectRatio;
+            }
+            
+            // Constrain to canvas bounds while preserving aspect ratio
+            const maxWidth = canvasRef.current!.width - resizeStartData.startImageX;
+            const maxHeight = canvasRef.current!.height - resizeStartData.startImageY;
+            
+            // Check if we need to scale down to fit bounds
+            if (newWidth > maxWidth) {
+              newWidth = maxWidth;
+              newHeight = newWidth / originalAspectRatio;
+            }
+            if (newHeight > maxHeight) {
+              newHeight = maxHeight;
+              newWidth = newHeight * originalAspectRatio;
+            }
+            
+            // Final dimensions - guaranteed to maintain aspect ratio
+            const finalWidth = Math.round(newWidth);
+            const finalHeight = Math.round(newHeight);
+            
+            newPositions[resizingSimpleImage] = {
+              ...newPositions[resizingSimpleImage],
+              width: finalWidth,
+              height: finalHeight
+            };
+            
+            setSimpleImagePositions(newPositions);
+            setIsResizing(true);
+            
+            // Call the onImageResize callback if provided
+            if (props.onImageResize) {
+              props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+            }
+            
+            // Force a re-render to update text wrapping
+            debouncedRender();
+          });
+          
           return;
         }
       }
@@ -3375,7 +3407,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setStickerAction(null);
     setStickerDragOffset(null);
     setIsDragging(false);
+    setIsResizing(false);
     setCanvasCursor('default');
+    
+    // Cancel any pending animation frames
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
   };
   
   // Update handleMouseLeave to handle dragging
@@ -3383,7 +3422,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setStickerAction(null);
     setStickerDragOffset(null);
     setIsDragging(false);
+    setIsResizing(false);
     setCanvasCursor('default');
+    
+    // Cancel any pending animation frames
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
   };
 
   // Add click handler to canvas
@@ -3434,11 +3480,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           image: string | Blob;
         }> = [];
         
-        const imageWidth = 1200; // Much larger width for freeflow layout to match other styles
-        const imageHeight = 900; // Much larger height for freeflow layout to match other styles
+        // Calculate proper dimensions based on each image's natural aspect ratio
+        const calculateImageDimensions = (imageUrl: string | Blob, maxDimension: number = 1200): Promise<{ width: number; height: number }> => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const aspectRatio = img.naturalWidth / img.naturalHeight;
+              
+              let width, height;
+              if (aspectRatio > 1) {
+                // Landscape image
+                width = maxDimension;
+                height = maxDimension / aspectRatio;
+              } else {
+                // Portrait or square image
+                height = maxDimension;
+                width = maxDimension * aspectRatio;
+              }
+              
+              resolve({ width: Math.round(width), height: Math.round(height) });
+            };
+            img.onerror = () => {
+              // Fallback to default dimensions if image fails to load
+              resolve({ width: 800, height: 600 });
+            };
+            img.src = typeof imageUrl === 'string' ? imageUrl : URL.createObjectURL(imageUrl);
+          });
+        };
         const canvasWidth = 3100; // Canvas width
         const canvasHeight = 4370; // Canvas height
         
+        // Process images synchronously for better performance
         images.forEach((image, index) => {
           // Check if we already have a position for this image index
           const existingPosition = prevPositions[index];
@@ -3452,6 +3524,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             });
           } else {
             console.log(`🖼️ Creating new position for image ${index}`);
+            
+            // Use default dimensions for initial positioning (will be updated when image loads)
+            const imageWidth = 800;
+            const imageHeight = 600;
+            
             // This is a new image, calculate default position
             let x = 0, y = 0;
             
@@ -3462,29 +3539,30 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               y = props.savedImagePositions[index].y;
               console.log(`🖼️ Using saved position for image ${index}:`, { x, y });
             } else {
-              // Center all images on the page
+              // Center all images on the page with slight offsets to prevent overlap
               const centerX = (canvasWidth - imageWidth) / 2;
               const centerY = (canvasHeight - imageHeight) / 2;
+              
+              // Add slight random offset to prevent perfect stacking
+              const offsetRange = 50; // Maximum offset in pixels
+              const randomOffsetX = (Math.random() - 0.5) * offsetRange;
+              const randomOffsetY = (Math.random() - 0.5) * offsetRange;
               
               // For the first image, place it in the center of the page
               if (index === 0) {
                 x = centerX;
                 y = centerY;
               } else {
-                // For additional images, create a grid layout to handle many images
-                const imagesPerRow = 2; // Show 2 images per row
-                const spacing = 100; // Space between images
-                const row = Math.floor(index / imagesPerRow);
-                const col = index % imagesPerRow;
+                // For additional images, place them near center with slight offsets
+                // This creates a more natural, scattered look while keeping them centered
+                x = centerX + randomOffsetX;
+                y = centerY + randomOffsetY;
                 
-                // Calculate grid position
-                const gridWidth = (imagesPerRow * imageWidth) + ((imagesPerRow - 1) * spacing);
-                const gridStartX = (canvasWidth - gridWidth) / 2;
-                
-                x = gridStartX + (col * (imageWidth + spacing));
-                y = centerY + (row * (imageHeight + spacing));
+                // Ensure images don't go off the canvas edges
+                x = Math.max(50, Math.min(x, canvasWidth - imageWidth - 50));
+                y = Math.max(50, Math.min(y, canvasHeight - imageHeight - 50));
               }
-              console.log(`🖼️ Using default position for image ${index}:`, { x, y });
+              console.log(`🖼️ Using centered position for image ${index}:`, { x, y });
             }
             
             newImagePositions.push({
@@ -3508,6 +3586,68 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       setSimpleImagePositions([]);
     }
   }, [images, layoutMode, renderJournal, props.savedImagePositions]);
+
+  // Update image dimensions when they load (preserving positions)
+  useEffect(() => {
+    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      const updateImageDimensions = async () => {
+        const updatedPositions = [...simpleImagePositions];
+        let hasChanges = false;
+
+        for (let i = 0; i < updatedPositions.length; i++) {
+          const position = updatedPositions[i];
+          const image = images[i];
+          
+          if (image && (position.width === 800 || position.height === 600)) {
+            // This image still has default dimensions, calculate proper ones
+            try {
+              // Calculate dimensions inline to avoid scope issues
+              const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  const aspectRatio = img.naturalWidth / img.naturalHeight;
+                  const maxDimension = 1200;
+                  
+                  let width, height;
+                  if (aspectRatio > 1) {
+                    width = maxDimension;
+                    height = maxDimension / aspectRatio;
+                  } else {
+                    height = maxDimension;
+                    width = maxDimension * aspectRatio;
+                  }
+                  
+                  resolve({ width: Math.round(width), height: Math.round(height) });
+                };
+                img.onerror = () => {
+                  resolve({ width: 800, height: 600 });
+                };
+                img.src = typeof image === 'string' ? image : URL.createObjectURL(image);
+              });
+
+              if (dimensions.width !== position.width || dimensions.height !== position.height) {
+                updatedPositions[i] = {
+                  ...position,
+                  width: dimensions.width,
+                  height: dimensions.height
+                };
+                hasChanges = true;
+                console.log(`🖼️ Updated dimensions for image ${i}: ${dimensions.width}x${dimensions.height}`);
+              }
+            } catch (error) {
+              console.error(`Failed to calculate dimensions for image ${i}:`, error);
+            }
+          }
+        }
+
+        if (hasChanges) {
+          setSimpleImagePositions(updatedPositions);
+        }
+      };
+
+      updateImageDimensions();
+    }
+  }, [simpleImagePositions, images, layoutMode]);
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
@@ -3831,17 +3971,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Touch event handlers for mobile devices
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !props.editMode || layoutMode !== 'freeflow') return;
+    if (!canvasRef.current || !props.editMode) return;
     
-    // iOS-specific touch optimizations
+    // Prevent scrolling when interacting with images
     e.preventDefault();
     e.stopPropagation();
     
-    // iOS Safari: Prevent zoom and scrolling
-    if (isIOSSafari()) {
-      document.body.style.touchAction = 'none';
-      document.body.style.overflow = 'hidden';
-    }
+    // Prevent zoom and scrolling on all mobile devices
+    document.body.style.touchAction = 'none';
+    document.body.style.overflow = 'hidden';
+    
+    // Only proceed with freeflow layout for image interactions
+    if (layoutMode !== 'freeflow') return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
@@ -4078,9 +4219,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
     
-    // iOS-specific touch optimizations
+    // Prevent scrolling when interacting with images
     e.preventDefault();
     e.stopPropagation();
+    
+    // Keep preventing scroll during touch move
+    document.body.style.touchAction = 'none';
+    document.body.style.overflow = 'hidden';
     
     // Handle two-finger rotation
     if (e.touches.length === 2 && 
@@ -4273,21 +4418,41 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const deltaX = x - resizeStartData.startX;
         const deltaY = y - resizeStartData.startY;
         
-        // Calculate new size (maintain aspect ratio)
-        const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
-        const newWidth = Math.max(100, resizeStartData.startWidth + deltaX);
-        const newHeight = newWidth / aspectRatio;
+        // STRICT ASPECT RATIO PRESERVATION - NO STRETCHING ALLOWED (Touch)
+        const originalAspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
         
-        // Constrain to canvas bounds
+        // Calculate new size based on touch movement (use the larger delta for better UX)
+        const deltaMagnitude = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+        const scaleFactor = deltaMagnitude > 0 ? 
+          (resizeStartData.startWidth + deltaMagnitude) / resizeStartData.startWidth : 1;
+        
+        // Apply scale factor while maintaining aspect ratio
+        let newWidth = Math.max(80, resizeStartData.startWidth * scaleFactor);
+        let newHeight = newWidth / originalAspectRatio;
+        
+        // Ensure minimum height as well
+        if (newHeight < 80) {
+          newHeight = 80;
+          newWidth = newHeight * originalAspectRatio;
+        }
+        
+        // Constrain to canvas bounds while preserving aspect ratio
         const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
         const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
-        const constrainedWidth = Math.min(newWidth, maxWidth);
-        const constrainedHeight = Math.min(newHeight, maxHeight);
         
-        // Ensure minimum size for usability
-        const minSize = 80;
-        const finalWidth = Math.max(minSize, constrainedWidth);
-        const finalHeight = Math.max(minSize, constrainedHeight);
+        // Check if we need to scale down to fit bounds
+        if (newWidth > maxWidth) {
+          newWidth = maxWidth;
+          newHeight = newWidth / originalAspectRatio;
+        }
+        if (newHeight > maxHeight) {
+          newHeight = maxHeight;
+          newWidth = newHeight * originalAspectRatio;
+        }
+        
+        // Final dimensions - guaranteed to maintain aspect ratio
+        const finalWidth = Math.round(newWidth);
+        const finalHeight = Math.round(newHeight);
         
         newPositions[resizingSimpleImage] = {
           ...newPositions[resizingSimpleImage],
@@ -4430,14 +4595,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setResizingSimpleImage(null);
     setResizeStartData(null);
     
-    // iOS-specific: Restore high quality mode and body settings after drag ends
+    // Restore scrolling for all devices after touch interactions
+    document.body.style.touchAction = '';
+    document.body.style.overflow = '';
+    
+    // iOS-specific: Restore high quality mode after drag ends
     if (isIOS()) {
-      // Restore body settings for iOS Safari
-      if (isIOSSafari()) {
-        document.body.style.touchAction = '';
-        document.body.style.overflow = '';
-      }
-      
       setTimeout(() => {
         setIsHighQualityMode(true);
         renderJournal(); // Re-render with high quality

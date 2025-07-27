@@ -102,16 +102,38 @@ const datePickerStyles = `
   
   .react-datepicker__navigation {
     color: white !important;
+    background-color: #3182ce !important;
+    border-radius: 4px !important;
+    width: 14px !important; /* 50% smaller */
+    height: 14px !important; /* 50% smaller */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background-color 0.2s ease !important; /* Only transition background */
+    border: 1px solid #3182ce !important;
+    box-shadow: 0 1px 3px rgba(49, 130, 206, 0.3) !important;
+    position: relative !important;
+    z-index: 10 !important;
+    top: 0 !important;
+  }
+  
+  .react-datepicker__navigation:hover {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    /* Removed transform scale to prevent bouncing */
+    box-shadow: 0 2px 4px rgba(49, 130, 206, 0.4) !important;
   }
   
   .react-datepicker__navigation--previous {
-    right: 50% !important;
-    transform: translateX(-80px) !important;
+    left: 8px !important;
+    right: auto !important;
+    transform: translateY(50px) !important;
   }
   
   .react-datepicker__navigation--next {
-    left: 50% !important;
-    transform: translateX(-40px) !important;
+    right: -162px !important;
+    left: auto !important;
+    transform: translateY(18px) !important;
   }
   
   .react-datepicker__triangle {
@@ -122,6 +144,38 @@ const datePickerStyles = `
   .react-datepicker__year-read-view--down-arrow,
   .react-datepicker__month-read-view--down-arrow {
     border-color: white !important;
+    border-width: 1.5px 1.5px 0 0 !important; /* Smaller arrow */
+    width: 6px !important; /* Smaller width */
+    height: 6px !important; /* Smaller height */
+    display: block !important;
+    margin: auto !important; /* Center the arrow */
+  }
+  
+  /* Mobile-specific navigation improvements */
+  @media (max-width: 768px) {
+    .react-datepicker__navigation {
+      width: 16px !important; /* 50% smaller on mobile too */
+      height: 16px !important;
+      background-color: #3182ce !important;
+      border-width: 1px !important;
+      border-radius: 4px !important;
+    }
+    
+    .react-datepicker__navigation--previous {
+      left: 6px !important;
+    }
+    
+    .react-datepicker__navigation--next {
+      right: 6px !important;
+    }
+    
+    .react-datepicker__navigation-icon::before,
+    .react-datepicker__year-read-view--down-arrow,
+    .react-datepicker__month-read-view--down-arrow {
+      border-width: 2px 2px 0 0 !important;
+      width: 8px !important;
+      height: 8px !important;
+    }
   }
   
   .react-datepicker__month-container {
@@ -275,7 +329,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
   initialDate.setHours(12, 0, 0, 0);
   const [date, setDate] = useState(initialDate);
   
-  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>('freeflow');
+  // Detect mobile device for default layout
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           window.innerWidth <= 768;
+  };
+  
+  const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>(
+    isMobile() ? 'freeflow' : 'standard'
+  );
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [needInspiration, setNeedInspiration] = useState(false);
@@ -831,8 +893,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Load saved data from localStorage when component mounts
   useEffect(() => {
-    // Try to load submitted journal first
-    const savedSubmittedJournal = loadFromLocalStorage('webjournal_submitted');
+    const loadData = async () => {
+      // Try to load submitted journal first
+      const savedSubmittedJournal = loadFromLocalStorage('webjournal_submitted');
     if (savedSubmittedJournal) {
       try {
         // Convert the date string back to a Date object
@@ -842,8 +905,61 @@ const JournalForm: React.FC<JournalFormProps> = ({
         setTextColors(savedSubmittedJournal.textColors);
         if (savedSubmittedJournal.layoutMode) {
           setLayoutMode(savedSubmittedJournal.layoutMode);
+        } else {
+          // Use mobile-appropriate default if no saved layout mode
+          setLayoutMode(isMobile() ? 'freeflow' : 'standard');
         }
         console.log('Restored submitted journal from localStorage');
+        
+        // EXTRACT COLORS FROM EXISTING IMAGES (Mobile-friendly)
+        if (savedSubmittedJournal.images && savedSubmittedJournal.images.length > 0) {
+          try {
+            console.log("Extracting colors from existing submitted images...");
+            const extractedColors = await extractDominantColors(savedSubmittedJournal.images[0]);
+            
+            if (extractedColors.length > 0) {
+              // Get the most vibrant color
+              const newColor = extractedColors[0];
+              
+              // Create a complementary shadow color (30% darker)
+              const r = parseInt(newColor.slice(1, 3), 16);
+              const g = parseInt(newColor.slice(3, 5), 16);
+              const b = parseInt(newColor.slice(5, 7), 16);
+              
+              const shadowR = Math.floor(r * 0.7);
+              const shadowG = Math.floor(g * 0.7);
+              const shadowB = Math.floor(b * 0.7);
+              
+              const shadowColor = `#${shadowR.toString(16).padStart(2, '0')}${
+                shadowG.toString(16).padStart(2, '0')}${
+                shadowB.toString(16).padStart(2, '0')}`;
+              
+              // Apply the new color scheme
+              const newColors = {
+                locationColor: newColor,
+                locationShadowColor: shadowColor
+              };
+              
+              console.log("Setting colors from existing submitted images:", newColors);
+              setTextColors(newColors);
+              
+              // Force canvas redraw with the new colors
+              setTimeout(() => {
+                window.CURRENT_COLORS = newColors;
+                if (window.forceCanvasRedraw) {
+                  requestAnimationFrame(() => {
+                    if (typeof window.forceCanvasRedraw === 'function') {
+                      window.forceCanvasRedraw();
+                    }
+                  });
+                }
+              }, 300);
+            }
+          } catch (colorError) {
+            console.error("Error extracting colors from existing submitted images:", colorError);
+          }
+        }
+        
         return; // Exit early if we found and restored a submitted journal
       } catch (error) {
         console.error('Error restoring submitted journal:', error);
@@ -871,6 +987,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
         });
         if (savedDraftJournal.layoutMode) {
           setLayoutMode(savedDraftJournal.layoutMode);
+        } else {
+          // Use mobile-appropriate default if no saved layout mode
+          setLayoutMode(isMobile() ? 'freeflow' : 'standard');
         }
         // Restore image positions if available
         if (savedDraftJournal.imagePositions) {
@@ -885,6 +1004,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
         clearLocalStorageItem('webjournal_draft');
       }
     }
+    };
+    
+    // Call the async function
+    loadData();
   }, []);
   
   // Save draft journal to localStorage whenever form data changes
@@ -1248,6 +1371,35 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
   
+  // Helper function to calculate proper initial dimensions based on image aspect ratio
+  const calculateInitialImageDimensions = (imageUrl: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const aspectRatio = img.naturalWidth / img.naturalHeight;
+        const maxDimension = 300; // Maximum dimension for initial size
+        
+        let width, height;
+        if (aspectRatio > 1) {
+          // Landscape image
+          width = maxDimension;
+          height = maxDimension / aspectRatio;
+        } else {
+          // Portrait or square image
+          height = maxDimension;
+          width = maxDimension * aspectRatio;
+        }
+        
+        resolve({ width: Math.round(width), height: Math.round(height) });
+      };
+      img.onerror = () => {
+        // Fallback to default dimensions if image fails to load
+        resolve({ width: 200, height: 200 });
+      };
+      img.src = imageUrl;
+    });
+  };
+
   // Update handleImageUpload to optimize images and show loading indicator
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -1293,12 +1445,53 @@ const JournalForm: React.FC<JournalFormProps> = ({
           const newImages = [...images, ...originalImages];
           setImages(newImages);
           
-          // Preserve existing image positions and add default positions for new images
+          // Calculate proper initial dimensions for new images based on their aspect ratios
+          const newImageDimensions = await Promise.all(
+            originalImages.map(img => calculateInitialImageDimensions(img))
+          );
+          
+          // Preserve existing image positions and add properly sized positions for new images
           setImagePositions(prev => {
             const newPositions = [...prev];
-            // Add default positions for any new images
-            for (let i = newPositions.length; i < newImages.length; i++) {
-              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
+            // Add properly sized positions for any new images
+            for (let i = 0; i < newImageDimensions.length; i++) {
+              const dimensions = newImageDimensions[i];
+              
+              // Center images on the page with slight offsets to prevent overlap
+              const canvasWidth = 3100; // Canvas width
+              const canvasHeight = 4370; // Canvas height
+              const centerX = (canvasWidth - dimensions.width) / 2;
+              const centerY = (canvasHeight - dimensions.height) / 2;
+              
+              // Add slight random offset to prevent perfect stacking
+              const offsetRange = 50; // Maximum offset in pixels
+              const randomOffsetX = (Math.random() - 0.5) * offsetRange;
+              const randomOffsetY = (Math.random() - 0.5) * offsetRange;
+              
+              // For the first new image, place it in the center
+              if (i === 0) {
+                newPositions.push({ 
+                  x: centerX,
+                  y: centerY,
+                  width: dimensions.width, 
+                  height: dimensions.height
+                });
+              } else {
+                // For additional images, place them near center with slight offsets
+                const x = centerX + randomOffsetX;
+                const y = centerY + randomOffsetY;
+                
+                // Ensure images don't go off the canvas edges
+                const finalX = Math.max(50, Math.min(x, canvasWidth - dimensions.width - 50));
+                const finalY = Math.max(50, Math.min(y, canvasHeight - dimensions.height - 50));
+                
+                newPositions.push({ 
+                  x: finalX,
+                  y: finalY,
+                  width: dimensions.width, 
+                  height: dimensions.height
+                });
+              }
             }
             return newPositions;
           });
@@ -1403,6 +1596,53 @@ const JournalForm: React.FC<JournalFormProps> = ({
           
           setSubmittedData(updatedData);
           
+          // EXTRACT COLORS FROM THE REPLACED IMAGE (Mobile-friendly)
+          try {
+            console.log("Extracting colors from replaced image...");
+            const extractedColors = await extractDominantColors(optimizedImage);
+            
+            if (extractedColors.length > 0) {
+              // Get the most vibrant color
+              const newColor = extractedColors[0];
+              
+              // Create a complementary shadow color (30% darker)
+              const r = parseInt(newColor.slice(1, 3), 16);
+              const g = parseInt(newColor.slice(3, 5), 16);
+              const b = parseInt(newColor.slice(5, 7), 16);
+              
+              const shadowR = Math.floor(r * 0.7);
+              const shadowG = Math.floor(g * 0.7);
+              const shadowB = Math.floor(b * 0.7);
+              
+              const shadowColor = `#${shadowR.toString(16).padStart(2, '0')}${
+                shadowG.toString(16).padStart(2, '0')}${
+                shadowB.toString(16).padStart(2, '0')}`;
+              
+              // Apply the new color scheme
+              const newColors = {
+                locationColor: newColor,
+                locationShadowColor: shadowColor
+              };
+              
+              console.log("Setting colors from replaced image:", newColors);
+              setTextColors(newColors);
+              
+              // Force canvas redraw with the new colors
+              setTimeout(() => {
+                window.CURRENT_COLORS = newColors;
+                if (window.forceCanvasRedraw) {
+                  requestAnimationFrame(() => {
+                    if (typeof window.forceCanvasRedraw === 'function') {
+                      window.forceCanvasRedraw();
+                    }
+                  });
+                }
+              }, 300);
+            }
+          } catch (colorError) {
+            console.error("Error extracting colors from replaced image:", colorError);
+          }
+          
           // Save to localStorage
           const dataToSave = {
             ...updatedData,
@@ -1450,6 +1690,53 @@ const JournalForm: React.FC<JournalFormProps> = ({
           };
           
           setSubmittedData(updatedData);
+          
+          // EXTRACT COLORS FROM THE NEW IMAGE (Mobile-friendly)
+          try {
+            console.log("Extracting colors from newly added image...");
+            const extractedColors = await extractDominantColors(optimizedImage);
+            
+            if (extractedColors.length > 0) {
+              // Get the most vibrant color
+              const newColor = extractedColors[0];
+              
+              // Create a complementary shadow color (30% darker)
+              const r = parseInt(newColor.slice(1, 3), 16);
+              const g = parseInt(newColor.slice(3, 5), 16);
+              const b = parseInt(newColor.slice(5, 7), 16);
+              
+              const shadowR = Math.floor(r * 0.7);
+              const shadowG = Math.floor(g * 0.7);
+              const shadowB = Math.floor(b * 0.7);
+              
+              const shadowColor = `#${shadowR.toString(16).padStart(2, '0')}${
+                shadowG.toString(16).padStart(2, '0')}${
+                shadowB.toString(16).padStart(2, '0')}`;
+              
+              // Apply the new color scheme
+              const newColors = {
+                locationColor: newColor,
+                locationShadowColor: shadowColor
+              };
+              
+              console.log("Setting colors from added image:", newColors);
+              setTextColors(newColors);
+              
+              // Force canvas redraw with the new colors
+              setTimeout(() => {
+                window.CURRENT_COLORS = newColors;
+                if (window.forceCanvasRedraw) {
+                  requestAnimationFrame(() => {
+                    if (typeof window.forceCanvasRedraw === 'function') {
+                      window.forceCanvasRedraw();
+                    }
+                  });
+                }
+              }, 300);
+            }
+          } catch (colorError) {
+            console.error("Error extracting colors from added image:", colorError);
+          }
           
           // Save to localStorage
           const dataToSave = {
@@ -2564,11 +2851,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               } rounded-md`}
                               title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
                             >
-                              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className={`${journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? 'text-gray-500' : 'text-blue-400'}`}>
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                              </svg>
+                            
                               <span className="hidden sm:inline">
-                                Get AI Insights
+                                AI +
                               </span>
                             </button>
                           </div>
