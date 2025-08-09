@@ -400,8 +400,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Detect mobile device for default layout
   const isMobile = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-           window.innerWidth <= 768;
+    return window.innerWidth <= 768 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   };
   
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>('freeflow');
@@ -2634,6 +2633,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
     e.target.value = '';
   };
 
+  // Add mobile-friendly styles
+  const mobileInputStyle = isMobile() ? {
+    fontSize: '16px', // Prevents zoom on iOS
+    minHeight: '48px',
+    padding: '12px 16px',
+    touchAction: 'manipulation'
+  } : {};
+
+  const mobileButtonStyle = isMobile() ? {
+    minHeight: '48px',
+    minWidth: '48px',
+    fontSize: '16px',
+    padding: '12px 16px',
+    touchAction: 'manipulation'
+  } : {};
+
   return (
     <div className="bg-black w-full min-h-screen md:h-screen md:overflow-hidden">
       {/* Mobile Navbar - Only visible on mobile */}
@@ -2768,15 +2783,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </svg>
                         <span>Location</span>
                       </label>
-                      <input
-                        type="text"
-                        id="location"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="e.g., MANIA, LA JOLLA, CA"
-                        className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base location-input-responsive placeholder-gray-400"
-                        required
-                      />
+                                              <input
+                          type="text"
+                          id="location"
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
+                          placeholder="e.g., MANIA, LA JOLLA, CA"
+                          className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base location-input-responsive placeholder-gray-400"
+                          style={mobileInputStyle}
+                          required
+                        />
                     </div>
                     <div className="flex-shrink-0">
                       <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
@@ -2823,11 +2839,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           <span>Images ({images.length})</span>
                         </label>
                         
-                        {/* Image upload area - always show */}
-                        <div 
-                          className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
+                                                 {/* Image upload area - always show */}
+                         <div 
+                           className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
+                           onClick={() => fileInputRef.current?.click()}
+                           style={isMobile() ? { minHeight: '80px', touchAction: 'manipulation' } : {}}
+                         >
                           {isLoadingImage && (
                             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
                               <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
@@ -2922,18 +2939,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               </span>
                             </button>
                           </div>
-                          <textarea
-                            ref={textareaRef}
-                            id="journalText"
-                            value={journalText}
-                            onChange={(e) => {
-                              setJournalText(e.target.value);
-                            }}
-                            placeholder="Write your journal entry here..."
-                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                            style={{ fontSize: '18px' }}
-                            required
-                          />
+                                                     <textarea
+                             ref={textareaRef}
+                             id="journalText"
+                             value={journalText}
+                             onChange={(e) => {
+                               setJournalText(e.target.value);
+                             }}
+                             placeholder="Write your journal entry here..."
+                             className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                             style={isMobile() ? { fontSize: '16px', minHeight: '100px', ...mobileInputStyle } : { fontSize: '18px' }}
+                             required
+                           />
                         </div>
 
                         {/* AI Insights Box - Below Journal Entry */}
@@ -3055,15 +3072,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           </svg>
                           <span>Location</span>
                         </label>
-                        <input
-                          type="text"
-                          id="mobile-location"
-                          value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                          placeholder="e.g., MANIA, LA JOLLA, CA"
-                          className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base placeholder-gray-400"
-                          required
-                        />
+                                                   <input
+                             type="text"
+                             id="mobile-location"
+                             value={location}
+                             onChange={(e) => setLocation(e.target.value)}
+                             placeholder="e.g., MANIA, LA JOLLA, CA"
+                             className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base placeholder-gray-400"
+                             style={mobileInputStyle}
+                             required
+                           />
                       </div>
                       <div className="flex-1">
                         <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
@@ -3201,17 +3219,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             </span>
                           </button>
                         </div>
-                        <textarea
-                          id="mobile-journalText"
-                          value={journalText}
-                          onChange={(e) => {
-                            setJournalText(e.target.value);
-                          }}
-                          placeholder="Write your journal entry here..."
-                          className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                          style={{ fontSize: '18px' }}
-                          required
-                        />
+                                                   <textarea
+                             id="mobile-journalText"
+                             value={journalText}
+                             onChange={(e) => {
+                               setJournalText(e.target.value);
+                             }}
+                             placeholder="Write your journal entry here..."
+                             className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                             style={{ fontSize: '16px', minHeight: '100px', ...mobileInputStyle }}
+                             required
+                           />
                       </div>
 
                       {/* AI Insights Box */}

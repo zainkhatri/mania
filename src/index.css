@@ -25,10 +25,12 @@
 /* Base styles */
 body {
   font-family: 'ZainCustomFont', sans-serif !important;
-  height: 100vh;
+  min-height: 100vh;
   background-color: #000000;
   color: #ffffff;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Hide scrollbar but keep scrolling functionality */
@@ -42,9 +44,10 @@ body {
 }
 
 html {
-  height: 100vh;
+  min-height: 100vh;
   scroll-behavior: smooth;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Typography */

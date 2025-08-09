@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-import './mobile-scroll-fix.css';
 import JournalForm from './components/JournalForm';
+import MobileJournal from './components/MobileJournal';
 import Home from './components/Home';
 
 
@@ -174,8 +174,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </>
       )}
       
-      {/* Main content */}
-      <main className="flex-1 relative z-10 overflow-hidden">
+       {/* Main content */}
+       <main className="flex-1 relative z-10 overflow-visible">
         {children}
       </main>
       
@@ -201,14 +201,14 @@ function App() {
 
   return (
     <Router>
-      <div className="h-screen flex flex-col bg-black overflow-hidden mobile-scroll-container">
+      <div className="min-h-screen flex flex-col bg-black overflow-auto">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route 
             path="/journal" 
             element={
               isMobile ? (
-                <JournalForm />
+                <MobileJournal />
               ) : (
                 <Layout>
                   <JournalForm />
