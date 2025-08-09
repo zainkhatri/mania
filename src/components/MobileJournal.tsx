@@ -15,9 +15,13 @@ const MobileJournal: React.FC = () => {
   const canvasRef = useRef<JournalCanvasHandle | null>(null);
 
   const [date, setDate] = useState<Date>(() => new Date());
+  // Decouple input typing from canvas render to avoid keystroke lag on mobile
+  const [locationInput, setLocationInput] = useState<string>('');
+  const [textInput, setTextInput] = useState<string>('');
   const [location, setLocation] = useState<string>('');
   const [text, setText] = useState<string>('');
   const [images, setImages] = useState<(string | Blob)[]>([]);
+  const [imagePositions, setImagePositions] = useState<Array<{ x: number; y: number; width: number; height: number }>>([]);
   const [colors, setColors] = useState<TextColors>(DEFAULT_COLORS);
   // Force freeflow layout on mobile
   const layoutMode = 'freeflow' as const;
@@ -26,12 +30,26 @@ const MobileJournal: React.FC = () => {
   // Derived journal text sections for canvas API
   const textSections = useMemo(() => [text], [text]);
 
+  // Debounce input updates to the canvas-facing state to keep typing smooth
+  useEffect(() => {
+    const id = setTimeout(() => setLocation(locationInput), 150);
+    return () => clearTimeout(id);
+  }, [locationInput]);
+
+  useEffect(() => {
+    const id = setTimeout(() => setText(textInput), 150);
+    return () => clearTimeout(id);
+  }, [textInput]);
+
   // Utilities
   const reset = () => {
     setDate(new Date());
+    setLocationInput('');
+    setTextInput('');
     setLocation('');
     setText('');
     setImages([]);
+    setImagePositions([]);
     setColors(DEFAULT_COLORS);
   };
 
@@ -45,11 +63,25 @@ const MobileJournal: React.FC = () => {
     for (let i = 0; i < files.length; i += 1) {
       next.push(files[i]); // File is a Blob and supported by JournalCanvas
     }
-    setImages(prev => [...prev, ...next]);
+    setImages(prev => {
+      const updated = [...prev, ...next];
+      setImagePositions(pos => {
+        const copy = [...pos];
+        const toAdd = updated.length - copy.length;
+        if (toAdd > 0) {
+          for (let j = 0; j < toAdd; j += 1) {
+            copy.push({ x: 0, y: 0, width: 0, height: 0 });
+          }
+        }
+        return copy;
+      });
+      return updated;
+    });
   };
 
   const removeImageAt = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
+    setImagePositions(prev => prev.filter((_, i) => i !== index));
   };
 
   // Native share (if supported)
@@ -63,6 +95,29 @@ const MobileJournal: React.FC = () => {
     } catch {
       // ignore
     }
+  };
+
+  // Image interaction callbacks from canvas so parent state stays in sync
+  const handleImageDrag = (index: number, x: number, y: number) => {
+    setImagePositions(prev => {
+      const next = [...prev];
+      if (!next[index]) next[index] = { x: 0, y: 0, width: 0, height: 0 };
+      next[index] = { ...next[index], x, y };
+      return next;
+    });
+  };
+
+  const handleImageResize = (index: number, width: number, height: number) => {
+    setImagePositions(prev => {
+      const next = [...prev];
+      if (!next[index]) next[index] = { x: 0, y: 0, width: 0, height: 0 };
+      next[index] = { ...next[index], width, height };
+      return next;
+    });
+  };
+
+  const handleImageDelete = (index: number) => {
+    removeImageAt(index);
   };
 
   // Simple segmented control for layout
@@ -110,8 +165,8 @@ const MobileJournal: React.FC = () => {
             type="text"
             placeholder="Where are you?"
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-3 text-white"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            value={locationInput}
+            onChange={(e) => setLocationInput(e.target.value)}
           />
         </div>
 
@@ -121,8 +176,8 @@ const MobileJournal: React.FC = () => {
             placeholder="Pour your thoughts..."
             rows={8}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-3 text-white"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
           />
         </div>
       </div>
@@ -231,6 +286,10 @@ const MobileJournal: React.FC = () => {
                   textColors={colors}
                   layoutMode={layoutMode}
                   editMode
+                  savedImagePositions={imagePositions}
+                  onImageDrag={handleImageDrag}
+                  onImageResize={handleImageResize}
+                  onImageDelete={handleImageDelete}
                 />
               </div>
             </div>
