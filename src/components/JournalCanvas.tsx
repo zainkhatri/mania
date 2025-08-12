@@ -125,6 +125,7 @@ interface JournalCanvasProps {
     y: number;
     width: number;
     height: number;
+    rotation?: number;
   }>; // Saved image positions to restore
 }
 
@@ -381,6 +382,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     y: number;
     width: number;
     height: number;
+    rotation: number;
     image: string | Blob;
   }>>([]);
   const [draggedSimpleImage, setDraggedSimpleImage] = useState<number | null>(null);
@@ -1004,15 +1006,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]);
 
-  // Ultra-high-quality export function
+  // Mobile-optimized PDF export function
   const exportUltraHDPDF = () => {
     if (!canvasRef.current) {
       console.error('Canvas reference not available for PDF export');
       return;
     }
     
+    // Detect mobile device and adjust settings accordingly
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
     console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
     console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
+    console.log('📱 Device detection:', { isMobile, isIOS, userAgent: navigator.userAgent });
     
     // Force high quality mode for export
     const wasHighQuality = isHighQualityMode;
@@ -1056,15 +1063,20 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
       
       try {
-        // Create a high quality PNG snapshot
+        // Create a mobile-optimized PNG snapshot
+        const exportScale = isMobile ? 2 : 4; // Lower scale on mobile to prevent memory issues
+        const exportQuality = isMobile ? 0.8 : 1.0; // Lower quality on mobile for smaller files
+        
+        console.log('📱 Export settings:', { exportScale, exportQuality, isMobile });
+        
         html2canvas(journalCanvas, {
-          scale: 4, // Reduced from 8 to prevent memory issues
+          scale: exportScale, // Mobile-optimized scale
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#f5f2e9',
           logging: false, // Disable logging to reduce console noise
           letterRendering: true,
-          imageTimeout: 10000, // Increase timeout for large images
+          imageTimeout: isMobile ? 15000 : 10000, // Longer timeout on mobile
           async: true,
           removeContainer: true,
           foreignObjectRendering: false, // Better quality with native canvas rendering
@@ -1072,8 +1084,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           y: 0,
           scrollX: 0,
           scrollY: 0,
-          windowWidth: journalCanvas.width * 1.2,  // Reduced scaling to prevent memory issues
-          windowHeight: journalCanvas.height * 1.2, // Reduced scaling to prevent memory issues
+          windowWidth: journalCanvas.width * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
+          windowHeight: journalCanvas.height * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
           onclone: (documentClone: Document) => {
             console.log('🖼️ PDF EXPORT DEBUG: Cloning document for export');
             const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
@@ -1094,11 +1106,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             throw new Error('Canvas snapshot has invalid dimensions');
           }
           
-          // Get PNG data at maximum quality
+          // Get PNG data with mobile-optimized quality
           let pngData: string;
           try {
-            pngData = canvas.toDataURL('image/png', 1.0);
-            console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length);
+            pngData = canvas.toDataURL('image/png', exportQuality);
+            console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length, 'quality:', exportQuality);
             
             // Validate PNG data
             if (pngData.length < 1000) { // PNG should be at least 1KB
@@ -1115,39 +1127,82 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
             
             try {
-              // Create PDF document with maximum quality
-              const pdf = new jsPDF(
-                'portrait', 
-                'px', 
-                [journalCanvas.width, journalCanvas.height],
-                false // No compression
-              );
+              // Mobile-optimized PDF creation
+              let pdf;
               
-              // Add the image to the PDF at maximum resolution
+              if (isMobile) {
+                // On mobile, use smaller dimensions to prevent memory issues
+                const mobileWidth = Math.min(journalCanvas.width, 1200);
+                const mobileHeight = Math.min(journalCanvas.height, 1600);
+                
+                console.log('📱 Mobile PDF dimensions:', { mobileWidth, mobileHeight, originalWidth: journalCanvas.width, originalHeight: journalCanvas.height });
+                
+                pdf = new jsPDF(
+                  'portrait', 
+                  'px', 
+                  [mobileWidth, mobileHeight],
+                  true // Enable compression on mobile for smaller files
+                );
+              } else {
+                // Desktop: maximum quality
+                pdf = new jsPDF(
+                  'portrait', 
+                  'px', 
+                  [journalCanvas.width, journalCanvas.height],
+                  false // No compression
+                );
+              }
+              
+              // Add the image to the PDF with mobile-optimized settings
               pdf.addImage({
                 imageData: pngData,
                 x: 0,
                 y: 0,
                 width: pdf.internal.pageSize.getWidth(),
                 height: pdf.internal.pageSize.getHeight(),
-                compression: 'NONE', // No compression for maximum quality
+                compression: isMobile ? 'FAST' : 'NONE', // Fast compression on mobile
                 rotation: 0,
                 alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
               });
               
               console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
               
-              // Save the PDF
+              // Save the PDF with mobile-optimized filename
               const date = new Date();
-              pdf.save(`journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`);
+              const filename = isMobile 
+                ? `journal-${date.toISOString().split('T')[0]}-mobile.pdf`
+                : `journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`;
+              
+              console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
+              
+              // Mobile-specific download handling
+              if (isMobile && isIOS) {
+                // iOS: Use blob download for better compatibility
+                try {
+                  const pdfBlob = pdf.output('blob');
+                  const url = URL.createObjectURL(pdfBlob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = filename;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                  console.log('📱 iOS PDF download initiated');
+                } catch (iosError) {
+                  console.warn('📱 iOS blob download failed, falling back to standard save:', iosError);
+                  pdf.save(filename);
+                }
+              } else {
+                // Standard save for other devices
+                pdf.save(filename);
+              }
               
               // Remove saving indicator
               document.body.removeChild(savingToast);
               
-              // Show success notification
+              // Show mobile-aware success notification
               const successToast = document.createElement('div');
               successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-              successToast.textContent = 'Crystal Clear Export Complete';
+              successToast.textContent = isMobile ? 'Mobile Export Complete' : 'Crystal Clear Export Complete';
               document.body.appendChild(successToast);
               
               // Remove success notification after 2 seconds
@@ -1160,8 +1215,39 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
             } catch (pdfError) {
               console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
+              
+              // On mobile, offer PNG fallback if PDF fails
+              if (isMobile) {
+                console.log('📱 PDF creation failed on mobile, offering PNG fallback');
+                try {
+                  // Create a download link for the PNG directly
+                  const link = document.createElement('a');
+                  link.href = pngData;
+                  link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
+                  link.click();
+                  
+                  // Show fallback success message
+                  const fallbackToast = document.createElement('div');
+                  fallbackToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+                  fallbackToast.textContent = 'PNG Export Complete (PDF failed)';
+                  document.body.appendChild(fallbackToast);
+                  
+                  setTimeout(() => {
+                    if (document.body.contains(fallbackToast)) {
+                      document.body.removeChild(fallbackToast);
+                    }
+                  }, 3000);
+                  
+                  console.log('📱 PNG fallback export completed');
+                } catch (fallbackError) {
+                  console.error('📱 PNG fallback also failed:', fallbackError);
+                  alert('Export failed. Please try again or use a different device.');
+                }
+              } else {
+                alert('Could not create PDF. Please try again.');
+              }
+              
               document.body.removeChild(savingToast);
-              alert('Could not create PDF. Please try again.');
             }
           };
           
@@ -1676,21 +1762,32 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         if (imageObjects[index]) {
           const img = imageObjects[index];
           
-          // Draw the image
+          // Draw the image with rotation support
           ctx.save();
+          
+          // Apply rotation if specified
+          if (imagePos.rotation && imagePos.rotation !== 0) {
+            // Move to center of image for rotation
+            const centerX = imagePos.x + imagePos.width / 2;
+            const centerY = imagePos.y + imagePos.height / 2;
+            ctx.translate(centerX, centerY);
+            ctx.rotate((imagePos.rotation * Math.PI) / 180);
+            ctx.translate(-centerX, -centerY);
+          }
+          
           ctx.drawImage(img, imagePos.x, imagePos.y, imagePos.width, imagePos.height);
           
-          // Draw border and controls if in edit mode and image is selected
-          if (props.editMode && selectedImage === index) {
+          // Draw border and controls if in edit mode and image is selected OR being dragged
+          if (props.editMode && (selectedImage === index || draggedSimpleImage === index)) {
             // Draw subtle border
             ctx.strokeStyle = draggedSimpleImage === index ? '#007AFF' : 'rgba(0, 122, 255, 0.6)';
             ctx.lineWidth = 2;
             ctx.strokeRect(imagePos.x, imagePos.y, imagePos.width, imagePos.height);
             
-            // Draw delete button (top-left) - GoodNotes style, smaller
-            const deleteBtnX = imagePos.x + 20;
-            const deleteBtnY = imagePos.y + 20;
-            const deleteBtnRadius = 25; // Much smaller, GoodNotes style
+            // Draw delete button (top-left) - GoodNotes style, bigger for mobile
+            const deleteBtnX = imagePos.x + 30;
+            const deleteBtnY = imagePos.y + 30;
+            const deleteBtnRadius = 40; // Bigger for mobile touch
             
             // Draw delete button with shadow
             ctx.save();
@@ -1712,16 +1809,16 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             ctx.lineWidth = 3; // Much thinner for smaller button
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(deleteBtnX - 12, deleteBtnY - 12);
-            ctx.lineTo(deleteBtnX + 12, deleteBtnY + 12);
-            ctx.moveTo(deleteBtnX + 12, deleteBtnY - 12);
-            ctx.lineTo(deleteBtnX - 12, deleteBtnY + 12);
+            ctx.moveTo(deleteBtnX - 16, deleteBtnY - 16);
+            ctx.lineTo(deleteBtnX + 16, deleteBtnY + 16);
+            ctx.moveTo(deleteBtnX + 16, deleteBtnY - 16);
+            ctx.lineTo(deleteBtnX - 16, deleteBtnY + 16);
             ctx.stroke();
             
-            // Draw resize handle (bottom-right) - GoodNotes style, smaller
-            const resizeBtnX = imagePos.x + imagePos.width - 20;
-            const resizeBtnY = imagePos.y + imagePos.height - 20;
-            const resizeBtnRadius = 25; // Much smaller, GoodNotes style
+            // Draw resize handle (bottom-right) - GoodNotes style, bigger for mobile
+            const resizeBtnX = imagePos.x + imagePos.width - 30;
+            const resizeBtnY = imagePos.y + imagePos.height - 30;
+            const resizeBtnRadius = 40; // Bigger for mobile touch
             const isResizing = resizingSimpleImage === index;
             
             // Draw resize button with shadow
@@ -1805,9 +1902,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // If image is already selected, check for button clicks
           if (selectedImage === i) {
             // Check if delete button was clicked (top-left)
-            const deleteBtnX = position.x + 20;
-            const deleteBtnY = position.y + 20;
-            const deleteBtnRadius = 25; // Match the visual button size
+            const deleteBtnX = position.x + 30;
+            const deleteBtnY = position.y + 30;
+            const deleteBtnRadius = 40; // Match the visual button size
             
             if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= deleteBtnRadius) {
               console.log("Deleting image:", i);
@@ -1819,9 +1916,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             }
             
             // Check if resize handle was clicked (bottom-right)
-            const resizeBtnX = position.x + position.width - 20;
-            const resizeBtnY = position.y + position.height - 20;
-            const resizeBtnRadius = 25; // Match the visual button size
+            const resizeBtnX = position.x + position.width - 30;
+            const resizeBtnY = position.y + position.height - 30;
+            const resizeBtnRadius = 40; // Match the visual button size
             
             if (Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2) <= resizeBtnRadius) {
               console.log("Starting resize for image:", i);
@@ -1927,35 +2024,41 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
     console.log("Mouse down at:", mouseX, mouseY);
 
-    // Check if we clicked on a freeflow layout image
+    // BULLETPROOF IMAGE INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
       let clickedImage = false;
       
+      // Process images from top to bottom (highest z-index first)
       for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
         const imagePos = simpleImagePositions[i];
-        const deleteBtnRadius = 25;
-        const resizeBtnRadius = 25;
+        const deleteBtnRadius = 40;
+        const resizeBtnRadius = 40;
         
-        // Check if click is on delete button
-        const deleteBtnX = imagePos.x + 20;
-        const deleteBtnY = imagePos.y + 20;
+        // Check if click is on delete button (top-left)
+        const deleteBtnX = imagePos.x + 30;
+        const deleteBtnY = imagePos.y + 30;
         const distanceToDelete = Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2);
         
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("Delete button clicked, deleting image:", i);
+          console.log("🗑️ Delete button clicked, deleting image:", i);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
+          // Keep selection on the deleted image until it's actually removed
           return;
         }
         
-        // Check if click is on resize button
-        const resizeBtnX = imagePos.x + imagePos.width - 20;
-        const resizeBtnY = imagePos.y + imagePos.height - 20;
+        // Check if click is on resize button (bottom-right)
+        const resizeBtnX = imagePos.x + imagePos.width - 30;
+        const resizeBtnY = imagePos.y + imagePos.height - 30;
         const distanceToResize = Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2);
         
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("Resize button clicked, starting resize for image:", i);
+          console.log("🔧 Resize button clicked, starting resize for image:", i);
+          // Ensure image is selected before resizing
+          if (selectedImage !== i) {
+            setSelectedImage(i);
+          }
           setResizingSimpleImage(i);
           setResizeStartData({
             startX: mouseX,
@@ -1973,38 +2076,31 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             mouseY >= imagePos.y && mouseY <= imagePos.y + imagePos.height) {
           
           clickedImage = true;
+          console.log("🖼️ Image body clicked:", i);
           
-          // Toggle selection: if already selected, deselect; if not selected, select
-          if (selectedImage === i) {
-            console.log("Deselecting image:", i);
-            setSelectedImage(null);
-          } else {
-            // If image is not selected, select it first
-            console.log("Selecting image:", i);
+          // ALWAYS select the image when clicked - no exceptions
+          if (selectedImage !== i) {
+            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
           
-          // Set up for potential dragging (will be activated after a delay if user holds)
+          // Set up for immediate dragging - no delays, no timers
           setDragOffset({
             x: mouseX - imagePos.x,
             y: mouseY - imagePos.y
           });
           
-          // Start a timer to enable dragging after a short delay (press and hold)
-          setTimeout(() => {
-            if (selectedImage === i && dragOffset.x !== 0 && dragOffset.y !== 0) {
-              console.log("Press and hold detected, enabling dragging for image:", i);
-              setDraggedSimpleImage(i);
-            }
-          }, 300); // 300ms delay to distinguish between click and press-and-hold
+          // Enable dragging immediately for responsive feel
+          setDraggedSimpleImage(i);
+          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
       }
       
-      // If we didn't click on any image, deselect current selection
+      // Only deselect if we didn't click on ANY image
       if (!clickedImage && selectedImage !== null) {
-        console.log("Clicking outside images, deselecting");
+        console.log("🔄 Clicking outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -2578,35 +2674,41 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
     console.log("Touch start at:", x, y);
 
-    // Check if we touched a freeflow layout image
+    // BULLETPROOF TOUCH INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
       let touchedImage = false;
       
+      // Process images from top to bottom (highest z-index first)
       for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
         const imagePos = simpleImagePositions[i];
-        const deleteBtnRadius = 25;
-        const resizeBtnRadius = 25;
+        const deleteBtnRadius = 40;
+        const resizeBtnRadius = 40;
         
-        // Check if touch is on delete button
-        const deleteBtnX = imagePos.x + 20;
-        const deleteBtnY = imagePos.y + 20;
+        // Check if touch is on delete button (top-left)
+        const deleteBtnX = imagePos.x + 30;
+        const deleteBtnY = imagePos.y + 30;
         const distanceToDelete = Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2);
         
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("Delete button touched, deleting image:", i);
+          console.log("🗑️ Delete button touched, deleting image:", i);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
+          // Keep selection on the deleted image until it's actually removed
           return;
         }
         
-        // Check if touch is on resize button
-        const resizeBtnX = imagePos.x + imagePos.width - 20;
-        const resizeBtnY = imagePos.y + imagePos.height - 20;
+        // Check if touch is on resize button (bottom-right)
+        const resizeBtnX = imagePos.x + imagePos.width - 30;
+        const resizeBtnY = imagePos.y + imagePos.height - 30;
         const distanceToResize = Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2);
         
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("Resize button touched, starting resize for image:", i);
+          console.log("🔧 Resize button touched, starting resize for image:", i);
+          // Ensure image is selected before resizing
+          if (selectedImage !== i) {
+            setSelectedImage(i);
+          }
           setResizingSimpleImage(i);
           setResizeStartData({
             startX: x,
@@ -2624,38 +2726,31 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             y >= imagePos.y && y <= imagePos.y + imagePos.height) {
           
           touchedImage = true;
+          console.log("🖼️ Image body touched:", i);
           
-          // Toggle selection: if already selected, deselect; if not selected, select
-          if (selectedImage === i) {
-            console.log("Deselecting image:", i);
-            setSelectedImage(null);
-          } else {
-            // If image is not selected, select it first
-            console.log("Selecting image:", i);
+          // ALWAYS select the image when touched - no exceptions
+          if (selectedImage !== i) {
+            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
           
-          // Set up for potential dragging (will be activated after a delay if user holds)
+          // Set up for immediate dragging - no delays, no timers
           setDragOffset({
             x: x - imagePos.x,
             y: y - imagePos.y
           });
           
-          // Start a timer to enable dragging after a short delay (press and hold)
-          setTimeout(() => {
-            if (selectedImage === i && dragOffset.x !== 0 && dragOffset.y !== 0) {
-              console.log("Press and hold detected, enabling dragging for image:", i);
-              setDraggedSimpleImage(i);
-            }
-          }, 300); // 300ms delay to distinguish between tap and press-and-hold
+          // Enable dragging immediately for responsive feel
+          setDraggedSimpleImage(i);
+          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
       }
       
-      // If we didn't touch any image, deselect current selection
+      // Only deselect if we didn't touch ANY image
       if (!touchedImage && selectedImage !== null) {
-        console.log("Touching outside images, deselecting");
+        console.log("🔄 Touching outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -2853,6 +2948,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           y: number;
           width: number;
           height: number;
+          rotation: number;
           image: string | Blob;
         }> = [];
         
@@ -2891,15 +2987,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Check if we already have a position for this image index
           const existingPosition = prevPositions[index];
           
-          if (existingPosition) {
-            console.log(`🖼️ Preserving position for image ${index}:`, existingPosition);
-            // Preserve existing position and size, but update the image reference
-            newImagePositions.push({
-              ...existingPosition,
-              image
-            });
-          } else {
-            console.log(`🖼️ Creating new position for image ${index}`);
+            if (existingPosition) {
+              console.log(`🖼️ Preserving position for image ${index}:`, existingPosition);
+              // Preserve existing position, size, and rotation, but update the image reference
+              newImagePositions.push({
+                ...existingPosition,
+                image
+              });
+            } else {
+              console.log(`🖼️ Creating new position for image ${index}`);
             
             // Use default dimensions for initial positioning (will be updated when image loads)
             const imageWidth = 400; // Reduced from 800
@@ -2909,11 +3005,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             let x = 0, y = 0;
             
             // Check if we have saved positions for this image
+            let savedRotation = 0;
             if (props.savedImagePositions && props.savedImagePositions[index]) {
               // Use saved position
               x = props.savedImagePositions[index].x;
               y = props.savedImagePositions[index].y;
-              console.log(`🖼️ Using saved position for image ${index}:`, { x, y });
+              savedRotation = props.savedImagePositions[index].rotation || 0;
+              console.log(`🖼️ Using saved position for image ${index}:`, { x, y, rotation: savedRotation });
             } else {
               // Center all images on the page with slight offsets to prevent overlap
             // Use the new canvas dimensions (1860x2620)
@@ -2949,6 +3047,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               y,
               width: imageWidth,
               height: imageHeight,
+              rotation: savedRotation, // Use saved rotation or default to 0
               image
             });
           }
@@ -3584,13 +3683,24 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }
 
-  // Force re-render when image selection changes
+  // BULLETPROOF SELECTION STATE MONITORING
   useEffect(() => {
     if (props.editMode && layoutMode === 'freeflow') {
-      console.log("Image selection changed, forcing re-render. Selected:", selectedImage);
+      console.log("🎯 Image selection changed, forcing re-render. Selected:", selectedImage);
+      
+      // Validate selection state
+      if (selectedImage !== null) {
+        if (selectedImage < 0 || selectedImage >= simpleImagePositions.length) {
+          console.error("🚨 INVALID SELECTION STATE: selectedImage out of bounds, resetting");
+          setSelectedImage(null);
+          return;
+        }
+        console.log("✅ Selection state validated:", selectedImage);
+      }
+      
       setRenderCount(prev => prev + 1);
     }
-  }, [selectedImage, props.editMode, layoutMode]);
+  }, [selectedImage, props.editMode, layoutMode, simpleImagePositions.length]);
 
   // Force re-render when image positions change
   useEffect(() => {
@@ -3635,7 +3745,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
-            onClick={handleCanvasClick}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}

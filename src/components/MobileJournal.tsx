@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import JournalCanvas, { JournalCanvasHandle } from './JournalCanvas';
-import { TextColors } from './ColorPicker';
+import TempColorPicker, { TextColors } from './TempColorPicker';
 
 // Helper function to get complementary shadow color
 const getComplementaryColor = (hex: string, offset: number = 30): string => {
@@ -112,6 +112,7 @@ interface ImagePosition {
   y: number;
   width: number;
   height: number;
+  rotation?: number;
   originalWidth?: number;
   originalHeight?: number;
 }
@@ -207,6 +208,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         y: 200 + offsetY,
         width: dimensions.width,
         height: dimensions.height,
+        rotation: 0,
         originalWidth: dimensions.originalWidth,
         originalHeight: dimensions.originalHeight
       };
@@ -265,6 +267,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     setImages(prev => prev.filter((_, i) => i !== index));
     setImagePositions(prev => prev.filter((_, i) => i !== index));
   }, []);
+
+
 
   // Export functionality
   const exportPDF = useCallback(async () => {
@@ -340,7 +344,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
           x: position.x,
           y: position.y,
           width: position.width,
-          height: position.height
+          height: position.height,
+          rotation: position.rotation || 0
         };
       } else {
         // Fallback position if none exists
@@ -348,7 +353,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
           x: 100 + (index * 50),
           y: 200 + (index * 50),
           width: 400,
-          height: 300
+          height: 300,
+          rotation: 0
         };
       }
     });
@@ -356,6 +362,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     console.log('🖼️ MOBILE DEBUG: Result:', result);
     return result;
   }, [images, imagePositions]);
+
+
 
   // Debug effect to track state changes
   useEffect(() => {
@@ -402,6 +410,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
             </div>
           </div>
         </section>
+
+
 
         {/* Write Your Entry Section */}
         <section className="p-4 border-b border-white/10">

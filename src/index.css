@@ -253,3 +253,42 @@ video.static-bg {
 /* Removed save notification styling */
 
 /* Add any other custom styles from the original project */
+
+/* Mobile image editor animations */
+@keyframes imageSelect {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.image-select-animation {
+  animation: imageSelect 0.6s ease-out;
+}
+
+/* Smooth transitions for image manipulation */
+.mobile-image-editor img {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-image-editor .selected-image {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced touch feedback */
+.mobile-image-editor button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-image-editor button:active {
+  transform: scale(0.95);
+}
