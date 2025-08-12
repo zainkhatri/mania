@@ -355,11 +355,13 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
                 placeholder="Pour your heart out..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                rows={6}
+                rows={7}
                 className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 resize-none overflow-y-auto"
                 style={{
-                  maxHeight: '200px',
-                  minHeight: '120px'
+                  maxHeight: '240px',
+                  minHeight: '180px',
+                  paddingTop: '24px',
+                  paddingBottom: '24px'
                 }}
               />
             </div>
