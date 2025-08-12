@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -190,7 +190,9 @@ function App() {
   // Check if device is mobile on mount and resize
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768); // md breakpoint
+      const isMobileDevice = window.innerWidth <= 768;
+      console.log('🔍 MOBILE DEBUG: Window width:', window.innerWidth, 'Is mobile:', isMobileDevice);
+      setIsMobile(isMobileDevice);
     };
     
     checkMobile();
@@ -199,6 +201,22 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Memoize the journal element to prevent unnecessary re-renders
+  const journalElement = useMemo(() => {
+    console.log('🔍 MOBILE DEBUG: Creating journal element, isMobile:', isMobile);
+    return isMobile ? (
+      <div className="mobile-journal-wrapper">
+        <MobileJournal />
+      </div>
+    ) : (
+      <Layout>
+        <JournalForm />
+      </Layout>
+    );
+  }, [isMobile]);
+
+  console.log('🔍 MOBILE DEBUG: Rendering journal element, isMobile:', isMobile);
+
   return (
     <Router>
       <div className="min-h-screen flex flex-col bg-black overflow-auto">
@@ -206,15 +224,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route 
             path="/journal" 
-            element={
-              isMobile ? (
-                <MobileJournal />
-              ) : (
-                <Layout>
-                  <JournalForm />
-                </Layout>
-              )
-            } 
+            element={journalElement}
           />
         </Routes>
       </div>

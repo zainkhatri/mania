@@ -36,20 +36,9 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isHovered, setIsHovered] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // Preload image to get aspect ratio
   useEffect(() => {
@@ -106,8 +95,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
     const relativeX = coords.x - rect.left;
     const relativeY = coords.y - rect.top;
 
-    // Larger touch targets for mobile
-    const resizeHandleSize = isMobile ? 40 : 20;
+    const resizeHandleSize = 20;
     const isInResizeHandle = 
       relativeX >= displayWidth - resizeHandleSize && 
       relativeY >= displayHeight - resizeHandleSize;
@@ -129,7 +117,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
     }
 
     onSelect();
-  }, [displayX, displayY, displayWidth, displayHeight, isSelected, onSelect, getEventCoords, isMobile]);
+  }, [displayX, displayY, displayWidth, displayHeight, isSelected, onSelect, getEventCoords]);
 
   // Handle move during touch/mouse interaction
   const handleMove = useCallback((e: TouchEvent | MouseEvent) => {
@@ -216,16 +204,15 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
 
   // Handle hover states (desktop only)
   const handleMouseEnter = useCallback(() => {
-    if (!isMobile) setIsHovered(true);
-  }, [isMobile]);
+    setIsHovered(true);
+  }, []);
 
   const handleMouseLeave = useCallback(() => {
-    if (!isMobile) setIsHovered(false);
-  }, [isMobile]);
+    setIsHovered(false);
+  }, []);
 
-  // Mobile-specific sizes
-  const deleteButtonSize = isMobile ? 28 : 20;
-  const resizeHandleSize = isMobile ? 20 : 16;
+  const deleteButtonSize = 20;
+  const resizeHandleSize = 16;
 
   return (
     <div 
@@ -244,7 +231,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
         zIndex: isSelected ? 1000 : 1,
       }}
       onTouchStart={handleStart}
-      onMouseDown={!isMobile ? handleStart : undefined}
+      onMouseDown={handleStart}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -274,7 +261,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
               left: '-3px',
               right: '-3px',
               bottom: '-3px',
-              border: isMobile ? '4px solid #007AFF' : '3px solid #007AFF',
+              border: '3px solid #007AFF',
               borderRadius: '8px',
               pointerEvents: 'none',
               boxShadow: '0 0 0 1px rgba(255,255,255,0.8)',
@@ -282,8 +269,8 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
           />
         )}
         
-        {/* Hover border (desktop only) */}
-        {isHovered && !isSelected && !isMobile && (
+        {/* Hover border */}
+        {isHovered && !isSelected && (
           <div
             style={{
               position: 'absolute',
@@ -302,7 +289,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
         {isSelected && (
           <button
             onTouchStart={handleDeleteClick}
-            onClick={!isMobile ? handleDeleteClick : undefined}
+            onClick={handleDeleteClick}
             style={{
               position: 'absolute',
               top: '-10px',
@@ -317,7 +304,7 @@ const DraggableResizableImage: React.FC<DraggableResizableImageProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: isMobile ? '16px' : '12px',
+              fontSize: '12px',
               fontWeight: 'bold',
               zIndex: 1000,
               boxShadow: '0 2px 8px rgba(0,0,0,0.3)',

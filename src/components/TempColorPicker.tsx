@@ -13,6 +13,7 @@ interface ColorPickerProps {
 }
 
 export default function SimpleColorPicker({ colors, onChange, images = [], compact = false }: ColorPickerProps) {
+  console.log('🔍 INPUT DEBUG: SimpleColorPicker component rendered with images count:', images?.length);
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -22,17 +23,17 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
 
   // Extract colors from images when the component mounts or images change
   useEffect(() => {
-    console.log('SimpleColorPicker: Images received:', images.length);
+    console.log('🔍 INPUT DEBUG: SimpleColorPicker images useEffect triggered with images count:', images.length);
     // Always reset the extracted colors when images prop changes
     setExtractedColors([]);
     
     if (images && images.length > 0) {
-      console.log('SimpleColorPicker: Extracting colors from images');
+      console.log('🔍 INPUT DEBUG: SimpleColorPicker: Extracting colors from images');
       // Force immediate color extraction with a clean state
       setIsExtracting(true);
       extractColorsFromImages(images, 16);
     } else {
-      console.log('SimpleColorPicker: No images available for color extraction');
+      console.log('🔍 INPUT DEBUG: SimpleColorPicker: No images available for color extraction');
       // Set default colors when no images are available
       setExtractedColors(getDefaultColors(16));
     }

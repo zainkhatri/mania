@@ -6,43 +6,18 @@ import html2canvas from 'html2canvas';
 import html2pdf from 'html2pdf.js';
 import { jsPDF } from 'jspdf';
 
-// iOS Detection and Performance Utilities
-const isIOS = () => {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
-         (navigator.userAgent.includes('Safari') && navigator.userAgent.includes('Mobile'));
-};
-
-const isIOSSafari = () => {
-  return isIOS() && /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS/.test(navigator.userAgent);
-};
-
-// iOS-specific performance configurations
-const getIOSOptimizedSettings = () => {
-  if (isIOS()) {
-    return {
-      // GOODNOTES-QUALITY: Maintain quality on iOS while keeping performance
-      dragCanvasScale: 0.9, // Higher resolution during drag (90% vs 50%)
-      dragRenderThrottle: 16, // Keep 60fps for smooth dragging
-      staticRenderThrottle: 16, // 60fps when static
-      maxStickerResolution: 2048, // Higher resolution limit for iOS (same as desktop)
-      enableHardwareAcceleration: true,
-      useOffscreenCanvas: false, // Safari doesn't support it well
-      imageSmoothingEnabled: true, // ALWAYS enable smoothing for quality
-      highQualityExport: true // Enable high quality during export
-    };
-  } else {
-    return {
-      dragCanvasScale: 0.9, // Consistent quality across platforms
-      dragRenderThrottle: 16,
-      staticRenderThrottle: 16,
-      maxStickerResolution: 2048,
-      enableHardwareAcceleration: true,
-      useOffscreenCanvas: true,
-      imageSmoothingEnabled: true,
-      highQualityExport: true
-    };
-  }
+// Performance configurations
+const getOptimizedSettings = () => {
+  return {
+    dragCanvasScale: 0.9,
+    dragRenderThrottle: 16,
+    staticRenderThrottle: 16,
+    maxStickerResolution: 2048,
+    enableHardwareAcceleration: true,
+    useOffscreenCanvas: true,
+    imageSmoothingEnabled: true,
+    highQualityExport: true
+  };
 };
 
 // Define types for image positioning
@@ -243,6 +218,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   inspirationQuestion = '',
   ...props
 }, ref) => {
+  console.log('🔍 INPUT DEBUG: JournalCanvas component rendered with props:', { 
+    textSectionsLength: textSections?.length, 
+    imagesLength: images?.length,
+    textColors: textColors,
+    layoutMode
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -413,15 +394,19 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     startImageX: number;
     startImageY: number;
   } | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Performance optimization refs with iOS-specific settings
-  const iosSettings = getIOSOptimizedSettings();
+  // Pinch-to-resize state for mobile
+  const [initialPinchDistance, setInitialPinchDistance] = useState<number>(0);
+  const [initialImageSize, setInitialImageSize] = useState<{width: number, height: number} | null>(null);
+  
+  // Performance optimization refs
+  const settings = getOptimizedSettings();
   const animationFrameRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const isRenderingRef = useRef<boolean>(false);
   const dragAnimationFrameRef = useRef<number | null>(null);
   const lastDragUpdateRef = useRef<number>(0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isDraggingSticker, setIsDraggingSticker] = useState(false);
   const [isHighQualityMode, setIsHighQualityMode] = useState(true);
   const [isImageInteraction, setIsImageInteraction] = useState(false);
@@ -435,13 +420,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // iOS-optimized throttled render function
   const throttledRender = useCallback(() => {
     const now = Date.now();
-    const throttleTime = isDraggingSticker ? iosSettings.dragRenderThrottle : iosSettings.staticRenderThrottle;
+    const throttleTime = isDraggingSticker ? settings.dragRenderThrottle : settings.staticRenderThrottle;
     
     if (now - lastUpdateTimeRef.current > throttleTime) {
       lastUpdateTimeRef.current = now;
       renderJournal();
     }
-  }, [renderJournal, isDraggingSticker, iosSettings]);
+  }, [renderJournal, isDraggingSticker, settings]);
 
   // iOS-optimized debounced render function for drag operations
   const debouncedDragRender = useCallback(() => {
@@ -451,23 +436,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     dragAnimationFrameRef.current = requestAnimationFrame(() => {
       const now = Date.now();
-      if (now - lastDragUpdateRef.current > iosSettings.dragRenderThrottle) {
+      if (now - lastDragUpdateRef.current > settings.dragRenderThrottle) {
         lastDragUpdateRef.current = now;
         
-        // On iOS, temporarily reduce quality during drag
-        if (isIOS() && isDraggingSticker) {
-          setIsHighQualityMode(false);
-        }
-        
         renderJournal();
-        
-        // Restore quality after a short delay
-        if (isIOS() && isDraggingSticker) {
-          setTimeout(() => setIsHighQualityMode(true), 100);
-        }
       }
     });
-  }, [renderJournal, isDraggingSticker, iosSettings]);
+  }, [renderJournal, isDraggingSticker, settings]);
   
   // Font loading using FontFace API
   useEffect(() => {
@@ -832,33 +807,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
 
 
-  // Draw the canvas with all elements - optimized with throttling for performance
+  // Draw the canvas with all elements - INSTANT updates for real-time experience
   useEffect(() => {
     if (!canvasRef.current) return;
     if (isLoading) return; // Don't draw while loading
     
-    // Throttle renders to prevent excessive re-rendering
-    const now = Date.now();
-    if (now - lastUpdateTimeRef.current < 16) { // 60fps throttle
-      return;
-    }
-    lastUpdateTimeRef.current = now;
-    
+    // INSTANT rendering - no debouncing for real-time experience
     const renderCanvas = () => {
-    // Check for global flag to force redraw
-    if (window.FORCE_CANVAS_REDRAW) {
-      window.FORCE_CANVAS_REDRAW = false;
-    }
-    
-    const canvas = canvasRef.current;
+      // Check for global flag to force redraw
+      if (window.FORCE_CANVAS_REDRAW) {
+        window.FORCE_CANVAS_REDRAW = false;
+      }
+      
+      const canvas = canvasRef.current;
       if (!canvas) return;
       
-    // Get device pixel ratio for mobile optimization
-    const dpr = window.devicePixelRatio || 1;
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-    
+      // Get device pixel ratio for mobile optimization
+      const dpr = window.devicePixelRatio || 1;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      
       // Use optimized high-resolution settings - reduced from 3100x4370 to 1860x2620
-    let canvasWidth, canvasHeight;
+      let canvasWidth, canvasHeight;
       canvasWidth = 1860;  // Reduced from 3100
       canvasHeight = 2620; // Reduced from 4370
       
@@ -905,14 +874,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Draw content based on layout mode
       if (layoutMode === 'freeflow') {
         renderSimpleTextFlow(ctx);
-              } else {
+      } else {
         // For now, just use the freeflow layout as fallback
-          renderSimpleTextFlow(ctx);
+        renderSimpleTextFlow(ctx);
       }
     };
     
+    console.log('🔍 INPUT DEBUG: Main rendering useEffect executing INSTANTLY');
     renderCanvas();
-  }, [textSections, images, templateImage, textColors, layoutMode, stickers, isLoading, forceRender]);
+  }, [templateImage, textColors, layoutMode, stickers, isLoading, textSections, images, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]); // Added image-related dependencies
   
   // Show location shadow when location is available
   useEffect(() => {
@@ -920,6 +890,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       setShowLocationShadow(true);
     }
   }, [location]);
+
+  // Handle text content changes - INSTANT updates for real-time experience
+  useEffect(() => {
+    // INSTANT updates - no debouncing for real-time experience
+    if (textSections.some(text => text.trim()) || images.length > 0) {
+      console.log('🔍 INPUT DEBUG: Content changed, canvas updating INSTANTLY');
+    }
+  }, [textSections, images]);
 
   // Add cleanup for animation frames and timers
   useEffect(() => {
@@ -938,6 +916,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Add this before the main useEffect
   const renderCanvas = useCallback(() => {
+    console.log('🔍 INPUT DEBUG: renderCanvas function called');
     if (!canvasRef.current) return;
     if (isLoading) return;
     
@@ -949,9 +928,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    // Get device pixel ratio for mobile optimization
+    // Get device pixel ratio
     const dpr = window.devicePixelRatio || 1;
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
     
     // Use optimized high-resolution settings - reduced from 3100x4370 to 1860x2620
     let canvasWidth, canvasHeight;
@@ -1013,18 +991,28 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           ctx.restore();
       }
       
-
-      
-      // ... rest of your existing render logic for other layouts ...
+      // Draw content based on layout mode
+      if (layoutMode === 'freeflow') {
+        renderSimpleTextFlow(ctx);
+      } else {
+        // For now, just use the freeflow layout as fallback
+        renderSimpleTextFlow(ctx);
+      }
       
     } catch (error) {
       console.error('Error rendering canvas:', error);
     }
-  }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions]);
+  }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]);
 
-  // iOS-optimized ultra-high-quality export function
+  // Ultra-high-quality export function
   const exportUltraHDPDF = () => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current) {
+      console.error('Canvas reference not available for PDF export');
+      return;
+    }
+    
+    console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
+    console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
     
     // Force high quality mode for export
     const wasHighQuality = isHighQualityMode;
@@ -1037,139 +1025,170 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     setIsHighQualityMode(true);
     setIsDraggingSticker(false);
     
-    // iOS-specific: Ensure we're not in any performance mode
-    if (isIOS()) {
-      // Force a high-quality re-render before export
-      setTimeout(() => {
-        renderJournal();
-        setTimeout(() => {
-          performExport();
-        }, 100); // Wait for render to complete
-      }, 50);
-    } else {
+    // Force a render to ensure all images are properly drawn on the canvas
+    renderJournal();
+    
+    // Wait a bit for the render to complete, then perform export
+    setTimeout(() => {
       performExport();
-    }
+    }, 100);
     
-         function performExport() {
-       // Create a saving indicator
-    const savingToast = document.createElement('div');
-    savingToast.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50';
-    savingToast.innerHTML = `
-      <div class="bg-white p-4 rounded-md shadow-lg flex flex-col items-center">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-3"></div>
-        <p class="text-gray-800">Creating Ultra-Maximum Resolution Export...</p>
-      </div>
-    `;
-    document.body.appendChild(savingToast);
-    
-    // Get the canvas for export
-    const journalCanvas = canvasRef.current;
-    if (!journalCanvas) return;
-    
-    try {
-      // Create a high quality PNG snapshot
-      html2canvas(journalCanvas, {
-        scale: 8, // Higher resolution for better image quality
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#f5f2e9',
-        logging: false,
-        letterRendering: true,
-        imageTimeout: 0,
-        async: true,
-        removeContainer: true,
-        foreignObjectRendering: false, // Better quality with native canvas rendering
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: journalCanvas.width * 1.5,  // Higher scaling for better quality
-        windowHeight: journalCanvas.height * 1.5, // Higher scaling for better quality
-        onclone: (documentClone: Document) => {
-          const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
-          if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
+    function performExport() {
+      // Create a saving indicator
+      const savingToast = document.createElement('div');
+      savingToast.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-black bg-opacity-50 z-50';
+      savingToast.innerHTML = `
+        <div class="bg-white p-4 rounded-md shadow-lg flex flex-col items-center">
+          <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-3"></div>
+          <p class="text-gray-800">Creating Ultra-Maximum Resolution Export...</p>
+        </div>
+      `;
+      document.body.appendChild(savingToast);
+      
+      // Get the canvas for export
+      const journalCanvas = canvasRef.current;
+      if (!journalCanvas) {
+        console.error('Canvas not available during export');
+        document.body.removeChild(savingToast);
+        return;
+      }
+      
+      console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+      
+      try {
+        // Create a high quality PNG snapshot
+        html2canvas(journalCanvas, {
+          scale: 4, // Reduced from 8 to prevent memory issues
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#f5f2e9',
+          logging: false, // Disable logging to reduce console noise
+          letterRendering: true,
+          imageTimeout: 10000, // Increase timeout for large images
+          async: true,
+          removeContainer: true,
+          foreignObjectRendering: false, // Better quality with native canvas rendering
+          x: 0,
+          y: 0,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: journalCanvas.width * 1.2,  // Reduced scaling to prevent memory issues
+          windowHeight: journalCanvas.height * 1.2, // Reduced scaling to prevent memory issues
+          onclone: (documentClone: Document) => {
+            console.log('🖼️ PDF EXPORT DEBUG: Cloning document for export');
+            const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
+            if (canvas) {
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                console.log('🖼️ PDF EXPORT DEBUG: Canvas context prepared for export');
+              }
             }
           }
-        }
-      }).then((canvas: HTMLCanvasElement) => {
-        // Get PNG data at maximum quality
-        const pngData = canvas.toDataURL('image/png', 1.0);
-        
-        // Create a new image element from the high-quality PNG
-        const img = new Image();
-        img.onload = () => {
-          // Define PDF options with extreme quality settings
-          // Create PDF document with maximum quality
-          const pdf = new jsPDF(
-            'portrait', 
-            'px', 
-            [journalCanvas.width * 2, journalCanvas.height * 2],
-            false // No compression
-          );
+        }).then((canvas: HTMLCanvasElement) => {
+          console.log('🖼️ PDF EXPORT DEBUG: Canvas snapshot created, dimensions:', canvas.width, 'x', canvas.height);
           
-          // Add px_scaling hotfix manually if needed
-          if (pdf.internal && pdf.internal.scaleFactor) {
-            pdf.internal.scaleFactor = 2; // Boost scaling factor
+          // Validate canvas data before proceeding
+          if (canvas.width === 0 || canvas.height === 0) {
+            throw new Error('Canvas snapshot has invalid dimensions');
           }
           
-          // Add the image to the PDF at maximum resolution
-          pdf.addImage({
-            imageData: pngData,
-            x: 0,
-            y: 0,
-            width: pdf.internal.pageSize.getWidth(),
-            height: pdf.internal.pageSize.getHeight(),
-            compression: 'NONE', // No compression for maximum quality
-            rotation: 0,
-            alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
-          });
+          // Get PNG data at maximum quality
+          let pngData: string;
+          try {
+            pngData = canvas.toDataURL('image/png', 1.0);
+            console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length);
+            
+            // Validate PNG data
+            if (pngData.length < 1000) { // PNG should be at least 1KB
+              throw new Error(`PNG data too small: ${pngData.length} bytes`);
+            }
+          } catch (pngError) {
+            console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
+            throw new Error('Failed to create image data from canvas');
+          }
           
-          // Save the PDF
-          pdf.save(`journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`);
+          // Create a new image element from the high-quality PNG
+          const img = new Image();
+          img.onload = () => {
+            console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
+            
+            try {
+              // Create PDF document with maximum quality
+              const pdf = new jsPDF(
+                'portrait', 
+                'px', 
+                [journalCanvas.width, journalCanvas.height],
+                false // No compression
+              );
+              
+              // Add the image to the PDF at maximum resolution
+              pdf.addImage({
+                imageData: pngData,
+                x: 0,
+                y: 0,
+                width: pdf.internal.pageSize.getWidth(),
+                height: pdf.internal.pageSize.getHeight(),
+                compression: 'NONE', // No compression for maximum quality
+                rotation: 0,
+                alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
+              });
+              
+              console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
+              
+              // Save the PDF
+              const date = new Date();
+              pdf.save(`journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`);
+              
+              // Remove saving indicator
+              document.body.removeChild(savingToast);
+              
+              // Show success notification
+              const successToast = document.createElement('div');
+              successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+              successToast.textContent = 'Crystal Clear Export Complete';
+              document.body.appendChild(successToast);
+              
+              // Remove success notification after 2 seconds
+              setTimeout(() => {
+                if (document.body.contains(successToast)) {
+                  document.body.removeChild(successToast);
+                }
+              }, 2000);
+              
+              console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
+            } catch (pdfError) {
+              console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
+              document.body.removeChild(savingToast);
+              alert('Could not create PDF. Please try again.');
+            }
+          };
           
-          // Remove saving indicator
+          img.onerror = (err) => {
+            console.error('🖼️ PDF EXPORT ERROR: Error loading high-resolution image for PDF:', err);
+            document.body.removeChild(savingToast);
+            alert('Could not create crystal clear export. Please try again.');
+          };
+          
+          // Start loading the high-resolution image
+          img.src = pngData;
+        }).catch((error: Error) => {
+          console.error('🖼️ PDF EXPORT ERROR: Error creating canvas snapshot:', error);
           document.body.removeChild(savingToast);
-          
-          // Show success notification
-          const successToast = document.createElement('div');
-          successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-          successToast.textContent = 'Crystal Clear Export Complete';
-          document.body.appendChild(successToast);
-          
-          // Remove success notification after 2 seconds
-          setTimeout(() => {
-            document.body.removeChild(successToast);
-          }, 2000);
-        };
-        
-        img.onerror = (err) => {
-          console.error('Error loading high-resolution image for PDF:', err);
-          document.body.removeChild(savingToast);
-          alert('Could not create crystal clear export. Please try again.');
-        };
-        
-        // Start loading the high-resolution image
-        img.src = pngData;
-      }).catch((error: Error) => {
-        console.error('Error creating canvas snapshot:', error);
+          alert('Could not create export. Please try again.');
+        });
+      } catch (error: unknown) {
+        console.error('🖼️ PDF EXPORT ERROR: Error in export process:', error);
         document.body.removeChild(savingToast);
         alert('Could not create export. Please try again.');
-      });
-    } catch (error: unknown) {
-      console.error('Error in export process:', error);
-      document.body.removeChild(savingToast);
-      alert('Could not create export. Please try again.');
+      }
+      
+      // Restore original quality settings after export
+      setIsHighQualityMode(wasHighQuality);
+      setIsDraggingSticker(wasDragging);
+      setSelectedImage(wasSelectedImage);
     }
-    
-    // Restore original quality settings after export
-    setIsHighQualityMode(wasHighQuality);
-    setIsDraggingSticker(wasDragging);
-    setSelectedImage(wasSelectedImage);
-  }
   };
 
   // Calculate the optimal font size to fit text in a given width
@@ -1668,17 +1687,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             ctx.lineWidth = 2;
             ctx.strokeRect(imagePos.x, imagePos.y, imagePos.width, imagePos.height);
             
-            // Draw delete button (top-left) - elegant design
-            const deleteBtnX = imagePos.x + 30;
-            const deleteBtnY = imagePos.y + 30;
-            const deleteBtnRadius = 200; // Match visual button size for full clickable area
+            // Draw delete button (top-left) - GoodNotes style, smaller
+            const deleteBtnX = imagePos.x + 20;
+            const deleteBtnY = imagePos.y + 20;
+            const deleteBtnRadius = 25; // Much smaller, GoodNotes style
             
             // Draw delete button with shadow
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
             
             // Delete button background
             ctx.fillStyle = '#FF3B30';
@@ -1690,27 +1709,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             // Draw elegant X icon
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 20; // REASONABLE line width
+            ctx.lineWidth = 3; // Much thinner for smaller button
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(deleteBtnX - 60, deleteBtnY - 60);
-            ctx.lineTo(deleteBtnX + 60, deleteBtnY + 60);
-            ctx.moveTo(deleteBtnX + 60, deleteBtnY - 60);
-            ctx.lineTo(deleteBtnX - 60, deleteBtnY + 60);
+            ctx.moveTo(deleteBtnX - 12, deleteBtnY - 12);
+            ctx.lineTo(deleteBtnX + 12, deleteBtnY + 12);
+            ctx.moveTo(deleteBtnX + 12, deleteBtnY - 12);
+            ctx.lineTo(deleteBtnX - 12, deleteBtnY + 12);
             ctx.stroke();
             
-            // Draw resize handle (bottom-right) - elegant design
-            const resizeBtnX = imagePos.x + imagePos.width - 30;
-            const resizeBtnY = imagePos.y + imagePos.height - 30;
-            const resizeBtnRadius = 200; // Match visual button size for full clickable area
+            // Draw resize handle (bottom-right) - GoodNotes style, smaller
+            const resizeBtnX = imagePos.x + imagePos.width - 20;
+            const resizeBtnY = imagePos.y + imagePos.height - 20;
+            const resizeBtnRadius = 25; // Much smaller, GoodNotes style
             const isResizing = resizingSimpleImage === index;
             
             // Draw resize button with shadow
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
             
             // Resize button background
             ctx.fillStyle = isResizing ? '#0056CC' : '#007AFF';
@@ -1720,37 +1739,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             ctx.restore();
             
-            // Draw GoodNotes-style scaling icon (corner handles) - BIG SIZE
+            // Draw GoodNotes-style scaling icon (corner handles) - smaller size
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 20; // Much thicker to match delete button
+            ctx.lineWidth = 3; // Much thinner for smaller button
             ctx.lineCap = 'round';
             
-            // Draw corner handles like GoodNotes - BIG SIZE
+            // Draw corner handles like GoodNotes - smaller size
             ctx.beginPath();
             
             // Top-left corner handle
-            ctx.moveTo(resizeBtnX - 60, resizeBtnY - 45);
-            ctx.lineTo(resizeBtnX - 60, resizeBtnY - 75);
-            ctx.moveTo(resizeBtnX - 60, resizeBtnY - 75);
-            ctx.lineTo(resizeBtnX - 30, resizeBtnY - 75);
+            ctx.moveTo(resizeBtnX - 12, resizeBtnY - 12);
+            ctx.lineTo(resizeBtnX - 12, resizeBtnY - 20);
+            ctx.moveTo(resizeBtnX - 12, resizeBtnY - 20);
+            ctx.lineTo(resizeBtnX - 20, resizeBtnY - 20);
             
             // Bottom-right corner handle
-            ctx.moveTo(resizeBtnX + 60, resizeBtnY + 45);
-            ctx.lineTo(resizeBtnX + 60, resizeBtnY + 75);
-            ctx.moveTo(resizeBtnX + 60, resizeBtnY + 75);
-            ctx.lineTo(resizeBtnX + 30, resizeBtnY + 75);
+            ctx.moveTo(resizeBtnX + 12, resizeBtnY + 12);
+            ctx.lineTo(resizeBtnX + 12, resizeBtnY + 20);
+            ctx.moveTo(resizeBtnX + 12, resizeBtnY + 20);
+            ctx.lineTo(resizeBtnX + 20, resizeBtnY + 20);
             
             // Top-right corner handle
-            ctx.moveTo(resizeBtnX + 60, resizeBtnY - 45);
-            ctx.lineTo(resizeBtnX + 60, resizeBtnY - 75);
-            ctx.moveTo(resizeBtnX + 60, resizeBtnY - 75);
-            ctx.lineTo(resizeBtnX + 30, resizeBtnY - 75);
+            ctx.moveTo(resizeBtnX + 12, resizeBtnY - 12);
+            ctx.lineTo(resizeBtnX + 12, resizeBtnY - 20);
+            ctx.moveTo(resizeBtnX + 12, resizeBtnY - 20);
+            ctx.lineTo(resizeBtnX + 20, resizeBtnY - 20);
             
             // Bottom-left corner handle
-            ctx.moveTo(resizeBtnX - 60, resizeBtnY + 45);
-            ctx.lineTo(resizeBtnX - 60, resizeBtnY + 75);
-            ctx.moveTo(resizeBtnX - 60, resizeBtnY + 75);
-            ctx.lineTo(resizeBtnX - 30, resizeBtnY + 75);
+            ctx.moveTo(resizeBtnX - 12, resizeBtnY + 12);
+            ctx.lineTo(resizeBtnX - 12, resizeBtnY + 20);
+            ctx.moveTo(resizeBtnX - 12, resizeBtnY + 20);
+            ctx.lineTo(resizeBtnX - 20, resizeBtnY + 20);
             
             ctx.stroke();
           }
@@ -1773,21 +1792,66 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
     console.log("Canvas clicked at:", mouseX, mouseY);
 
-    // First check for image delete button clicks
-    if (props.editMode && hoveredImage !== null && imagePositionsRef.current[hoveredImage]) {
-      const position = imagePositionsRef.current[hoveredImage];
-      const deleteBtnX = position.x + position.width - 20;
-      const deleteBtnY = position.y + 20;
-      const btnRadius = 20;
-      
-      // Check if delete button was clicked
-      if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= btnRadius) {
-        console.log("Deleting image:", hoveredImage);
-        if (props.onImageDelete) {
-          props.onImageDelete(hoveredImage);
+    // First check for image interactions
+    if (props.editMode && layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      // Check if clicked on an image or its controls
+      for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+        const position = simpleImagePositions[i];
+        
+        // Check if click is within image bounds
+        if (mouseX >= position.x && mouseX <= position.x + position.width &&
+            mouseY >= position.y && mouseY <= position.y + position.height) {
+          
+          // If image is already selected, check for button clicks
+          if (selectedImage === i) {
+            // Check if delete button was clicked (top-left)
+            const deleteBtnX = position.x + 20;
+            const deleteBtnY = position.y + 20;
+            const deleteBtnRadius = 25; // Match the visual button size
+            
+            if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= deleteBtnRadius) {
+              console.log("Deleting image:", i);
+              if (props.onImageDelete) {
+                props.onImageDelete(i);
+              }
+              setSelectedImage(null);
+              return;
+            }
+            
+            // Check if resize handle was clicked (bottom-right)
+            const resizeBtnX = position.x + position.width - 20;
+            const resizeBtnY = position.y + position.height - 20;
+            const resizeBtnRadius = 25; // Match the visual button size
+            
+            if (Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2) <= resizeBtnRadius) {
+              console.log("Starting resize for image:", i);
+              setResizingSimpleImage(i);
+              setResizeStartData({
+                startX: mouseX,
+                startY: mouseY,
+                startWidth: position.width,
+                startHeight: position.height,
+                startImageX: position.x,
+                startImageY: position.y
+              });
+              return;
+            }
+          } else {
+            // Select this image
+            console.log("Selecting image:", i);
+            setSelectedImage(i);
+            setHoveredImage(i);
+            return;
+          }
         }
+      }
+      
+      // If clicked outside all images, deselect current image
+      if (selectedImage !== null) {
+        console.log("Deselecting image, saving position");
+        setSelectedImage(null);
         setHoveredImage(null);
-        return;
+        // The position is already saved in the state, no need to call save here
       }
     }
 
@@ -1858,98 +1922,89 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasRef.current.width / rect.width;
     const scaleY = canvasRef.current.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const mouseX = (e.clientX - rect.left) * scaleX;
+    const mouseY = (e.clientY - rect.top) * scaleY;
+
+    console.log("Mouse down at:", mouseX, mouseY);
 
     // Check if we clicked on a freeflow layout image
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
-      let clickedOnImage = false;
+      let clickedImage = false;
       
       for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
         const imagePos = simpleImagePositions[i];
+        const deleteBtnRadius = 25;
+        const resizeBtnRadius = 25;
         
-        // Check if click is inside image bounds
-        if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
-            y >= imagePos.y && y <= imagePos.y + imagePos.height) {
-          
-          clickedOnImage = true;
-          
-          // Check if delete button was clicked (only if image is selected)
-          if (selectedImage === i) {
-            const deleteBtnX = imagePos.x + 30;
-            const deleteBtnY = imagePos.y + 30;
-            const deleteBtnRadius = 200; // Match visual button size for full clickable area
-            
-            if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
-              // Delete the image
-              const newPositions = simpleImagePositions.filter((_, index) => index !== i);
-              setSimpleImagePositions(newPositions);
-              setSelectedImage(null); // Clear selection after deletion
-              if (props.onImageDelete) {
-                props.onImageDelete(i);
-              }
-              return;
-            }
-            
-            // Check if resize handle was clicked (bottom-right corner)
-            const resizeBtnX = imagePos.x + imagePos.width - 30;
-            const resizeBtnY = imagePos.y + imagePos.height - 30;
-            const resizeBtnRadius = 200; // Match visual button size for full clickable area
-            
-            if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
-              // Start resizing the image
-              setResizingSimpleImage(i);
-              setResizeStartData({
-                startX: x,
-                startY: y,
-                startWidth: imagePos.width,
-                startHeight: imagePos.height,
-                startImageX: imagePos.x,
-                startImageY: imagePos.y
-              });
-              setCanvasCursor('nwse-resize');
-              return;
-            }
-            
-            // Check if clicking on image edges for resizing (alternative method)
-            const edgeThreshold = 20; // Slightly smaller threshold for cleaner interaction
-            const isNearRightEdge = Math.abs(x - (imagePos.x + imagePos.width)) <= edgeThreshold;
-            const isNearBottomEdge = Math.abs(y - (imagePos.y + imagePos.height)) <= edgeThreshold;
-            
-            if (isNearRightEdge && isNearBottomEdge) {
-              // Start resizing the image
-              setResizingSimpleImage(i);
-              setResizeStartData({
-                startX: x,
-                startY: y,
-                startWidth: imagePos.width,
-                startHeight: imagePos.height,
-                startImageX: imagePos.x,
-                startImageY: imagePos.y
-              });
-              setCanvasCursor('nwse-resize');
-              return;
-            }
+        // Check if click is on delete button
+        const deleteBtnX = imagePos.x + 20;
+        const deleteBtnY = imagePos.y + 20;
+        const distanceToDelete = Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2);
+        
+        if (distanceToDelete <= deleteBtnRadius) {
+          console.log("Delete button clicked, deleting image:", i);
+          if (props.onImageDelete) {
+            props.onImageDelete(i);
           }
-          
-          // Select the image if it wasn't already selected
-          if (selectedImage !== i) {
-            setSelectedImage(i);
-            return;
-          }
-          
-          // Start dragging the image (if already selected)
-          setDraggedSimpleImage(i);
-          setDragOffset({
-            x: x - imagePos.x,
-            y: y - imagePos.y
+          return;
+        }
+        
+        // Check if click is on resize button
+        const resizeBtnX = imagePos.x + imagePos.width - 20;
+        const resizeBtnY = imagePos.y + imagePos.height - 20;
+        const distanceToResize = Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2);
+        
+        if (distanceToResize <= resizeBtnRadius) {
+          console.log("Resize button clicked, starting resize for image:", i);
+          setResizingSimpleImage(i);
+          setResizeStartData({
+            startX: mouseX,
+            startY: mouseY,
+            startWidth: imagePos.width,
+            startHeight: imagePos.height,
+            startImageX: imagePos.x,
+            startImageY: imagePos.y
           });
           return;
         }
+        
+        // Check if click is on the image body
+        if (mouseX >= imagePos.x && mouseX <= imagePos.x + imagePos.width &&
+            mouseY >= imagePos.y && mouseY <= imagePos.y + imagePos.height) {
+          
+          clickedImage = true;
+          
+          // Toggle selection: if already selected, deselect; if not selected, select
+          if (selectedImage === i) {
+            console.log("Deselecting image:", i);
+            setSelectedImage(null);
+          } else {
+            // If image is not selected, select it first
+            console.log("Selecting image:", i);
+            setSelectedImage(i);
+          }
+          
+          // Set up for potential dragging (will be activated after a delay if user holds)
+          setDragOffset({
+            x: mouseX - imagePos.x,
+            y: mouseY - imagePos.y
+          });
+          
+          // Start a timer to enable dragging after a short delay (press and hold)
+          setTimeout(() => {
+            if (selectedImage === i && dragOffset.x !== 0 && dragOffset.y !== 0) {
+              console.log("Press and hold detected, enabling dragging for image:", i);
+              setDraggedSimpleImage(i);
+            }
+          }, 300); // 300ms delay to distinguish between click and press-and-hold
+          
+          break;
+        }
       }
       
-      // If we didn't click on any image, deselect the current selection
-      if (!clickedOnImage && selectedImage !== null) {
+      // If we didn't click on any image, deselect current selection
+      if (!clickedImage && selectedImage !== null) {
+        console.log("Clicking outside images, deselecting");
         setSelectedImage(null);
       }
     }
@@ -1959,8 +2014,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const sticker = stickers[activeSticker];
       const centerX = sticker.x + sticker.width/2;
       const centerY = sticker.y + sticker.height/2;
-      const dx = x - centerX;
-      const dy = y - centerY;
+      const dx = mouseX - centerX;
+      const dy = mouseY - centerY;
       const angle = -sticker.rotation * Math.PI / 180;
       const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
       const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
@@ -2006,6 +2061,56 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Handle freeflow layout image dragging and resizing
       if (layoutMode === 'freeflow') {
+        // Check for image hover
+        let foundHoveredImage = false;
+        for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+          const imagePos = simpleImagePositions[i];
+          if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+              y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+            setHoveredImage(i);
+            foundHoveredImage = true;
+            break;
+          }
+        }
+        if (!foundHoveredImage) {
+          setHoveredImage(null);
+        }
+        
+        // Handle dragging of images (only when dragging is explicitly enabled)
+        if (draggedSimpleImage !== null) {
+          // Cancel any pending animation frame
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+          
+          // Use requestAnimationFrame for smooth updates
+          animationFrameRef.current = requestAnimationFrame(() => {
+            const newPositions = [...simpleImagePositions];
+            const newX = x - dragOffset.x;
+            const newY = y - dragOffset.y;
+            
+            // Constrain to canvas bounds
+            const constrainedX = Math.max(0, Math.min(canvasRef.current!.width - newPositions[draggedSimpleImage].width, newX));
+            const constrainedY = Math.max(0, Math.min(canvasRef.current!.height - newPositions[draggedSimpleImage].height, newY));
+            
+            newPositions[draggedSimpleImage] = {
+              ...newPositions[draggedSimpleImage],
+              x: constrainedX,
+              y: constrainedY
+            };
+            
+            setSimpleImagePositions(newPositions);
+            setIsDragging(true);
+            
+            // Call the onImageDrag callback if provided
+            if (props.onImageDrag) {
+              props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
+            }
+          });
+          
+          return;
+        }
+        
         if (draggedSimpleImage !== null) {
           // Cancel any pending animation frame
           if (animationFrameRef.current) {
@@ -2212,17 +2317,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Only show hover effects for selected images
           if (selectedImage === i) {
             // Check if hovering over delete button (top-left)
-            const deleteBtnX = position.x + 30;
-            const deleteBtnY = position.y + 30;
-            const deleteBtnRadius = 200; // Match visual button size for full clickable area
+            const deleteBtnX = position.x + 20;
+            const deleteBtnY = position.y + 20;
+            const deleteBtnRadius = 25; // Match visual button size for full clickable area
             
             if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= deleteBtnRadius) {
               setCanvasCursor('pointer');
             } else {
               // Check if hovering over resize handle (bottom-right)
-              const resizeBtnX = position.x + position.width - 30;
-              const resizeBtnY = position.y + position.height - 30;
-              const resizeBtnRadius = 200; // Match visual button size for full clickable area
+              const resizeBtnX = position.x + position.width - 20;
+              const resizeBtnY = position.y + position.height - 20;
+              const resizeBtnRadius = 25; // Match visual button size for full clickable area
               
               if (Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2) <= resizeBtnRadius) {
                 setCanvasCursor('nwse-resize');
@@ -2460,6 +2565,246 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   };
 
+  // Handle touch start events for mobile image dragging
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+
+    console.log("Touch start at:", x, y);
+
+    // Check if we touched a freeflow layout image
+    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+      let touchedImage = false;
+      
+      for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+        const imagePos = simpleImagePositions[i];
+        const deleteBtnRadius = 25;
+        const resizeBtnRadius = 25;
+        
+        // Check if touch is on delete button
+        const deleteBtnX = imagePos.x + 20;
+        const deleteBtnY = imagePos.y + 20;
+        const distanceToDelete = Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2);
+        
+        if (distanceToDelete <= deleteBtnRadius) {
+          console.log("Delete button touched, deleting image:", i);
+          if (props.onImageDelete) {
+            props.onImageDelete(i);
+          }
+          return;
+        }
+        
+        // Check if touch is on resize button
+        const resizeBtnX = imagePos.x + imagePos.width - 20;
+        const resizeBtnY = imagePos.y + imagePos.height - 20;
+        const distanceToResize = Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2);
+        
+        if (distanceToResize <= resizeBtnRadius) {
+          console.log("Resize button touched, starting resize for image:", i);
+          setResizingSimpleImage(i);
+          setResizeStartData({
+            startX: x,
+            startY: y,
+            startWidth: imagePos.width,
+            startHeight: imagePos.height,
+            startImageX: imagePos.x,
+            startImageY: imagePos.y
+          });
+          return;
+        }
+        
+        // Check if touch is on the image body
+        if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+            y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+          
+          touchedImage = true;
+          
+          // Toggle selection: if already selected, deselect; if not selected, select
+          if (selectedImage === i) {
+            console.log("Deselecting image:", i);
+            setSelectedImage(null);
+          } else {
+            // If image is not selected, select it first
+            console.log("Selecting image:", i);
+            setSelectedImage(i);
+          }
+          
+          // Set up for potential dragging (will be activated after a delay if user holds)
+          setDragOffset({
+            x: x - imagePos.x,
+            y: y - imagePos.y
+          });
+          
+          // Start a timer to enable dragging after a short delay (press and hold)
+          setTimeout(() => {
+            if (selectedImage === i && dragOffset.x !== 0 && dragOffset.y !== 0) {
+              console.log("Press and hold detected, enabling dragging for image:", i);
+              setDraggedSimpleImage(i);
+            }
+          }, 300); // 300ms delay to distinguish between tap and press-and-hold
+          
+          break;
+        }
+      }
+      
+      // If we didn't touch any image, deselect current selection
+      if (!touchedImage && selectedImage !== null) {
+        console.log("Touching outside images, deselecting");
+        setSelectedImage(null);
+      }
+    }
+  };
+
+  // Handle touch move events for mobile image dragging and resizing
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !props.editMode) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    // Handle dragging of images (only when dragging is explicitly enabled)
+    if (draggedSimpleImage !== null && e.touches.length === 1) {
+      // Update image position
+      const newPositions = [...simpleImagePositions];
+      const newX = Math.max(0, Math.min(canvasRef.current.width - newPositions[draggedSimpleImage].width, x - dragOffset.x));
+      const newY = Math.max(0, Math.min(canvasRef.current.height - newPositions[draggedSimpleImage].height, y - dragOffset.y));
+      
+      newPositions[draggedSimpleImage] = {
+        ...newPositions[draggedSimpleImage],
+        x: newX,
+        y: newY
+      };
+      
+      setSimpleImagePositions(newPositions);
+      
+      // Call the callback to update parent state
+      if (props.onImageDrag) {
+        props.onImageDrag(draggedSimpleImage, newX, newY);
+      }
+    }
+    
+    // Handle resizing with single finger drag
+    if (resizingSimpleImage !== null && e.touches.length === 1 && resizeStartData) {
+      const deltaX = x - resizeStartData.startX;
+      const deltaY = y - resizeStartData.startY;
+      
+      // Calculate new dimensions based on drag direction
+      // GoodNotes style: drag bottom-right to grow, top-left to shrink
+      const newWidth = Math.max(100, Math.min(canvasRef.current.width * 0.8, resizeStartData.startWidth + deltaX));
+      const newHeight = Math.max(100, Math.min(canvasRef.current.height * 0.8, resizeStartData.startHeight + deltaY));
+      
+      // Preserve aspect ratio
+      const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+      let finalWidth = newWidth;
+      let finalHeight = newHeight;
+      
+      if (newWidth / newHeight > aspectRatio) {
+        finalHeight = newWidth / aspectRatio;
+        if (finalHeight > canvasRef.current.height * 0.8) {
+          finalHeight = canvasRef.current.height * 0.8;
+          finalWidth = finalHeight * aspectRatio;
+        }
+      } else {
+        finalWidth = newHeight * aspectRatio;
+        if (finalWidth > canvasRef.current.width * 0.8) {
+          finalWidth = canvasRef.current.width * 0.8;
+          finalHeight = finalWidth / aspectRatio;
+        }
+      }
+      
+      const newPositions = [...simpleImagePositions];
+      newPositions[resizingSimpleImage] = {
+        ...newPositions[resizingSimpleImage],
+        width: finalWidth,
+        height: finalHeight
+      };
+      
+      setSimpleImagePositions(newPositions);
+      
+      // Call the callback to update parent state
+      if (props.onImageResize) {
+        props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+      }
+    }
+    
+    // Handle pinch-to-resize
+    if (selectedImage !== null && e.touches.length === 2 && initialPinchDistance > 0 && initialImageSize) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentDistance = Math.sqrt(
+        Math.pow(touch1.clientX - touch2.clientX, 2) + 
+        Math.pow(touch1.clientY - touch2.clientY, 2)
+      );
+      
+      const scale = currentDistance / initialPinchDistance;
+      const newWidth = Math.max(100, Math.min(canvasRef.current.width * 0.8, initialImageSize.width * scale));
+      const newHeight = Math.max(100, Math.min(canvasRef.current.height * 0.8, initialImageSize.height * scale));
+      
+      // Preserve aspect ratio
+      const aspectRatio = initialImageSize.width / initialImageSize.height;
+      let finalWidth = newWidth;
+      let finalHeight = newHeight;
+      
+      if (newWidth / newHeight > aspectRatio) {
+        finalHeight = newWidth / aspectRatio;
+        if (finalHeight > canvasRef.current.height * 0.8) {
+          finalHeight = canvasRef.current.height * 0.8;
+          finalWidth = finalHeight * aspectRatio;
+        }
+      } else {
+        finalWidth = newHeight * aspectRatio;
+        if (finalWidth > canvasRef.current.width * 0.8) {
+          finalWidth = canvasRef.current.width * 0.8;
+          finalHeight = finalWidth / aspectRatio;
+        }
+      }
+      
+      const newPositions = [...simpleImagePositions];
+      newPositions[selectedImage] = {
+        ...newPositions[selectedImage],
+        width: finalWidth,
+        height: finalHeight
+      };
+      
+      setSimpleImagePositions(newPositions);
+      
+      // Call the callback to update parent state
+      if (props.onImageResize) {
+        props.onImageResize(selectedImage, finalWidth, finalHeight);
+      }
+    }
+  };
+
+  // Handle touch end events for mobile image dragging
+  const handleTouchEnd = () => {
+    // Stop dragging
+    setDraggedSimpleImage(null);
+    setDragOffset({ x: 0, y: 0 });
+    
+    // Stop resizing
+    if (resizingSimpleImage !== null) {
+      setResizingSimpleImage(null);
+      setResizeStartData(null);
+    }
+    
+    // Stop pinch-to-resize
+    setInitialPinchDistance(0);
+    setInitialImageSize(null);
+    
+    // Note: We don't deselect the image here to allow for continuous interaction
+    // The image will be deselected when touching elsewhere in handleTouchStart
+  };
+
   // Add click handler to canvas
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2473,6 +2818,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       };
     }
   }, [activeSticker, stickers, props.editMode]);
+
+
 
   // Function to force a redraw from outside
   const forceRedraw = useCallback(() => {
@@ -2493,12 +2840,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Update simple image positions when images prop changes
   useEffect(() => {
     if (layoutMode === 'freeflow' && images.length > 0) {
-      console.log('🖼️ Images changed, updating positions. Images count:', images.length);
-      console.log('🖼️ Saved positions:', props.savedImagePositions);
+      console.log('🖼️ CANVAS DEBUG: Images changed, updating positions. Images count:', images.length);
+      console.log('🖼️ CANVAS DEBUG: Saved positions:', props.savedImagePositions);
+      console.log('🖼️ CANVAS DEBUG: Current simpleImagePositions:', simpleImagePositions);
       
       // Preserve existing positions and only add new ones for new images
       setSimpleImagePositions(prevPositions => {
-        console.log('🖼️ Previous positions:', prevPositions);
+        console.log('🖼️ CANVAS DEBUG: Previous positions:', prevPositions);
         
         const newImagePositions: Array<{
           x: number;
@@ -2816,45 +3164,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     y: number,
     color: string, // fill color
     icon: 'delete' | 'rotate' | 'resize',
-    btnRadius = 30, // Half the size for even cleaner look
+    btnRadius = 150, // Standard button radius
     isHovered = false
   ) {
-    // Force much larger buttons for testing - VISUALLY HUGE
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-    const mobileBtnRadius = isMobile ? 200 : 150; // REASONABLE but much bigger buttons (mobile: 200px, desktop: 150px)
-    const actualRadius = isMobile ? mobileBtnRadius : btnRadius;
-    console.log(`Drawing button with radius: ${actualRadius}px (mobile: ${isMobile})`); // DEBUG: Verify button size
-    console.log(`Button position: x=${x}, y=${y}, canvas size: ${ctx?.canvas.width}x${ctx?.canvas.height}`); // DEBUG: Button position
     if (!ctx) return;
+    
     // Draw drop shadowed button
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x, y, actualRadius, 0, 2 * Math.PI);
-    ctx.shadowColor = 'rgba(0,0,0,0.4)'; // Darker shadow for better visibility
-    ctx.shadowBlur = isMobile ? 80 : 60; // Much larger shadow on mobile
-    ctx.shadowOffsetX = isMobile ? 20 : 16; // Much larger offset on mobile
-    ctx.shadowOffsetY = isMobile ? 20 : 16; // Much larger offset on mobile
+    ctx.arc(x, y, btnRadius, 0, 2 * Math.PI);
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 60;
+    ctx.shadowOffsetX = 16;
+    ctx.shadowOffsetY = 16;
     
-    // Make button brighter if hovered or on mobile for better visibility
-    const btnColor = (isHovered || isMobile) ? adjustColor(color, 25) : color;
+    // Make button brighter if hovered
+    const btnColor = isHovered ? adjustColor(color, 25) : color;
     ctx.fillStyle = btnColor;
     ctx.fill();
     
-    // Add white border - much thicker on mobile
-    ctx.lineWidth = isMobile ? 100 : 80; // MASSIVE border on mobile
+    // Add white border
+    ctx.lineWidth = 80;
     ctx.strokeStyle = '#fff';
     ctx.stroke();
     ctx.restore();
 
-    // Set icon size relative to button radius (70-80% of button) - much larger on mobile
-    const iconSize = actualRadius * (isHovered ? 1.4 : (isMobile ? 1.6 : 1.3)); // Much bigger on mobile
+    // Set icon size relative to button radius
+    const iconSize = btnRadius * (isHovered ? 1.4 : 1.3);
     
     // Draw the icon directly using canvas primitives for perfect control
     ctx.save();
     ctx.translate(x, y);
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
-    ctx.lineWidth = isHovered ? (isMobile ? 150 : 120) : (isMobile ? 120 : 100); // MASSIVE lines on mobile
+    ctx.lineWidth = isHovered ? 120 : 100;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
@@ -3021,480 +3364,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
   }, [isImageInteraction, activeSticker, draggedSimpleImage, resizingSimpleImage]);
 
-  // Touch event handlers for mobile devices
-  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !props.editMode) return;
-    
-    // Only prevent default for actual image interactions, not general page scrolling
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasRef.current.width / rect.width;
-    const scaleY = canvasRef.current.height / rect.height;
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * scaleX;
-    const y = (touch.clientY - rect.top) * scaleY;
-    
-    let isImageInteraction = false;
-    
-    // Check if touching an image or sticker - only prevent scroll for actual interactions
-    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
-      for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
-        const imagePos = simpleImagePositions[i];
-        if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
-            y >= imagePos.y && y <= imagePos.y + imagePos.height) {
-          isImageInteraction = true;
-          break;
-        }
-      }
-    }
-    
-    // Check stickers
-    if (stickers.length > 0) {
-      for (let i = stickers.length - 1; i >= 0; i--) {
-        const sticker = stickers[i];
-        const centerX = sticker.x + sticker.width/2;
-        const centerY = sticker.y + sticker.height/2;
-        const dx = x - centerX;
-        const dy = y - centerY;
-        const angle = -sticker.rotation * Math.PI / 180;
-        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
-        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-        
-        if (Math.abs(localX) <= sticker.width/2 && Math.abs(localY) <= sticker.height/2) {
-          isImageInteraction = true;
-          break;
-        }
-      }
-    }
-    
-    // Only prevent scrolling and set interaction state for actual image interactions
-    if (isImageInteraction) {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsImageInteraction(true);
-    }
-    
-    // Continue with existing touch logic...
-    // ... rest of existing handleTouchStart logic
-  };
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !props.editMode) return;
-    
-    // Only prevent scrolling if we're in an image interaction
-    if (isImageInteraction || activeSticker !== null || draggedSimpleImage !== null || resizingSimpleImage !== null) {
-      e.preventDefault();
-      e.stopPropagation();
-      document.body.style.touchAction = 'none';
-      document.body.style.overflow = 'hidden';
-    }
-    
-    // Handle two-finger rotation
-    if (e.touches.length === 2 && 
-        activeSticker !== null && 
-        stickerAction === 'rotate' && 
-        stickerDragOffset?.initialTouchAngle !== undefined) {
-      
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      
-      const rect = canvasRef.current.getBoundingClientRect();
-      const scaleX = canvasRef.current.width / rect.width;
-      const scaleY = canvasRef.current.height / rect.height;
-      
-      // Convert touch positions to canvas coordinates
-      const touch1X = (touch1.clientX - rect.left) * scaleX;
-      const touch1Y = (touch1.clientY - rect.top) * scaleY;
-      const touch2X = (touch2.clientX - rect.left) * scaleX;
-      const touch2Y = (touch2.clientY - rect.top) * scaleY;
-      
-      // Calculate current angle between fingers
-      const currentAngle = Math.atan2(touch2Y - touch1Y, touch2X - touch1X);
-      
-      // Determine the angle change in radians
-      const angleDelta = currentAngle - stickerDragOffset.initialTouchAngle;
-      
-      // Convert to degrees and add to initial rotation
-      const newRotation = stickerDragOffset.initialRotation! + (angleDelta * 180 / Math.PI);
-      
-      // Update sticker rotation
-      const activeStickObj = stickers[activeSticker];
-      const newStickers = [...stickers];
-      newStickers[activeSticker] = {
-        ...activeStickObj,
-        rotation: newRotation
-      };
-      
-      setStickers(newStickers);
-      renderJournal();
-      return;
-    }
-    
 
-    
-    // Handle pinch-to-zoom gesture for resizing stickers
-    if (e.touches.length === 2 && activeSticker !== null) {
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      
-      const rect = canvasRef.current.getBoundingClientRect();
-      const scaleX = canvasRef.current.width / rect.width;
-      const scaleY = canvasRef.current.height / rect.height;
-      
-      // Convert touch positions to canvas coordinates
-      const touch1X = (touch1.clientX - rect.left) * scaleX;
-      const touch1Y = (touch1.clientY - rect.top) * scaleY;
-      const touch2X = (touch2.clientX - rect.left) * scaleX;
-      const touch2Y = (touch2.clientY - rect.top) * scaleY;
-      
-      // Calculate the distance between the two touches
-      const currentDistance = Math.sqrt(
-        Math.pow(touch2X - touch1X, 2) + Math.pow(touch2Y - touch1Y, 2)
-      );
-      
-      // Also calculate the midpoint between touches to maintain position during resize
-      const midpointX = (touch1X + touch2X) / 2;
-      const midpointY = (touch1Y + touch2Y) / 2;
-      
-      // If this is the first move of a pinch gesture, store the initial distance
-      if (!stickerDragOffset || !stickerDragOffset.initialPinchDistance) {
-        const activeStickObj = stickers[activeSticker];
-        
-        // Get sticker center position to maintain during resize
-        const centerX = activeStickObj.x + activeStickObj.width / 2;
-        const centerY = activeStickObj.y + activeStickObj.height / 2;
-        
-        setStickerAction('resize');
-        setStickerDragOffset({
-          x: centerX - midpointX, // Store offset between sticker center and touch midpoint
-          y: centerY - midpointY,
-          initialPinchDistance: currentDistance,
-          initialWidth: activeStickObj.width,
-          initialHeight: activeStickObj.height
-        });
-        return;
-      }
-      
-      // Get active sticker object
-      const activeStickObj = stickers[activeSticker];
-      
-      // Calculate scale factor with gradual change to make it much smoother
-      const distanceRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
-      
-      // Apply very gentle scaling - use a more conservative approach
-      // Blend between current size and target size for smoother transitions
-      const blendFactor = 0.1; // Only move 10% toward the target size per frame
-      const targetScaleFactor = Math.sqrt(distanceRatio); // Sqrt for more linear feel
-      
-      // Gradually approach the target scale (prevents jumps and disappearing)
-      const currentScale = activeStickObj.width / stickerDragOffset.initialWidth!;
-      const newScale = currentScale * (1 - blendFactor) + targetScaleFactor * blendFactor;
-      
-      // Calculate new dimensions while preserving aspect ratio
-      let newWidth = stickerDragOffset.initialWidth! * newScale;
-      let newHeight = stickerDragOffset.initialHeight! * newScale;
-      
-      // Enforce minimum size (larger minimum to prevent disappearing)
-      const minSize = 50;
-      if (newWidth < minSize || newHeight < minSize) {
-        const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
-        if (aspectRatio > 1) {
-          newWidth = minSize;
-          newHeight = minSize / aspectRatio;
-        } else {
-          newHeight = minSize;
-          newWidth = minSize * aspectRatio;
-        }
-      }
-      
-      // Enforce maximum size to prevent stickers from becoming too large
-      const maxSize = Math.min(canvasRef.current.width, canvasRef.current.height) * 0.5;
-      if (newWidth > maxSize || newHeight > maxSize) {
-        const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
-        if (aspectRatio > 1) {
-          newWidth = maxSize;
-          newHeight = maxSize / aspectRatio;
-        } else {
-          newHeight = maxSize;
-          newWidth = maxSize * aspectRatio;
-        }
-      }
-      
-      // Calculate new position based on midpoint and stored offset to maintain position
-      // This is key to prevent stickers from "jumping" when resizing
-      const newX = midpointX + stickerDragOffset.x - newWidth/2;
-      const newY = midpointY + stickerDragOffset.y - newHeight/2;
-      
-      // Update sticker dimensions and position
-      const newStickers = [...stickers];
-      newStickers[activeSticker] = {
-        ...activeStickObj,
-        x: newX,
-        y: newY,
-        width: newWidth,
-        height: newHeight
-      };
-      
-      setStickers(newStickers);
-      renderJournal();
-      return;
-    }
-    
-    // Handle single touch for moving, rotating, etc.
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasRef.current.width / rect.width;
-    const scaleY = canvasRef.current.height / rect.height;
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * scaleX;
-    const y = (touch.clientY - rect.top) * scaleY;
-    
-    // Handle freeflow layout image dragging and resizing
-    if (layoutMode === 'freeflow') {
-      if (draggedSimpleImage !== null) {
-        const newPositions = [...simpleImagePositions];
-        const newX = x - dragOffset.x;
-        const newY = y - dragOffset.y;
-        
-        // Constrain to canvas bounds
-        const constrainedX = Math.max(0, Math.min(canvasRef.current.width - newPositions[draggedSimpleImage].width, newX));
-        const constrainedY = Math.max(0, Math.min(canvasRef.current.height - newPositions[draggedSimpleImage].height, newY));
-        
-        newPositions[draggedSimpleImage] = {
-          ...newPositions[draggedSimpleImage],
-          x: constrainedX,
-          y: constrainedY
-        };
-        
-        setSimpleImagePositions(newPositions);
-        
-        // Call the onImageDrag callback if provided
-        if (props.onImageDrag) {
-          props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
-        }
-        
-        return;
-      }
-      
-      if (resizingSimpleImage !== null && resizeStartData) {
-        // Cancel any pending animation frame for smoother updates
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        
-        // Use requestAnimationFrame for smooth 60fps updates
-        animationFrameRef.current = requestAnimationFrame(() => {
-          const newPositions = [...simpleImagePositions];
-          const deltaX = x - resizeStartData.startX;
-          const deltaY = y - resizeStartData.startY;
-          
-          // Enhanced touch sensitivity for mobile - more responsive
-          const touchSensitivity = 1.5; // Increase sensitivity for better mobile experience
-          const adjustedDeltaX = deltaX * touchSensitivity;
-          const adjustedDeltaY = deltaY * touchSensitivity;
-          
-          // STRICT ASPECT RATIO PRESERVATION - NO STRETCHING ALLOWED (Touch)
-          const originalAspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
-          
-          // Calculate new size based on touch movement with improved algorithm
-          // Use diagonal distance for more natural scaling
-          const deltaMagnitude = Math.sqrt(adjustedDeltaX * adjustedDeltaX + adjustedDeltaY * adjustedDeltaY);
-          
-          // SUPER SIMPLE LOGIC: Top-left = shrink, bottom-right = grow
-          const dragDirectionX = x - resizeStartData.startX;
-          const dragDirectionY = y - resizeStartData.startY;
-          
-          // If dragging towards top-left: shrink, if dragging towards bottom-right: grow
-          const isShrinking = dragDirectionX < 0 || dragDirectionY < 0;
-          const isGrowing = dragDirectionX > 0 || dragDirectionY > 0;
-          
-          // Simple scale factor based on drag distance
-          const scaleFactor = isShrinking ? 
-            Math.max(0.01, 1 - (deltaMagnitude / 100)) : // Shrink: 1% to 100% of original
-            Math.min(2.0, 1 + (deltaMagnitude / 100));   // Grow: 100% to 200% of original
-          
-          // Apply scale factor while maintaining aspect ratio
-          let newWidth = Math.max(2, resizeStartData.startWidth * scaleFactor); // Reduced minimum from 8 to 2
-          let newHeight = newWidth / originalAspectRatio;
-          
-          // Ensure minimum height as well
-          if (newHeight < 2) { // Reduced minimum from 8 to 2
-            newHeight = 2;
-            newWidth = newHeight * originalAspectRatio;
-          }
-          
-          // Constrain to canvas bounds while preserving aspect ratio
-          if (!canvasRef.current) return;
-          const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
-          const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
-          
-          // Check if we need to scale down to fit bounds
-          if (newWidth > maxWidth) {
-            newWidth = maxWidth;
-            newHeight = newWidth / originalAspectRatio;
-          }
-          if (newHeight > maxHeight) {
-            newHeight = maxHeight;
-            newWidth = newHeight * originalAspectRatio;
-          }
-          
-          // Final dimensions - guaranteed to maintain aspect ratio
-          const finalWidth = Math.round(newWidth);
-          const finalHeight = Math.round(newHeight);
-          
-          newPositions[resizingSimpleImage] = {
-            ...newPositions[resizingSimpleImage],
-            width: finalWidth,
-            height: finalHeight
-          };
-          
-          setSimpleImagePositions(newPositions);
-          
-          // Call the onImageResize callback if provided
-          if (props.onImageResize) {
-            props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
-          }
-          
-          // Force a re-render to update text wrapping
-          debouncedRender();
-        });
-        return;
-      }
-    }
-    
-    // Handle sticker actions
-    if (activeSticker !== null && stickerAction && stickerDragOffset) {
-      const activeStickObj = stickers[activeSticker];
-      const centerX = activeStickObj.x + activeStickObj.width/2;
-      const centerY = activeStickObj.y + activeStickObj.height/2;
-      const dx = x - centerX;
-      const dy = y - centerY;
-      const angle = -activeStickObj.rotation * Math.PI / 180;
-      const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
-      const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-      
-      let newStickers = [...stickers];
-      
-      if (stickerAction === 'move') {
-        newStickers[activeSticker] = {
-          ...activeStickObj,
-          x: x - stickerDragOffset.x - activeStickObj.width/2,
-          y: y - stickerDragOffset.y - activeStickObj.height/2,
-        };
-      } else if (stickerAction === 'resize') {
-        // Get the current distance from cursor to sticker center
-        const currentDistance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Get the initial distance (or calculate it if first resize move)
-        if (!stickerDragOffset.initialWidth) {
-          // This is the first resize move, store initial values
-          setStickerDragOffset({
-            ...stickerDragOffset,
-            initialWidth: activeStickObj.width,
-            initialHeight: activeStickObj.height,
-            initialPinchDistance: currentDistance
-          });
-          return;
-        }
-        
-        // Calculate scale factor with gradual change to make it much smoother
-        const distanceRatio = currentDistance / stickerDragOffset.initialPinchDistance!;
-        
-        // Apply very gentle scaling - use a more conservative approach
-        // Blend between current size and target size for smoother transitions
-        const blendFactor = 0.1; // Only move 10% toward the target size per frame
-        const targetScaleFactor = Math.sqrt(distanceRatio); // Sqrt for more linear feel
-        
-        // Gradually approach the target scale (prevents jumps and disappearing)
-        const currentScale = activeStickObj.width / stickerDragOffset.initialWidth!;
-        const newScale = currentScale * (1 - blendFactor) + targetScaleFactor * blendFactor;
-        
-        // Calculate new dimensions while preserving aspect ratio
-        let newWidth = stickerDragOffset.initialWidth! * newScale;
-        let newHeight = stickerDragOffset.initialHeight! * newScale;
-        
-        // Enforce minimum size (HELLA small for tiny stickers)
-        const minSize = 5;
-        if (newWidth < minSize || newHeight < minSize) {
-          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
-          if (aspectRatio > 1) {
-            newWidth = minSize;
-            newHeight = minSize / aspectRatio;
-          } else {
-            newHeight = minSize;
-            newWidth = minSize * aspectRatio;
-          }
-        }
-        
-        // Enforce maximum size to prevent stickers from becoming too large
-        const maxSize = Math.min(canvasRef.current.width, canvasRef.current.height) * 0.5;
-        if (newWidth > maxSize || newHeight > maxSize) {
-          const aspectRatio = stickerDragOffset.initialWidth! / stickerDragOffset.initialHeight!;
-          if (aspectRatio > 1) {
-            newWidth = maxSize;
-            newHeight = maxSize / aspectRatio;
-          } else {
-            newHeight = maxSize;
-            newWidth = maxSize * aspectRatio;
-          }
-        }
-        
-        // Calculate new position that keeps the sticker centered at the same point
-        // This is critical to prevent the sticker from moving during resize
-        const oldCenterX = activeStickObj.x + activeStickObj.width/2;
-        const oldCenterY = activeStickObj.y + activeStickObj.height/2;
-        const newX = oldCenterX - newWidth/2;
-        const newY = oldCenterY - newHeight/2;
-        
-        // GOODNOTES-STYLE: Update scale factors for export quality
-        const newScaleX = newWidth / (activeStickObj.originalWidth || activeStickObj.width);
-        const newScaleY = newHeight / (activeStickObj.originalHeight || activeStickObj.height);
-        
-        newStickers[activeSticker] = {
-          ...activeStickObj,
-          x: newX,
-          y: newY,
-          width: newWidth,
-          height: newHeight,
-          scaleX: newScaleX, // Update scale factor for export
-          scaleY: newScaleY, // Update scale factor for export
-        };
-      } else if (stickerAction === 'rotate') {
-        const angleRad = Math.atan2(y - centerY, x - centerX);
-        newStickers[activeSticker] = {
-          ...activeStickObj,
-          rotation: angleRad * 180 / Math.PI + 90,
-        };
-      }
-      
-      setStickers(newStickers);
-      debouncedDragRender();
-    }
-  };
 
-  const handleTouchEnd = () => {
-    setButtonClickHandling(false);
-    setStickerAction(null);
-    setStickerDragOffset(null);
-    setIsDragging(false);
-    setIsDraggingSticker(false);
-    
-    // Reset simple layout image states
-    setDraggedSimpleImage(null);
-    setResizingSimpleImage(null);
-    setResizeStartData(null);
-    
-    // Restore scrolling for all devices after touch interactions
-    document.body.style.touchAction = '';
-    document.body.style.overflow = '';
-    setIsImageInteraction(false);
-    
-    // iOS-specific: Restore high quality mode after drag ends
-    if (isIOS()) {
-      setTimeout(() => {
-        setIsHighQualityMode(true);
-        renderJournal(); // Re-render with high quality
-      }, 50); // Small delay to ensure smooth drag end
-    }
-  };
+
+
 
   // Clean up any timers and animation frames
   useEffect(() => {
@@ -3534,8 +3408,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const originalWidth = img.naturalWidth || img.width;
           const originalHeight = img.naturalHeight || img.height;
           
-          // Set default sticker size optimized for iOS touch interaction - GoodNotes style
-          const defaultStickerSize = isIOS() ? 1200 : 1000; // Bigger on iOS for easier touch
+          // Set default sticker size - GoodNotes style
+          const defaultStickerSize = 1000;
           let width = defaultStickerSize;
           let height = defaultStickerSize;
           
@@ -3557,10 +3431,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const col = index % cols;
           const row = Math.floor(index / cols);
           
-          // iOS-optimized positioning - avoid edges and make them easier to grab
+          // Positioning - avoid edges and make them easier to grab
           const locationAreaHeight = canvasHeight * 0.15; // Top 15% for location
-          const stickerAreaTop = locationAreaHeight + (isIOS() ? 100 : 50); // More space on iOS
-          const stickerAreaHeight = canvasHeight * (isIOS() ? 0.5 : 0.4); // More area on iOS for easier access
+          const stickerAreaTop = locationAreaHeight + 50;
+          const stickerAreaHeight = canvasHeight * 0.4;
           
           // Calculate base position in a grid BELOW the location
           const baseX = (canvasWidth * 0.6) * (col / cols) + canvasWidth * 0.2;
@@ -3710,6 +3584,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }
 
+  // Force re-render when image selection changes
+  useEffect(() => {
+    if (props.editMode && layoutMode === 'freeflow') {
+      console.log("Image selection changed, forcing re-render. Selected:", selectedImage);
+      setRenderCount(prev => prev + 1);
+    }
+  }, [selectedImage, props.editMode, layoutMode]);
+
+  // Force re-render when image positions change
+  useEffect(() => {
+    if (props.editMode && layoutMode === 'freeflow') {
+      console.log("Image positions changed, forcing re-render");
+      setRenderCount(prev => prev + 1);
+    }
+  }, [simpleImagePositions, props.editMode, layoutMode]);
+
   return (
     <div className="relative w-full overflow-hidden">
       {isLoading ? (
@@ -3749,7 +3639,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchEnd}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}

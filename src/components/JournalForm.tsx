@@ -398,10 +398,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   initialDate.setHours(12, 0, 0, 0);
   const [date, setDate] = useState(initialDate);
   
-  // Detect mobile device for default layout
-  const isMobile = () => {
-    return window.innerWidth <= 768 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  };
+
   
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>('freeflow');
   const [submitted, setSubmitted] = useState(false);
@@ -559,11 +556,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   const [isJournalCollapsed, setIsJournalCollapsed] = useState(false);
   
-  // Mobile preview refs
-  const mobileCanvasRef = useRef<JournalCanvasHandle>(null);
-  const mobileJournalRef = useRef<HTMLDivElement>(null);
-  const [showMobilePreview, setShowMobilePreview] = useState(true);
-  const [activeMobileTab, setActiveMobileTab] = useState<'editing' | 'preview'>('editing');
+
   const [textColors, setTextColors] = useState<TextColors>({
     locationColor: '#2D9CDB',
     locationShadowColor: '#1D3557',
@@ -2633,21 +2626,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     e.target.value = '';
   };
 
-  // Add mobile-friendly styles
-  const mobileInputStyle = isMobile() ? {
-    fontSize: '16px', // Prevents zoom on iOS
-    minHeight: '48px',
-    padding: '12px 16px',
-    touchAction: 'manipulation'
-  } : {};
 
-  const mobileButtonStyle = isMobile() ? {
-    minHeight: '48px',
-    minWidth: '48px',
-    fontSize: '16px',
-    padding: '12px 16px',
-    touchAction: 'manipulation'
-  } : {};
 
   return (
     <div className="bg-black w-full min-h-screen md:h-screen md:overflow-hidden">
@@ -2790,7 +2769,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           onChange={(e) => setLocation(e.target.value)}
                           placeholder="e.g., MANIA, LA JOLLA, CA"
                           className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base location-input-responsive placeholder-gray-400"
-                          style={mobileInputStyle}
                           required
                         />
                     </div>
@@ -2843,7 +2821,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                          <div 
                            className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
                            onClick={() => fileInputRef.current?.click()}
-                           style={isMobile() ? { minHeight: '80px', touchAction: 'manipulation' } : {}}
+
                          >
                           {isLoadingImage && (
                             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
@@ -2948,7 +2926,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                              }}
                              placeholder="Write your journal entry here..."
                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                             style={isMobile() ? { fontSize: '16px', minHeight: '100px', ...mobileInputStyle } : { fontSize: '18px' }}
+                             style={{ fontSize: '18px' }}
                              required
                            />
                         </div>
@@ -2999,9 +2977,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   </h3>
                 </div>
                 <div className="p-4">
-                  <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[400px]" ref={mobileJournalRef} id="journal-container-mobile" data-journal-content>
+                  <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[400px]" id="journal-container" data-journal-content>
                     <JournalCanvas
-                      ref={mobileCanvasRef}
+                      ref={canvasRef}
                       date={date}
                       location={location}
                       textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
@@ -3065,7 +3043,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     {/* Location and Date */}
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <label htmlFor="mobile-location" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
+                        <label htmlFor="location" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
                           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -3074,12 +3052,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </label>
                                                    <input
                              type="text"
-                             id="mobile-location"
+                             id="location"
                              value={location}
                              onChange={(e) => setLocation(e.target.value)}
                              placeholder="e.g., MANIA, LA JOLLA, CA"
                              className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base placeholder-gray-400"
-                             style={mobileInputStyle}
                              required
                            />
                       </div>
@@ -3187,7 +3164,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     {/* Journal Entry */}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center relative">
-                        <label htmlFor="mobile-journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap">
+                        <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap">
                           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                           </svg>
@@ -3220,14 +3197,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           </button>
                         </div>
                                                    <textarea
-                             id="mobile-journalText"
+                             id="journalText"
                              value={journalText}
                              onChange={(e) => {
                                setJournalText(e.target.value);
                              }}
                              placeholder="Write your journal entry here..."
                              className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                             style={{ fontSize: '16px', minHeight: '100px', ...mobileInputStyle }}
+                             style={{ fontSize: '18px', minHeight: '100px' }}
                              required
                            />
                       </div>
