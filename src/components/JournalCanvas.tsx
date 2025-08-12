@@ -1047,7 +1047,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       savingToast.innerHTML = `
         <div class="bg-white p-4 rounded-md shadow-lg flex flex-col items-center">
           <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-3"></div>
-          <p class="text-gray-800">Creating Ultra-Maximum Resolution Export...</p>
+          <p class="text-gray-800">Creating your mania journal...</p>
         </div>
       `;
       document.body.appendChild(savingToast);
@@ -1194,21 +1194,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   URL.revokeObjectURL(url);
                   console.log('📱 Safari iOS blob download initiated');
                   
-                  // Show Safari-specific instructions
-                  const safariToast = document.createElement('div');
-                  safariToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50 max-w-sm';
-                  safariToast.innerHTML = `
-                    <div class="text-sm">
-                      <strong>Safari Download:</strong><br/>
-                      Tap the share button (□↑) then "Save to Files"
-                    </div>
-                  `;
-                  document.body.appendChild(safariToast);
-                  setTimeout(() => {
-                    if (document.body.contains(safariToast)) {
-                      document.body.removeChild(safariToast);
-                    }
-                  }, 5000);
+                  // Safari download handled silently
                   
                 } catch (iosError) {
                   console.warn('📱 Safari iOS blob download failed, trying alternative method:', iosError);
@@ -1248,10 +1234,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               // Remove saving indicator
               document.body.removeChild(savingToast);
               
-              // Show mobile-aware success notification
+              // Show simple success notification
               const successToast = document.createElement('div');
               successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-              successToast.textContent = isMobile ? 'Mobile Export Complete' : 'Crystal Clear Export Complete';
+              successToast.textContent = 'Export Complete';
               document.body.appendChild(successToast);
               
               // Remove success notification after 2 seconds
@@ -1296,21 +1282,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                             document.body.removeChild(link);
                             URL.revokeObjectURL(url);
                             
-                            // Show Safari PNG instructions
-                            const safariPNGToast = document.createElement('div');
-                            safariPNGToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50 max-w-sm';
-                            safariPNGToast.innerHTML = `
-                              <div class="text-sm">
-                                <strong>PNG Ready:</strong><br/>
-                                Tap the share button (□↑) then "Save to Files"
-                              </div>
-                            `;
-                            document.body.appendChild(safariPNGToast);
-                            setTimeout(() => {
-                              if (document.body.contains(safariPNGToast)) {
-                                document.body.removeChild(safariPNGToast);
-                              }
-                            }, 5000);
+                            // Safari PNG handled silently
                           }
                         }, 'image/png');
                       };
@@ -1342,10 +1314,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                     link.click();
                   }
                   
-                  // Show fallback success message
+                  // Show simple fallback message
                   const fallbackToast = document.createElement('div');
                   fallbackToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-                  fallbackToast.textContent = isIOS ? 'PNG Ready for Safari Download' : 'PNG Export Complete (PDF failed)';
+                  fallbackToast.textContent = 'PNG Export Complete';
                   document.body.appendChild(fallbackToast);
                   
                   setTimeout(() => {

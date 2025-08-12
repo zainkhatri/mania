@@ -187,43 +187,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     }
   }, []);
 
-  // Share functionality - directly create and share PDF
-  const share = useCallback(async () => {
-    try {
-      // Always create and share a PDF
-      if (hasContent) {
-        // Create the PDF first
-        await exportPDF();
-        
-        // Show a success message with sharing instructions
-        const shareToast = document.createElement('div');
-        shareToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50 max-w-sm';
-        shareToast.innerHTML = `
-          <div class="flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            <div>
-              <div class="font-semibold">PDF Created!</div>
-              <div class="text-sm">Check your downloads folder to share via messages, email, etc.</div>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(shareToast);
-        
-        // Remove the toast after 5 seconds
-        setTimeout(() => {
-          if (document.body.contains(shareToast)) {
-            document.body.removeChild(shareToast);
-          }
-        }, 5000);
-      }
-    } catch (error) {
-      console.error('Share failed:', error);
-      // Fallback to regular export if share fails
-      exportPDF();
-    }
-  }, [hasContent, exportPDF]);
+
 
   // Reset functionality
   const reset = useCallback(() => {
@@ -285,7 +249,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         <section className="p-4 border-b border-white/10">
           <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
             <Icons.FaEye />
-            Journal Preview
+            
           </h2>
           
           <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-2xl overflow-hidden shadow-2xl border border-white/10"
@@ -438,14 +402,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
               )}
             </button>
             
-            <button
-              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-2xl text-white hover:from-purple-600/30 hover:to-cyan-600/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={share}
-              disabled={!hasContent}
-            >
-              <Icons.FaShare />
-              <span className="font-medium">Share Journal</span>
-            </button>
+
 
             <button
               className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-red-600/20 to-orange-600/20 border border-red-500/30 rounded-2xl text-white hover:from-red-600/30 hover:to-orange-600/30 transition-all duration-200"
