@@ -17,7 +17,6 @@ const DEFAULT_COLORS: TextColors = {
 
 // Icons
 const Icons = {
-  FaEye: () => <span className="text-lg">👁️</span>,
   FaPen: () => <span className="text-lg">✏️</span>,
   FaShare: () => <span className="text-lg">📤</span>,
   FaCalendarAlt: () => <span className="text-lg">📅</span>,
@@ -242,22 +241,24 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   }, [images, imagePositions, canvasImagePositions]);
 
   return (
-    <div className="mobile-journal bg-black w-full min-h-screen flex flex-col relative">
+    <div className="mobile-journal bg-black w-full min-h-screen flex flex-col relative select-none">
       {/* Single scrollable page with all sections */}
       <div className="flex-1 overflow-y-auto">
         {/* Journal Preview Section */}
         <section className="p-4 border-b border-white/10">
           <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
-            <Icons.FaEye />
-            
+            Preview
           </h2>
           
-          <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-               style={{ aspectRatio: '3/4', minHeight: '400px' }}>
-            
+          <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-2xl overflow-hidden shadow-2xl border border-white/10">
             {/* Journal Canvas with Integrated Image Handling */}
-            <div className="relative w-full h-full bg-white rounded-xl overflow-hidden">
-              <JournalCanvas
+            <div className="relative w-full bg-white rounded-xl overflow-hidden" style={{ 
+              paddingTop: '141.4%', /* This creates a 1:√2 aspect ratio (A4 proportion) */
+              height: 'auto',
+              touchAction: 'none'
+            }}>
+              <div className="absolute inset-0" style={{ touchAction: 'none', userSelect: 'none' }}>
+                <JournalCanvas
                 ref={canvasRef}
                 date={date}
                 location={location}
@@ -272,8 +273,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
                 onImageResize={handleImageResize}
                 onImageDelete={handleImageDelete}
               />
-              
-
+              </div>
             </div>
           </div>
         </section>
@@ -291,20 +291,20 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
             {/* Date and Location Row */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-white/80">
+                <label className="flex items-center gap-2 text-sm font-medium text-white">
                   <Icons.FaCalendarAlt />
                   Date
                 </label>
                 <input
                   type="date"
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white/60 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
                   value={new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0]}
                   onChange={(e) => setDate(new Date(e.target.value))}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-white/80">
+                <label className="flex items-center gap-2 text-sm font-medium text-white">
                   <Icons.FaMapMarkerAlt />
                   Location
                 </label>
@@ -320,7 +320,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
             {/* Add Images */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-white/80">
+              <label className="flex items-center gap-2 text-sm font-medium text-white">
                 <Icons.FaImage />
                 Add Images
               </label>
@@ -337,7 +337,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
                     };
                     input.click();
                   }}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white hover:bg-white/20 transition-all duration-200 flex items-center justify-center gap-2"
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white/60 hover:bg-white/20 hover:text-white transition-all duration-200 flex items-center justify-center gap-2"
                 >
                   <Icons.FaImage />
                   Choose Files
@@ -347,7 +347,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
             {/* Journal Text */}
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-white/80">
+              <label className="flex items-center gap-2 text-sm font-medium text-white">
                 <Icons.FaPen />
                 Your Thoughts
               </label>
@@ -366,7 +366,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
             {/* Text Colors */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-white/80">
+              <label className="flex items-center gap-2 text-sm font-medium text-white">
                 <Icons.FaPalette />
                 Text Colors
               </label>
