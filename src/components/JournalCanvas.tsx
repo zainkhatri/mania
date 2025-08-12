@@ -1177,22 +1177,71 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               
               // Mobile-specific download handling
               if (isMobile && isIOS) {
-                // iOS: Use blob download for better compatibility
+                // Safari iOS: Use special handling for better compatibility
                 try {
+                  console.log('📱 Safari iOS detected, using special download method');
+                  
+                  // Method 1: Try blob with download attribute
                   const pdfBlob = pdf.output('blob');
                   const url = URL.createObjectURL(pdfBlob);
                   const link = document.createElement('a');
                   link.href = url;
                   link.download = filename;
+                  link.style.display = 'none';
+                  document.body.appendChild(link);
                   link.click();
+                  document.body.removeChild(link);
                   URL.revokeObjectURL(url);
-                  console.log('📱 iOS PDF download initiated');
+                  console.log('📱 Safari iOS blob download initiated');
+                  
+                  // Show Safari-specific instructions
+                  const safariToast = document.createElement('div');
+                  safariToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50 max-w-sm';
+                  safariToast.innerHTML = `
+                    <div class="text-sm">
+                      <strong>Safari Download:</strong><br/>
+                      Tap the share button (□↑) then "Save to Files"
+                    </div>
+                  `;
+                  document.body.appendChild(safariToast);
+                  setTimeout(() => {
+                    if (document.body.contains(safariToast)) {
+                      document.body.removeChild(safariToast);
+                    }
+                  }, 5000);
+                  
                 } catch (iosError) {
-                  console.warn('📱 iOS blob download failed, falling back to standard save:', iosError);
-                  pdf.save(filename);
+                  console.warn('📱 Safari iOS blob download failed, trying alternative method:', iosError);
+                  
+                  // Method 2: Try opening in new tab for Safari
+                  try {
+                    const pdfDataUri = pdf.output('datauristring');
+                    const newWindow = window.open();
+                    if (newWindow) {
+                      newWindow.document.write(`
+                        <html>
+                          <head><title>Download PDF</title></head>
+                          <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
+                            <h2>PDF Ready for Download</h2>
+                            <p>Tap and hold the image below, then select "Save Image" or "Save to Files"</p>
+                            <img src="${pdfDataUri}" style="max-width:100%;border:1px solid #333;" />
+                            <p><small>If this doesn't work, try the PNG export instead.</small></p>
+                          </body>
+                        </html>
+                      `);
+                      console.log('📱 Safari iOS new window method initiated');
+                    }
+                  } catch (windowError) {
+                    console.error('📱 Safari iOS all methods failed:', windowError);
+                    // Fall back to PNG
+                    throw new Error('Safari PDF download failed');
+                  }
                 }
+              } else if (isMobile) {
+                // Other mobile devices: Standard save
+                pdf.save(filename);
               } else {
-                // Standard save for other devices
+                // Desktop: Standard save
                 pdf.save(filename);
               }
               
@@ -1220,16 +1269,83 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               if (isMobile) {
                 console.log('📱 PDF creation failed on mobile, offering PNG fallback');
                 try {
-                  // Create a download link for the PNG directly
-                  const link = document.createElement('a');
-                  link.href = pngData;
-                  link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
-                  link.click();
+                  if (isIOS) {
+                    // Safari iOS: Use special PNG handling
+                    console.log('📱 Safari iOS PNG fallback initiated');
+                    
+                    // Method 1: Try blob download
+                    try {
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      const img = new Image();
+                      
+                      img.onload = () => {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx?.drawImage(img, 0, 0);
+                        
+                        canvas.toBlob((blob) => {
+                          if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                            
+                            // Show Safari PNG instructions
+                            const safariPNGToast = document.createElement('div');
+                            safariPNGToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50 max-w-sm';
+                            safariPNGToast.innerHTML = `
+                              <div class="text-sm">
+                                <strong>PNG Ready:</strong><br/>
+                                Tap the share button (□↑) then "Save to Files"
+                              </div>
+                            `;
+                            document.body.appendChild(safariPNGToast);
+                            setTimeout(() => {
+                              if (document.body.contains(safariPNGToast)) {
+                                document.body.removeChild(safariPNGToast);
+                              }
+                            }, 5000);
+                          }
+                        }, 'image/png');
+                      };
+                      
+                      img.src = pngData;
+                    } catch (blobError) {
+                      console.warn('📱 Safari iOS blob PNG failed, trying data URI method:', blobError);
+                      
+                      // Method 2: Open PNG in new tab for Safari
+                      const newWindow = window.open();
+                      if (newWindow) {
+                        newWindow.document.write(`
+                          <html>
+                            <head><title>Download PNG</title></head>
+                            <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
+                              <h2>PNG Ready for Download</h2>
+                              <p>Tap and hold the image below, then select "Save Image" or "Save to Files"</p>
+                              <img src="${pngData}" style="max-width:100%;border:1px solid #333;" />
+                            </body>
+                          </html>
+                        `);
+                      }
+                    }
+                  } else {
+                    // Other mobile: Standard PNG download
+                    const link = document.createElement('a');
+                    link.href = pngData;
+                    link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
+                    link.click();
+                  }
                   
                   // Show fallback success message
                   const fallbackToast = document.createElement('div');
                   fallbackToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-                  fallbackToast.textContent = 'PNG Export Complete (PDF failed)';
+                  fallbackToast.textContent = isIOS ? 'PNG Ready for Safari Download' : 'PNG Export Complete (PDF failed)';
                   document.body.appendChild(fallbackToast);
                   
                   setTimeout(() => {

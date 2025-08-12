@@ -3,25 +3,7 @@ import { motion } from 'framer-motion';
 import JournalCanvas, { JournalCanvasHandle } from './JournalCanvas';
 import TempColorPicker, { TextColors } from './TempColorPicker';
 
-// Helper function to get complementary shadow color
-const getComplementaryColor = (hex: string, offset: number = 30): string => {
-  if (!hex || !hex.startsWith('#') || hex.length !== 7) {
-    return '#1D3557'; // Default shadow color if invalid input
-  }
-
-  // Convert hex to RGB
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  
-  // Create a darker shadow (offset% darker)
-  const shadowR = Math.max(0, Math.floor(r * (1 - offset / 100)));
-  const shadowG = Math.max(0, Math.floor(g * (1 - offset / 100)));
-  const shadowB = Math.max(0, Math.floor(b * (1 - offset / 100)));
-  
-  // Convert to hex
-  return `#${shadowR.toString(16).padStart(2, '0')}${shadowG.toString(16).padStart(2, '0')}${shadowB.toString(16).padStart(2, '0')}`;
-};
+// Color functions are now handled by TempColorPicker
 
 // Default colors
 const DEFAULT_COLORS: TextColors = {
@@ -29,70 +11,9 @@ const DEFAULT_COLORS: TextColors = {
   locationShadowColor: '#1D3557',
 };
 
-// Color presets (same as desktop version)
-const COLOR_PRESETS = [
-  '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCF7F', 
-  '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE',
-  '#85C1E9', '#F8C471', '#F1948A', '#A9DFBF'
-];
+// Color presets are now handled by TempColorPicker
 
-// Function to extract dominant colors from an image
-const extractDominantColors = async (imageUrl: string): Promise<string[]> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(COLOR_PRESETS);
-        return;
-      }
-
-      // Scale down image for faster processing
-      const scale = Math.min(100 / img.width, 100 / img.height);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      // Sample pixels and count colors
-      const colorCounts: { [key: string]: number } = {};
-      const step = 4; // Sample every 4th pixel for performance
-
-      for (let i = 0; i < data.length; i += step * 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Skip very light or very dark colors
-        const brightness = (r + g + b) / 3;
-        if (brightness < 30 || brightness > 225) continue;
-
-        // Quantize colors to reduce similar shades
-        const quantizedR = Math.round(r / 32) * 32;
-        const quantizedG = Math.round(g / 32) * 32;
-        const quantizedB = Math.round(b / 32) * 32;
-        
-        const colorKey = `#${quantizedR.toString(16).padStart(2, '0')}${quantizedG.toString(16).padStart(2, '0')}${quantizedB.toString(16).padStart(2, '0')}`;
-        colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
-      }
-
-      // Get top 8 most common colors
-      const sortedColors = Object.entries(colorCounts)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 8)
-        .map(([color]) => color);
-
-      resolve(sortedColors.length > 0 ? sortedColors : COLOR_PRESETS);
-    };
-    img.onerror = () => resolve(COLOR_PRESETS);
-    img.src = imageUrl;
-  });
-};
+// Color extraction is now handled by TempColorPicker
 
 // Icons
 const Icons = {
@@ -137,7 +58,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   const [text, setText] = useState<string>(initialText);
   const [images, setImages] = useState<(string | Blob)[]>(initialImages);
   const [colors, setColors] = useState<TextColors>(initialColors);
-  const [extractedColors, setExtractedColors] = useState<string[]>(COLOR_PRESETS);
+  // Colors are now handled by TempColorPicker
   const [isExporting, setIsExporting] = useState(false);
   const [imagePositions, setImagePositions] = useState<ImagePosition[]>([]);
 
@@ -221,25 +142,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     setImages(prev => [...prev, ...newImages]);
     setImagePositions(prev => [...prev, ...newPositions]);
 
-    // Extract colors from the first image for color palette
-    if (newImages.length > 0) {
-      try {
-        const firstImage = newImages[0];
-        const imageUrl = typeof firstImage === 'string' ? firstImage : URL.createObjectURL(firstImage);
-        const dominantColors = await extractDominantColors(imageUrl);
-        setExtractedColors(dominantColors);
-        
-        // If this is the first image, also set the first extracted color as the current color
-        if (images.length === 0 && dominantColors.length > 0) {
-          setColors({
-            locationColor: dominantColors[0],
-            locationShadowColor: getComplementaryColor(dominantColors[0], 30)
-          });
-        }
-      } catch (error) {
-        console.error('Failed to extract colors from image:', error);
-      }
-    }
+    // TempColorPicker will handle color extraction automatically
   }, [images.length, calculateImageDimensions]);
 
   // Canvas callbacks for image manipulation
@@ -503,29 +406,12 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
                 <Icons.FaPalette />
                 Text Colors
               </label>
-              <div className="overflow-x-auto pb-2 scrollbar-hide" style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
-                <div className="flex gap-2 min-w-max px-1" style={{ paddingRight: '20px' }}>
-                  {extractedColors.map((color, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        const newColors = {
-                          locationColor: color,
-                          locationShadowColor: getComplementaryColor(color, 30)
-                        };
-                        setColors(newColors);
-                      }}
-                      className={`w-10 h-10 rounded-full border-2 transition-all duration-200 hover:scale-110 ${
-                        colors.locationColor === color 
-                          ? 'border-white shadow-lg shadow-white/50' 
-                          : 'border-white/30 hover:border-white/60'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={`Color ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
+              <TempColorPicker
+                colors={colors}
+                onChange={setColors}
+                images={images}
+                compact={true}
+              />
             </div>
           </div>
         </section>
