@@ -1,9 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { TextColors } from './ColorPicker';
-import html2canvas from 'html2canvas';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
+
 import { jsPDF } from 'jspdf';
 
 // Performance configurations
@@ -1016,10 +1014,49 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Detect mobile device and adjust settings accordingly
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isDesktop = !isMobile;
     
     console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
     console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
-    console.log('📱 Device detection:', { isMobile, isIOS, userAgent: navigator.userAgent });
+    console.log('📱 Device detection:', { isMobile, isIOS, isDesktop, userAgent: navigator.userAgent });
+    console.log('🖼️ Export mode:', isMobile ? 'Mobile' : 'Desktop');
+    
+    // Check browser compatibility for desktop
+    if (isDesktop) {
+      // Check if browser supports required features for PDF export
+      if (!window.Blob || !window.URL || !window.URL.createObjectURL) {
+        console.warn('🖼️ Desktop browser lacks required features, falling back to PNG');
+        // Force PNG fallback for incompatible browsers
+        const canvas = canvasRef.current;
+        if (canvas) {
+          try {
+            const pngData = canvas.toDataURL('image/png', 0.9);
+            const link = document.createElement('a');
+            link.href = pngData;
+            link.download = `journal-${new Date().toISOString().split('T')[0]}-desktop.png`;
+            link.click();
+            
+            // Show success message
+            const successToast = document.createElement('div');
+            successToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+            successToast.textContent = 'PNG Export Complete (Browser incompatible with PDF)';
+            document.body.appendChild(successToast);
+            
+            setTimeout(() => {
+              if (document.body.contains(successToast)) {
+                document.body.removeChild(successToast);
+              }
+            }, 3000);
+            
+            return; // Exit early
+          } catch (pngError) {
+            console.error('🖼️ PNG fallback also failed:', pngError);
+            alert('Your browser does not support PDF or PNG export. Please try a different browser.');
+            return;
+          }
+        }
+      }
+    }
     
     // Force high quality mode for export
     const wasHighQuality = isHighQualityMode;
@@ -1069,64 +1106,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         
         console.log('📱 Export settings:', { exportScale, exportQuality, isMobile });
         
-        html2canvas(journalCanvas, {
-          scale: exportScale, // Mobile-optimized scale
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#f5f2e9',
-          logging: false, // Disable logging to reduce console noise
-          letterRendering: true,
-          imageTimeout: isMobile ? 15000 : 10000, // Longer timeout on mobile
-          async: true,
-          removeContainer: true,
-          foreignObjectRendering: false, // Better quality with native canvas rendering
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: journalCanvas.width * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
-          windowHeight: journalCanvas.height * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
-          onclone: (documentClone: Document) => {
-            console.log('🖼️ PDF EXPORT DEBUG: Cloning document for export');
-            const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
-            if (canvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                console.log('🖼️ PDF EXPORT DEBUG: Canvas context prepared for export');
-              }
-            }
-          }
-        }).then((canvas: HTMLCanvasElement) => {
-          console.log('🖼️ PDF EXPORT DEBUG: Canvas snapshot created, dimensions:', canvas.width, 'x', canvas.height);
+        // Validate canvas dimensions before proceeding
+        if (journalCanvas.width === 0 || journalCanvas.height === 0) {
+          throw new Error('Canvas has invalid dimensions - width: ' + journalCanvas.width + ', height: ' + journalCanvas.height);
+        }
+        
+        console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+        
+        // Create a high-quality PNG directly from the canvas
+        let pngData: string;
+        try {
+          pngData = journalCanvas.toDataURL('image/png', exportQuality);
+          console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length, 'quality:', exportQuality);
           
-          // Validate canvas data before proceeding
-          if (canvas.width === 0 || canvas.height === 0) {
-            throw new Error('Canvas snapshot has invalid dimensions');
+          // Validate PNG data
+          if (pngData.length < 1000) { // PNG should be at least 1KB
+            throw new Error(`PNG data too small: ${pngData.length} bytes`);
           }
-          
-          // Get PNG data with mobile-optimized quality
-          let pngData: string;
-          try {
-            pngData = canvas.toDataURL('image/png', exportQuality);
-            console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length, 'quality:', exportQuality);
-            
-            // Validate PNG data
-            if (pngData.length < 1000) { // PNG should be at least 1KB
-              throw new Error(`PNG data too small: ${pngData.length} bytes`);
-            }
-          } catch (pngError) {
-            console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
-            throw new Error('Failed to create image data from canvas');
-          }
-          
-          // Create a new image element from the high-quality PNG
-          const img = new Image();
-          img.onload = () => {
+        } catch (pngError) {
+          console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
+          throw new Error('Failed to create image data from canvas');
+        }
+        
+        // Create a new image element from the high-quality PNG
+        const img = new Image();
+        img.onload = () => {
             console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
             
             try {
+              // Check if jsPDF is available
+              if (typeof jsPDF === 'undefined') {
+                console.error('🖼️ jsPDF library not available, falling back to PNG');
+                throw new Error('PDF library not loaded');
+              }
+              
               // Mobile-optimized PDF creation
               let pdf;
               
@@ -1144,13 +1157,35 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   true // Enable compression on mobile for smaller files
                 );
               } else {
-                // Desktop: maximum quality
-                pdf = new jsPDF(
-                  'portrait', 
-                  'px', 
-                  [journalCanvas.width, journalCanvas.height],
-                  false // No compression
-                );
+                // Desktop: maximum quality with better error handling
+                try {
+                  console.log('🖼️ Creating desktop PDF with dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+                  pdf = new jsPDF(
+                    'portrait', 
+                    'px', 
+                    [journalCanvas.width, journalCanvas.height],
+                    false // No compression for maximum quality
+                  );
+                } catch (pdfCreationError) {
+                  console.warn('🖼️ Desktop PDF creation failed, trying with reduced dimensions:', pdfCreationError);
+                  // Fallback to smaller dimensions if the original size fails
+                  const fallbackWidth = Math.min(journalCanvas.width, 2000);
+                  const fallbackHeight = Math.min(journalCanvas.height, 2800);
+                  
+                  pdf = new jsPDF(
+                    'portrait', 
+                    'px', 
+                    [fallbackWidth, fallbackHeight],
+                    true // Enable compression for fallback
+                  );
+                  
+                  console.log('🖼️ Using fallback PDF dimensions:', fallbackWidth, 'x', fallbackHeight);
+                }
+              }
+              
+              // Validate PDF object before proceeding
+              if (!pdf || typeof pdf.addImage !== 'function') {
+                throw new Error('PDF object is invalid or corrupted');
               }
               
               // Add the image to the PDF with mobile-optimized settings
@@ -1227,8 +1262,58 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 // Other mobile devices: Standard save
                 pdf.save(filename);
               } else {
-                // Desktop: Standard save
-                pdf.save(filename);
+                // Desktop: Use robust download methods with fallbacks
+                console.log('🖼️ Desktop PDF export initiated');
+                try {
+                  // Method 1: Try blob download first (most reliable)
+                  const pdfBlob = pdf.output('blob');
+                  const url = URL.createObjectURL(pdfBlob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = filename;
+                  link.style.display = 'none';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                  console.log('🖼️ Desktop blob download completed');
+                } catch (blobError) {
+                  console.warn('🖼️ Desktop blob download failed, trying direct save:', blobError);
+                  
+                  // Method 2: Try direct save
+                  try {
+                    pdf.save(filename);
+                    console.log('🖼️ Desktop direct save completed');
+                  } catch (directSaveError) {
+                    console.warn('🖼️ Desktop direct save failed, trying new window method:', directSaveError);
+                    
+                    // Method 3: Open in new tab for manual download
+                    try {
+                      const pdfDataUri = pdf.output('datauristring');
+                      const newWindow = window.open();
+                      if (newWindow) {
+                        newWindow.document.write(`
+                          <html>
+                            <head><title>Download PDF</title></head>
+                            <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
+                              <h2>PDF Ready for Download</h2>
+                              <p>Right-click the image below and select "Save Image As..." or "Save Picture As..."</p>
+                              <img src="${pdfDataUri}" style="max-width:100%;border:1px solid #333;" />
+                              <p><small>If this doesn't work, try the PNG export instead.</small></p>
+                            </body>
+                          </html>
+                        `);
+                        console.log('🖼️ Desktop new window fallback initiated');
+                      } else {
+                        throw new Error('Could not open new window for PDF download');
+                      }
+                    } catch (windowError) {
+                      console.error('🖼️ Desktop all PDF methods failed, falling back to PNG:', windowError);
+                      // Force PNG fallback for desktop
+                      throw new Error('Desktop PDF download failed, using PNG fallback');
+                    }
+                  }
+                }
               }
               
               // Remove saving indicator
@@ -1332,7 +1417,69 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   alert('Export failed. Please try again or use a different device.');
                 }
               } else {
-                alert('Could not create PDF. Please try again.');
+                // Desktop-specific error handling
+                if (isMobile) {
+                  alert('Could not create PDF. Please try again.');
+                } else {
+                  console.error('🖼️ Desktop PDF creation failed, offering PNG fallback');
+                  // On desktop, automatically try PNG fallback instead of showing error
+                  try {
+                    // Create PNG fallback automatically for desktop
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    
+                    img.onload = () => {
+                      canvas.width = img.width;
+                      canvas.height = img.height;
+                      ctx?.drawImage(img, 0, 0);
+                      
+                      // Try blob download first
+                      try {
+                        canvas.toBlob((blob) => {
+                          if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `journal-${new Date().toISOString().split('T')[0]}-desktop.png`;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                            console.log('🖼️ Desktop PNG blob download completed');
+                          }
+                        }, 'image/png');
+                      } catch (blobError) {
+                        console.warn('🖼️ Desktop PNG blob failed, trying direct download:', blobError);
+                        // Direct download fallback
+                        const link = document.createElement('a');
+                        link.href = pngData;
+                        link.download = `journal-${new Date().toISOString().split('T')[0]}-desktop.png`;
+                        link.click();
+                        console.log('🖼️ Desktop PNG direct download completed');
+                      }
+                    };
+                    
+                    img.src = pngData;
+                    
+                    // Show success message
+                    const successToast = document.createElement('div');
+                    successToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+                    successToast.textContent = 'PNG Export Complete (PDF failed)';
+                    document.body.appendChild(successToast);
+                    
+                    setTimeout(() => {
+                      if (document.body.contains(successToast)) {
+                        document.body.removeChild(successToast);
+                      }
+                    }, 3000);
+                    
+                  } catch (pngFallbackError) {
+                    console.error('🖼️ Desktop PNG fallback also failed:', pngFallbackError);
+                    alert('PDF creation failed and PNG fallback also failed. Please try again or use a different browser.');
+                  }
+                }
               }
               
               document.body.removeChild(savingToast);
@@ -1347,16 +1494,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Start loading the high-resolution image
           img.src = pngData;
-        }).catch((error: Error) => {
-          console.error('🖼️ PDF EXPORT ERROR: Error creating canvas snapshot:', error);
+        } catch (error: unknown) {
+          console.error('🖼️ PDF EXPORT ERROR: Error in export process:', error);
           document.body.removeChild(savingToast);
           alert('Could not create export. Please try again.');
-        });
-      } catch (error: unknown) {
-        console.error('🖼️ PDF EXPORT ERROR: Error in export process:', error);
-        document.body.removeChild(savingToast);
-        alert('Could not create export. Please try again.');
-      }
+        }
       
       // Restore original quality settings after export
       setIsHighQualityMode(wasHighQuality);
