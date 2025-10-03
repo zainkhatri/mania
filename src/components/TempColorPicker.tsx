@@ -559,22 +559,37 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   
   if (compact) {
     return (
-      <div className="grid grid-cols-4 gap-2">
-        {sortedColors.map((color, i) => (
-          <button
-            key={`compact-${i}`}
-            className={`w-8 h-8 rounded-md shadow hover:shadow-md transition-all duration-200 border border-white/30 ${
-              colors.locationColor === color 
-                ? 'ring-2 ring-offset-1 ring-white/70 transform scale-110' 
-                : 'hover:scale-105'
-            }`}
-            style={{ 
-              backgroundColor: color,
-            }}
-            onClick={() => selectColor(color)}
-            title={color}
+      <div className="space-y-3">
+        <div className="grid grid-cols-6 gap-2">
+          {sortedColors.map((color, i) => (
+            <button
+              key={`compact-${i}`}
+              className={`aspect-square rounded-xl transition-all duration-200 ${
+                colors.locationColor === color
+                  ? 'ring-2 ring-white shadow-lg shadow-white/20 scale-95'
+                  : 'hover:scale-95 hover:shadow-md'
+              }`}
+              style={{
+                backgroundColor: color,
+                border: colors.locationColor === color ? '2px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
+              }}
+              onClick={() => selectColor(color)}
+              title={color}
+            />
+          ))}
+        </div>
+
+        {/* Selected color preview */}
+        <div className="flex items-center gap-3 p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
+          <div
+            className="w-10 h-10 rounded-lg shadow-lg"
+            style={{ backgroundColor: colors.locationColor }}
           />
-        ))}
+          <div className="flex-1 text-xs">
+            <div className="text-gray-400">Selected</div>
+            <div className="font-mono text-white">{colors.locationColor}</div>
+          </div>
+        </div>
       </div>
     );
   }
