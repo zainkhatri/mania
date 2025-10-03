@@ -217,12 +217,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   inspirationQuestion = '',
   ...props
 }, ref) => {
-  console.log('🔍 INPUT DEBUG: JournalCanvas component rendered with props:', { 
-    textSectionsLength: textSections?.length, 
-    imagesLength: images?.length,
-    textColors: textColors,
-    layoutMode
-  });
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -240,10 +234,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [stickers, setStickers] = useState<StickerImage[]>([]);
   const [showLocationShadow, setShowLocationShadow] = useState(false);
   
-  // Debug: Log stickers state changes
-  useEffect(() => {
-    console.log("Stickers state updated:", stickers.length, stickers);
-  }, [stickers]);
 
   // Add persistence for stickers - save to localStorage whenever stickers change
   useEffect(() => {
@@ -259,9 +249,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           originalUrl: undefined
         }));
         localStorage.setItem(stickerKey, JSON.stringify(stickersToSave));
-        console.log("Saved stickers to localStorage:", stickerKey, stickersToSave.length);
       } catch (error) {
-        console.error("Failed to save stickers to localStorage:", error);
       }
     }
   }, [stickers, date, location]);
@@ -273,8 +261,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const savedStickers = localStorage.getItem(stickerKey);
       if (savedStickers) {
         const parsedStickers = JSON.parse(savedStickers);
-        console.log("Loaded stickers from localStorage:", stickerKey, parsedStickers.length);
-        
+
         // Restore stickers with their positions and properties, and reload their images
         const restoredStickers = parsedStickers.map((sticker: any) => ({
           ...sticker,
@@ -304,9 +291,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 return newStickers;
               });
             };
-            
+
             img.onerror = (error) => {
-              console.error("Failed to reload sticker image:", error);
             };
             
             // Handle both File objects and string URLs
@@ -332,7 +318,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         });
       }
     } catch (error) {
-      console.error("Failed to load stickers from localStorage:", error);
     }
   }, [date, location]); // Only reload when date or location changes
 
@@ -348,10 +333,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
   }, [stickers]);
   
-  // Debug: Log stickers state changes
-  useEffect(() => {
-    console.log("Stickers state updated:", stickers.length, stickers);
-  }, [stickers]);
   const [activeSticker, setActiveSticker] = useState<number | null>(null);
   const [stickerDragOffset, setStickerDragOffset] = useState<StickerDragData | null>(null);
   const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
@@ -454,8 +435,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Load the fonts
     const loadFonts = async () => {
       try {
-        console.log('Starting to load custom fonts...');
-        
+
         // Load content font
         const contentFont = new FontFace('ZainCustomFont', `url(${contentFontUrl})`, {
           style: 'normal',
@@ -474,36 +454,29 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Attempt to clear font cache
           if ('fonts' in document) {
             document.fonts.clear();
-            console.log('Font cache cleared');
           }
         } catch (e) {
-          console.warn('Failed to clear font cache, continuing anyway:', e);
         }
         
         // Load both fonts and add to document
         const loadedContentFont = await contentFont.load();
         document.fonts.add(loadedContentFont);
-        console.log('Content font loaded successfully');
-        
+
         try {
           const loadedTitleFont = await headingFont.load();
           document.fonts.add(loadedTitleFont);
-          console.log('Title font loaded successfully: ', titleFontUrl);
-          
+
           // Force a redraw when fonts are loaded
           setTimeout(() => {
-            console.log('Forcing redraw after font load');
             setForceRender(prev => prev + 1);
           }, 100);
         } catch (titleErr) {
-          console.warn('Failed to load title font, continuing with standard fonts:', titleErr);
         }
         
         // Mark fonts as loaded and remove loading state
         setFontLoaded(true);
         setIsLoading(false);
       } catch (err) {
-        console.error('Error loading fonts:', err);
         // Continue without custom fonts
         setFontLoaded(false);
         setIsLoading(false);
@@ -515,7 +488,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     // Add a fallback to ensure loading state is cleared even if fonts fail
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.warn('Font loading timed out, continuing without custom fonts');
         setIsLoading(false);
       }
     }, 3000); // 3 second timeout
@@ -577,43 +549,32 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Preload template and images
   useEffect(() => {
     if (isLoading) return; // Wait for font loading state to be cleared
-    
-    console.log('Starting to load template and images');
+
     setIsLoading(true);
     const loadTemplateAndImages = async () => {
       try {
         // Load template first
         const template = new Image();
         template.crossOrigin = 'anonymous'; // In case the template is hosted elsewhere
-        
-        console.log('Attempting to load template from:', templateUrl);
-        
+
         const templatePromise = new Promise<HTMLImageElement | null>((resolve) => {
           template.onload = () => {
-            console.log('Template loaded successfully:', template.width, 'x', template.height);
             resolve(template);
           };
           template.onerror = (err) => {
-            console.error('Failed to load template image with cache buster:', err);
             // Try loading without cache buster
-            console.log('Attempting to load template without cache buster:', templateUrl);
             template.src = templateUrl;
             template.onload = () => {
-              console.log('Template loaded successfully without cache buster:', template.width, 'x', template.height);
               resolve(template);
             };
             template.onerror = () => {
-              console.error('Failed to load template image even without cache buster');
               // Try one more time with a different path
               const altPath = templateUrl.startsWith('/') ? templateUrl.slice(1) : '/' + templateUrl;
-              console.log('Attempting to load template with alternate path:', altPath);
               template.src = altPath;
               template.onload = () => {
-                console.log('Template loaded successfully with alternate path:', template.width, 'x', template.height);
                 resolve(template);
               };
               template.onerror = () => {
-                console.error('All template loading attempts failed');
                 resolve(null);
               };
             };
@@ -622,12 +583,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           const cacheBuster = `?v=${new Date().getTime()}`;
           template.src = templateUrl.includes('?') ? templateUrl : templateUrl + cacheBuster;
         });
-        
+
         const loadedTemplate = await templatePromise;
         if (!loadedTemplate) {
-          console.error('Could not load template, falling back to default background');
         } else {
-          console.log('Template loaded and ready to use:', loadedTemplate.width, 'x', loadedTemplate.height);
         }
         setTemplateImage(loadedTemplate);
         
@@ -643,7 +602,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               resolve(img);
             };
             img.onerror = (err) => {
-              console.error(`Failed to load image ${index}:`, err);
               resolve(null);
             };
             // Determine source type
@@ -672,7 +630,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Force a re-render when images are loaded
         renderJournal();
       } catch (err) {
-        console.error('Error loading template or images:', err);
       } finally {
         setIsLoading(false);
       }
@@ -771,7 +728,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       ctx.restore();
     } catch (err) {
-      console.error('Error drawing image:', err);
     }
   };
 
@@ -879,8 +835,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         renderSimpleTextFlow(ctx);
       }
     };
-    
-    console.log('🔍 INPUT DEBUG: Main rendering useEffect executing INSTANTLY');
+
     renderCanvas();
   }, [templateImage, textColors, layoutMode, stickers, isLoading, textSections, images, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]); // Added image-related dependencies
   
@@ -895,7 +850,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   useEffect(() => {
     // INSTANT updates - no debouncing for real-time experience
     if (textSections.some(text => text.trim()) || images.length > 0) {
-      console.log('🔍 INPUT DEBUG: Content changed, canvas updating INSTANTLY');
     }
   }, [textSections, images]);
 
@@ -916,7 +870,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Add this before the main useEffect
   const renderCanvas = useCallback(() => {
-    console.log('🔍 INPUT DEBUG: renderCanvas function called');
     if (!canvasRef.current) return;
     if (isLoading) return;
     
@@ -978,12 +931,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         try {
           ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
               } catch (err) {
-          console.error('Error drawing template:', err);
           // If drawing fails, try to draw at original size
           try {
             ctx.drawImage(templateImage, 0, 0, templateImage.width, templateImage.height);
       } catch (err) {
-            console.error('Failed to draw template even at original size:', err);
           }
         }
         
@@ -998,34 +949,26 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // For now, just use the freeflow layout as fallback
         renderSimpleTextFlow(ctx);
       }
-      
+
     } catch (error) {
-      console.error('Error rendering canvas:', error);
     }
   }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]);
 
   // Mobile-optimized PDF export function
   const exportUltraHDPDF = () => {
     if (!canvasRef.current) {
-      console.error('Canvas reference not available for PDF export');
       return;
     }
-    
+
     // Detect mobile device and adjust settings accordingly
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isDesktop = !isMobile;
     
-    console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
-    console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
-    console.log('📱 Device detection:', { isMobile, isIOS, isDesktop, userAgent: navigator.userAgent });
-    console.log('🖼️ Export mode:', isMobile ? 'Mobile' : 'Desktop');
-    
     // Check browser compatibility for desktop
     if (isDesktop) {
       // Check if browser supports required features for PDF export
       if (!window.Blob || !window.URL || !window.URL.createObjectURL) {
-        console.warn('🖼️ Desktop browser lacks required features, falling back to PNG');
         // Force PNG fallback for incompatible browsers
         const canvas = canvasRef.current;
         if (canvas) {
@@ -1047,10 +990,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 document.body.removeChild(successToast);
               }
             }, 3000);
-            
+
             return; // Exit early
           } catch (pngError) {
-            console.error('🖼️ PNG fallback also failed:', pngError);
             alert('Your browser does not support PDF or PNG export. Please try a different browser.');
             return;
           }
@@ -1092,51 +1034,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Get the canvas for export
       const journalCanvas = canvasRef.current;
       if (!journalCanvas) {
-        console.error('Canvas not available during export');
         document.body.removeChild(savingToast);
         return;
       }
-      
-      console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
       
       try {
         // Create a mobile-optimized PNG snapshot
         const exportScale = isMobile ? 2 : 4; // Lower scale on mobile to prevent memory issues
         const exportQuality = isMobile ? 0.8 : 1.0; // Lower quality on mobile for smaller files
-        
-        console.log('📱 Export settings:', { exportScale, exportQuality, isMobile });
-        
+
         // Validate canvas dimensions before proceeding
         if (journalCanvas.width === 0 || journalCanvas.height === 0) {
           throw new Error('Canvas has invalid dimensions - width: ' + journalCanvas.width + ', height: ' + journalCanvas.height);
         }
         
-        console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
-        
         // Create a high-quality PNG directly from the canvas
         let pngData: string;
         try {
           pngData = journalCanvas.toDataURL('image/png', exportQuality);
-          console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length, 'quality:', exportQuality);
-          
+
           // Validate PNG data
           if (pngData.length < 1000) { // PNG should be at least 1KB
             throw new Error(`PNG data too small: ${pngData.length} bytes`);
           }
         } catch (pngError) {
-          console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
           throw new Error('Failed to create image data from canvas');
         }
         
         // Create a new image element from the high-quality PNG
         const img = new Image();
         img.onload = () => {
-            console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
-            
+
             try {
               // Check if jsPDF is available
               if (typeof jsPDF === 'undefined') {
-                console.error('🖼️ jsPDF library not available, falling back to PNG');
                 throw new Error('PDF library not loaded');
               }
               
@@ -1147,9 +1078,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 // On mobile, use smaller dimensions to prevent memory issues
                 const mobileWidth = Math.min(journalCanvas.width, 1200);
                 const mobileHeight = Math.min(journalCanvas.height, 1600);
-                
-                console.log('📱 Mobile PDF dimensions:', { mobileWidth, mobileHeight, originalWidth: journalCanvas.width, originalHeight: journalCanvas.height });
-                
+
                 pdf = new jsPDF(
                   'portrait', 
                   'px', 
@@ -1159,27 +1088,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               } else {
                 // Desktop: maximum quality with better error handling
                 try {
-                  console.log('🖼️ Creating desktop PDF with dimensions:', journalCanvas.width, 'x', journalCanvas.height);
                   pdf = new jsPDF(
-                    'portrait', 
-                    'px', 
+                    'portrait',
+                    'px',
                     [journalCanvas.width, journalCanvas.height],
                     false // No compression for maximum quality
                   );
                 } catch (pdfCreationError) {
-                  console.warn('🖼️ Desktop PDF creation failed, trying with reduced dimensions:', pdfCreationError);
                   // Fallback to smaller dimensions if the original size fails
                   const fallbackWidth = Math.min(journalCanvas.width, 2000);
                   const fallbackHeight = Math.min(journalCanvas.height, 2800);
-                  
+
                   pdf = new jsPDF(
-                    'portrait', 
-                    'px', 
+                    'portrait',
+                    'px',
                     [fallbackWidth, fallbackHeight],
                     true // Enable compression for fallback
                   );
-                  
-                  console.log('🖼️ Using fallback PDF dimensions:', fallbackWidth, 'x', fallbackHeight);
                 }
               }
               
@@ -1199,23 +1124,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 rotation: 0,
                 alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
               });
-              
-              console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
-              
+
               // Save the PDF with mobile-optimized filename
               const date = new Date();
-              const filename = isMobile 
+              const filename = isMobile
                 ? `journal-${date.toISOString().split('T')[0]}-mobile.pdf`
                 : `journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`;
-              
-              console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
               
               // Mobile-specific download handling
               if (isMobile && isIOS) {
                 // Safari iOS: Use special handling for better compatibility
                 try {
-                  console.log('📱 Safari iOS detected, using special download method');
-                  
+
                   // Method 1: Try blob with download attribute
                   const pdfBlob = pdf.output('blob');
                   const url = URL.createObjectURL(pdfBlob);
@@ -1227,12 +1147,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   link.click();
                   document.body.removeChild(link);
                   URL.revokeObjectURL(url);
-                  console.log('📱 Safari iOS blob download initiated');
-                  
+
                   // Safari download handled silently
-                  
+
                 } catch (iosError) {
-                  console.warn('📱 Safari iOS blob download failed, trying alternative method:', iosError);
                   
                   // Method 2: Try opening in new tab for Safari
                   try {
@@ -1250,10 +1168,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                           </body>
                         </html>
                       `);
-                      console.log('📱 Safari iOS new window method initiated');
                     }
                   } catch (windowError) {
-                    console.error('📱 Safari iOS all methods failed:', windowError);
                     // Fall back to PNG
                     throw new Error('Safari PDF download failed');
                   }
@@ -1263,7 +1179,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 pdf.save(filename);
               } else {
                 // Desktop: Use robust download methods with fallbacks
-                console.log('🖼️ Desktop PDF export initiated');
                 try {
                   // Method 1: Try blob download first (most reliable)
                   const pdfBlob = pdf.output('blob');
@@ -1276,16 +1191,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   link.click();
                   document.body.removeChild(link);
                   URL.revokeObjectURL(url);
-                  console.log('🖼️ Desktop blob download completed');
                 } catch (blobError) {
-                  console.warn('🖼️ Desktop blob download failed, trying direct save:', blobError);
                   
                   // Method 2: Try direct save
                   try {
                     pdf.save(filename);
-                    console.log('🖼️ Desktop direct save completed');
                   } catch (directSaveError) {
-                    console.warn('🖼️ Desktop direct save failed, trying new window method:', directSaveError);
                     
                     // Method 3: Open in new tab for manual download
                     try {
@@ -1303,12 +1214,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                             </body>
                           </html>
                         `);
-                        console.log('🖼️ Desktop new window fallback initiated');
                       } else {
                         throw new Error('Could not open new window for PDF download');
                       }
                     } catch (windowError) {
-                      console.error('🖼️ Desktop all PDF methods failed, falling back to PNG:', windowError);
                       // Force PNG fallback for desktop
                       throw new Error('Desktop PDF download failed, using PNG fallback');
                     }
@@ -1331,18 +1240,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   document.body.removeChild(successToast);
                 }
               }, 2000);
-              
-              console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
+
             } catch (pdfError) {
-              console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
-              
+
               // On mobile, offer PNG fallback if PDF fails
               if (isMobile) {
-                console.log('📱 PDF creation failed on mobile, offering PNG fallback');
                 try {
                   if (isIOS) {
                     // Safari iOS: Use special PNG handling
-                    console.log('📱 Safari iOS PNG fallback initiated');
                     
                     // Method 1: Try blob download
                     try {
@@ -1374,8 +1279,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                       
                       img.src = pngData;
                     } catch (blobError) {
-                      console.warn('📱 Safari iOS blob PNG failed, trying data URI method:', blobError);
-                      
+
                       // Method 2: Open PNG in new tab for Safari
                       const newWindow = window.open();
                       if (newWindow) {
@@ -1410,10 +1314,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                       document.body.removeChild(fallbackToast);
                     }
                   }, 3000);
-                  
-                  console.log('📱 PNG fallback export completed');
+
                 } catch (fallbackError) {
-                  console.error('📱 PNG fallback also failed:', fallbackError);
                   alert('Export failed. Please try again or use a different device.');
                 }
               } else {
@@ -1421,7 +1323,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 if (isMobile) {
                   alert('Could not create PDF. Please try again.');
                 } else {
-                  console.error('🖼️ Desktop PDF creation failed, offering PNG fallback');
                   // On desktop, automatically try PNG fallback instead of showing error
                   try {
                     // Create PNG fallback automatically for desktop
@@ -1447,17 +1348,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                             link.click();
                             document.body.removeChild(link);
                             URL.revokeObjectURL(url);
-                            console.log('🖼️ Desktop PNG blob download completed');
                           }
                         }, 'image/png');
                       } catch (blobError) {
-                        console.warn('🖼️ Desktop PNG blob failed, trying direct download:', blobError);
                         // Direct download fallback
                         const link = document.createElement('a');
                         link.href = pngData;
                         link.download = `journal-${new Date().toISOString().split('T')[0]}-desktop.png`;
                         link.click();
-                        console.log('🖼️ Desktop PNG direct download completed');
                       }
                     };
                     
@@ -1474,9 +1372,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                         document.body.removeChild(successToast);
                       }
                     }, 3000);
-                    
+
                   } catch (pngFallbackError) {
-                    console.error('🖼️ Desktop PNG fallback also failed:', pngFallbackError);
                     alert('PDF creation failed and PNG fallback also failed. Please try again or use a different browser.');
                   }
                 }
@@ -1485,17 +1382,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               document.body.removeChild(savingToast);
             }
           };
-          
+
           img.onerror = (err) => {
-            console.error('🖼️ PDF EXPORT ERROR: Error loading high-resolution image for PDF:', err);
             document.body.removeChild(savingToast);
             alert('Could not create crystal clear export. Please try again.');
           };
-          
+
           // Start loading the high-resolution image
           img.src = pngData;
         } catch (error: unknown) {
-          console.error('🖼️ PDF EXPORT ERROR: Error in export process:', error);
           document.body.removeChild(savingToast);
           alert('Could not create export. Please try again.');
         }
@@ -2117,7 +2012,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    console.log("Canvas clicked at:", mouseX, mouseY);
 
     // First check for image interactions
     if (props.editMode && layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2135,9 +2029,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const deleteBtnX = position.x + 30;
             const deleteBtnY = position.y + 30;
             const deleteBtnRadius = 40; // Match the visual button size
-            
+
             if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= deleteBtnRadius) {
-              console.log("Deleting image:", i);
               if (props.onImageDelete) {
                 props.onImageDelete(i);
               }
@@ -2149,9 +2042,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const resizeBtnX = position.x + position.width - 30;
             const resizeBtnY = position.y + position.height - 30;
             const resizeBtnRadius = 40; // Match the visual button size
-            
+
             if (Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2) <= resizeBtnRadius) {
-              console.log("Starting resize for image:", i);
               setResizingSimpleImage(i);
               setResizeStartData({
                 startX: mouseX,
@@ -2165,7 +2057,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             }
           } else {
             // Select this image
-            console.log("Selecting image:", i);
             setSelectedImage(i);
             setHoveredImage(i);
             return;
@@ -2175,7 +2066,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // If clicked outside all images, deselect current image
       if (selectedImage !== null) {
-        console.log("Deselecting image, saving position");
         setSelectedImage(null);
         setHoveredImage(null);
         // The position is already saved in the state, no need to call save here
@@ -2189,7 +2079,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Check if delete button was clicked (with larger hit area)
       if (Math.sqrt((mouseX - deleteBtn.x) ** 2 + (mouseY - deleteBtn.y) ** 2) <= btnRadius * 1.5) {
-        console.log("Deleting sticker:", activeSticker);
         // Delete this sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         setStickers(newStickers);
@@ -2231,7 +2120,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
             setStickers(newStickers);
           }
-        console.log("Selected sticker:", i, "Total stickers:", stickers.length);
         break;
       }
     }
@@ -2252,7 +2140,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    console.log("Mouse down at:", mouseX, mouseY);
 
     // BULLETPROOF IMAGE INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2268,9 +2155,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const deleteBtnX = imagePos.x + 30;
         const deleteBtnY = imagePos.y + 30;
         const distanceToDelete = Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2);
-        
+
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("🗑️ Delete button clicked, deleting image:", i);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
@@ -2282,9 +2168,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const resizeBtnX = imagePos.x + imagePos.width - 30;
         const resizeBtnY = imagePos.y + imagePos.height - 30;
         const distanceToResize = Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2);
-        
+
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("🔧 Resize button clicked, starting resize for image:", i);
           // Ensure image is selected before resizing
           if (selectedImage !== i) {
             setSelectedImage(i);
@@ -2304,33 +2189,31 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Check if click is on the image body
         if (mouseX >= imagePos.x && mouseX <= imagePos.x + imagePos.width &&
             mouseY >= imagePos.y && mouseY <= imagePos.y + imagePos.height) {
-          
+
+
           clickedImage = true;
-          console.log("🖼️ Image body clicked:", i);
-          
+
           // ALWAYS select the image when clicked - no exceptions
           if (selectedImage !== i) {
-            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
-          
+
           // Set up for immediate dragging - no delays, no timers
           setDragOffset({
             x: mouseX - imagePos.x,
             y: mouseY - imagePos.y
           });
-          
+
           // Enable dragging immediately for responsive feel
           setDraggedSimpleImage(i);
-          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
       }
-      
+
+
       // Only deselect if we didn't click on ANY image
       if (!clickedImage && selectedImage !== null) {
-        console.log("🔄 Clicking outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -2841,7 +2724,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       debouncedDragRender();
     }
     } catch (error) {
-      console.error('Error in handleMouseMove:', error);
       // Reset sticker action on error to prevent crashes
       setStickerAction(null);
       setStickerDragOffset(null);
@@ -2902,7 +2784,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
 
-    console.log("Touch start at:", x, y);
 
     // BULLETPROOF TOUCH INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2918,9 +2799,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const deleteBtnX = imagePos.x + 30;
         const deleteBtnY = imagePos.y + 30;
         const distanceToDelete = Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2);
-        
+
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("🗑️ Delete button touched, deleting image:", i);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
@@ -2932,9 +2812,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const resizeBtnX = imagePos.x + imagePos.width - 30;
         const resizeBtnY = imagePos.y + imagePos.height - 30;
         const distanceToResize = Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2);
-        
+
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("🔧 Resize button touched, starting resize for image:", i);
           // Ensure image is selected before resizing
           if (selectedImage !== i) {
             setSelectedImage(i);
@@ -2954,33 +2833,31 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Check if touch is on the image body
         if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
             y >= imagePos.y && y <= imagePos.y + imagePos.height) {
-          
+
+
           touchedImage = true;
-          console.log("🖼️ Image body touched:", i);
-          
+
           // ALWAYS select the image when touched - no exceptions
           if (selectedImage !== i) {
-            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
-          
+
           // Set up for immediate dragging - no delays, no timers
           setDragOffset({
             x: x - imagePos.x,
             y: y - imagePos.y
           });
-          
+
           // Enable dragging immediately for responsive feel
           setDraggedSimpleImage(i);
-          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
       }
-      
+
+
       // Only deselect if we didn't touch ANY image
       if (!touchedImage && selectedImage !== null) {
-        console.log("🔄 Touching outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -3148,7 +3025,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Function to force a redraw from outside
   const forceRedraw = useCallback(() => {
-    console.log('Force redraw called');
     setRenderCount(prev => prev + 1);
   }, []);
 
@@ -3165,13 +3041,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Update simple image positions when images prop changes
   useEffect(() => {
     if (layoutMode === 'freeflow' && images.length > 0) {
-      console.log('🖼️ CANVAS DEBUG: Images changed, updating positions. Images count:', images.length);
-      console.log('🖼️ CANVAS DEBUG: Saved positions:', props.savedImagePositions);
-      console.log('🖼️ CANVAS DEBUG: Current simpleImagePositions:', simpleImagePositions);
-      
+
       // Preserve existing positions and only add new ones for new images
       setSimpleImagePositions(prevPositions => {
-        console.log('🖼️ CANVAS DEBUG: Previous positions:', prevPositions);
         
         const newImagePositions: Array<{
           x: number;
@@ -3216,16 +3088,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         images.forEach((image, index) => {
           // Check if we already have a position for this image index
           const existingPosition = prevPositions[index];
-          
+
             if (existingPosition) {
-              console.log(`🖼️ Preserving position for image ${index}:`, existingPosition);
               // Preserve existing position, size, and rotation, but update the image reference
               newImagePositions.push({
                 ...existingPosition,
                 image
               });
             } else {
-              console.log(`🖼️ Creating new position for image ${index}`);
             
             // Use default dimensions for initial positioning (will be updated when image loads)
             const imageWidth = 400; // Reduced from 800
@@ -3241,7 +3111,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               x = props.savedImagePositions[index].x;
               y = props.savedImagePositions[index].y;
               savedRotation = props.savedImagePositions[index].rotation || 0;
-              console.log(`🖼️ Using saved position for image ${index}:`, { x, y, rotation: savedRotation });
             } else {
               // Center all images on the page with slight offsets to prevent overlap
             // Use the new canvas dimensions (1860x2620)
@@ -3269,7 +3138,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 x = Math.max(50, Math.min(x, canvasWidth - imageWidth - 50));
                 y = Math.max(50, Math.min(y, canvasHeight - imageHeight - 50));
               }
-              console.log(`🖼️ Using centered position for image ${index}:`, { x, y });
             }
             
             newImagePositions.push({
@@ -3282,8 +3150,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             });
           }
         });
-        
-        console.log('🖼️ Final new positions:', newImagePositions);
+
         return newImagePositions;
       });
       
@@ -3340,10 +3207,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   height: dimensions.height
                 };
                 hasChanges = true;
-                console.log(`🖼️ Updated dimensions for image ${i}: ${dimensions.width}x${dimensions.height}`);
               }
             } catch (error) {
-              console.error(`Failed to calculate dimensions for image ${i}:`, error);
             }
           }
         }
@@ -3359,22 +3224,19 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
-    console.log("handleStickerFile called with:", file.name, file.size, file.type);
-    
+
     // Create a revocable URL for the file IMMEDIATELY - no compression
     const url = URL.createObjectURL(file);
-    
+
     // Pre-load the image to get original dimensions
     const img = new window.Image();
     img.crossOrigin = "anonymous";
-    
+
     img.onload = () => {
-      console.log("Image loaded successfully for sticker:", file.name);
-      
+
       // STEP 1: SAVE ORIGINAL AT FULL QUALITY - Never touch the original image
       const originalWidth = img.naturalWidth || img.width;
       const originalHeight = img.naturalHeight || img.height;
-      console.log("Original dimensions preserved:", originalWidth, "x", originalHeight);
       
       // STEP 2: CALCULATE DISPLAY SIZE - This is just for initial preview, not permanent
       const defaultStickerSize = 100; // Reduced from 200 to match new tiny dimensions
@@ -3390,8 +3252,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         displayHeight = defaultStickerSize;
         displayWidth = defaultStickerSize * aspectRatio;
       }
-      
-      console.log("Initial display dimensions:", displayWidth, "x", displayHeight);
       
       // Position stickers BELOW the location text area for easier grabbing
       // Use the new canvas dimensions (1860x2620)
@@ -3424,7 +3284,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       setStickers(prevStickers => {
         const newZIndex = prevStickers.length + 10;
         const stickerWithZIndex = { ...newSticker, zIndex: newZIndex };
-        console.log("Adding ORIGINAL QUALITY sticker to state:", stickerWithZIndex);
         return [...prevStickers, stickerWithZIndex];
       });
       
@@ -3434,9 +3293,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Force a re-render to show the sticker
       throttledRender();
     };
-    
+
     img.onerror = (error) => {
-      console.error("Failed to load sticker image:", file.name, error);
       URL.revokeObjectURL(url);
     };
     
@@ -3448,12 +3306,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Expose the addSticker method via the forwarded ref
   useImperativeHandle(ref, () => ({
     addSticker: (file: File, width?: number, height?: number) => {
-      console.log("Adding sticker:", file.name);
       try {
         handleStickerFile(file);
         return true;
       } catch (err) {
-        console.error("Error adding sticker:", err);
         return false;
       }
     },
@@ -3462,13 +3318,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         addMultipleStickers(files);
         return true;
       } catch (err) {
-        console.error("Error adding multiple stickers:", err);
         return false;
       }
     },
     exportUltraHDPDF: exportUltraHDPDF,
     clearStickers: () => {
-      console.log("Clearing all stickers");
       // Revoke object URLs to prevent memory leaks
       stickers.forEach(sticker => {
         if (sticker.originalUrl) {
@@ -3481,7 +3335,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const stickerKey = `stickers_${date.toISOString().split('T')[0]}_${location}`;
         localStorage.removeItem(stickerKey);
       } catch (error) {
-        console.error("Failed to clear stickers from localStorage:", error);
       }
     }
   }));
@@ -3640,7 +3493,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Use a larger hit area for easier button clicking (1.5x radius)
       if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.5) {
-        console.log("Delete button clicked!");
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         setStickers(newStickers);
@@ -3719,8 +3571,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Add a new function to handle multiple stickers
   const addMultipleStickers = (files: File[]) => {
-    console.log(`Adding ${files.length} stickers at once`);
-    
+
     // Calculate canvas dimensions for positioning
     const canvasWidth = canvasRef.current?.width || 1240;
     const canvasHeight = canvasRef.current?.height || 1748;
@@ -3789,9 +3640,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             originalUrl: URL.createObjectURL(file) // Keep reference to original URL
           });
         };
-        
+
         img.onerror = () => {
-          console.error("Failed to load sticker image:", file.name);
           resolve(null);
         };
         
@@ -3916,18 +3766,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // BULLETPROOF SELECTION STATE MONITORING
   useEffect(() => {
     if (props.editMode && layoutMode === 'freeflow') {
-      console.log("🎯 Image selection changed, forcing re-render. Selected:", selectedImage);
-      
+
       // Validate selection state
       if (selectedImage !== null) {
         if (selectedImage < 0 || selectedImage >= simpleImagePositions.length) {
-          console.error("🚨 INVALID SELECTION STATE: selectedImage out of bounds, resetting");
           setSelectedImage(null);
           return;
         }
-        console.log("✅ Selection state validated:", selectedImage);
       }
-      
+
       setRenderCount(prev => prev + 1);
     }
   }, [selectedImage, props.editMode, layoutMode, simpleImagePositions.length]);
@@ -3935,7 +3782,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Force re-render when image positions change
   useEffect(() => {
     if (props.editMode && layoutMode === 'freeflow') {
-      console.log("Image positions changed, forcing re-render");
       setRenderCount(prev => prev + 1);
     }
   }, [simpleImagePositions, props.editMode, layoutMode]);

@@ -4,14 +4,6 @@ import OpenAI from 'openai';
 // API key should be stored in .env file as REACT_APP_OPENAI_API_KEY
 const apiKey = process.env.REACT_APP_OPENAI_API_KEY || process.env.REACT_APP_CHATGPTAPI || process.env.OPEN_AI_API_KEY;
 
-// Debug environment variables
-console.log('🔍 Environment check:');
-console.log('REACT_APP_OPENAI_API_KEY exists:', !!process.env.REACT_APP_OPENAI_API_KEY);
-console.log('REACT_APP_OPENAI_API_KEY value:', process.env.REACT_APP_OPENAI_API_KEY ? process.env.REACT_APP_OPENAI_API_KEY.substring(0, 20) + '...' : 'undefined');
-console.log('All REACT_APP_ env vars:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
-console.log('All env vars containing "OPENAI":', Object.keys(process.env).filter(key => key.includes('OPENAI')));
-console.log('All env vars containing "API":', Object.keys(process.env).filter(key => key.includes('API')));
-
 // Create a client with the API key
 let openai: OpenAI | null = null;
 
@@ -29,22 +21,17 @@ const DEFAULT_TEMPERATURE = 0.2;
 // Keep track of recent questions to avoid repeating
 const recentQuestions: string[] = [];
 
-// Initialize OpenAI with logging and error handling
+// Initialize OpenAI with error handling
 try {
-  console.log('🔑 Checking API key:', apiKey ? 'Present' : 'Missing');
   // Only initialize if we have a valid API key
   if (apiKey && apiKey !== 'your_openai_api_key_here' && apiKey.length > 20) {
     openai = new OpenAI({
       apiKey: apiKey,
       dangerouslyAllowBrowser: true // Allow running in browser environment
     });
-    console.log('✅ OpenAI API initialized successfully with key:', apiKey.substring(0, 10) + '...');
-  } else {
-    console.warn('⚠️ OpenAI API key not found or using placeholder value. Current key:', apiKey ? apiKey.substring(0, 10) + '...' : 'undefined');
-    console.warn('The AI journal enhancement feature will use fallback suggestions.');
   }
 } catch (error) {
-  console.error('❌ Failed to initialize OpenAI API:', error);
+  // Silently fail - will use fallback prompts
 }
 
 // Helper utility for async retries
@@ -60,8 +47,7 @@ const withRetry = async <T>(
       return await fn();
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt + 1}/${maxRetries} failed:`, error);
-      
+
       // Don't delay on the final attempt
       if (attempt < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -80,17 +66,12 @@ export const generateJournalPrompts = async (
   seed: number = Math.floor(Math.random() * 1000),
   retries: number = MAX_RETRY_ATTEMPTS
 ): Promise<string[]> => {
-  console.log('🚀 generateJournalPrompts called with:', { journalText: journalText.substring(0, 50) + '...', location });
-  
   // Early validation
   if (!journalText || journalText.trim() === '') {
-    console.warn('Empty journal text provided');
     return ['What motivated you to start journaling today?'];
   }
-  
+
   if (!openai) {
-    console.log('❌ No OpenAI API key found - using fallback prompts');
-    console.log('🔑 API Key status:', apiKey ? 'Present but invalid' : 'Missing');
     return [getUniqueDefaultPrompt(journalText, location)];
   }
   
@@ -100,11 +81,10 @@ export const generateJournalPrompts = async (
   
   return withRetry(async () => {
     try {
-      console.log('🚀 Attempting to call OpenAI API...');
       if (!openai) {
         throw new Error('OpenAI API not initialized');
       }
-      
+
       // Natural conversational prompt that makes the AI genuinely curious
       const prompt = `
 I just told you this:
@@ -116,13 +96,13 @@ You're my friend and you just heard me vent. Ask me ONE natural question that sh
 Use my exact words and be genuinely curious about my situation.
 
 Respond ONLY with the question - no explanation.`;
-      
+
       // Generate content using OpenAI with enhanced parameters for variety
       const response = await openai.chat.completions.create({
         model: DEFAULT_MODEL,
         messages: [
-          { 
-            role: "system", 
+          {
+            role: "system",
             content: "You are a caring friend who just heard someone share something personal. Ask them ONE natural question that shows you were listening and makes them think deeper. Use their exact words and be genuinely curious about their situation."
           },
           { role: "user", content: prompt }
@@ -133,36 +113,31 @@ Respond ONLY with the question - no explanation.`;
         presence_penalty: 0.6, // Encourage novel content
         frequency_penalty: 0.3  // Reduce repetition
       });
-      
+
       const text = response.choices[0].message.content || '';
-      console.log('📝 Raw GPT response:', text);
-      
+
       // Clean up the response
       const cleanedQuestion = text
         .replace(/^["']|["']$/g, '') // Remove surrounding quotes if present
         .replace(/^(here's a question:|question:|follow-up:|follow up:)/i, '') // Remove introductory phrases
         .trim();
-      
+
       // Make sure it ends with a question mark
-      const finalQuestion = cleanedQuestion.endsWith('?') 
-        ? cleanedQuestion 
+      const finalQuestion = cleanedQuestion.endsWith('?')
+        ? cleanedQuestion
         : cleanedQuestion + '?';
-      
+
       // Validate the question quality
       if (finalQuestion.length < 10 || finalQuestion.toLowerCase().includes('experience with rather')) {
         throw new Error('Generated question quality is poor');
       }
-      
+
       // Store the question in the recent questions list
       addToRecentQuestions(finalQuestion);
-      
-      console.log('✅ Successfully generated GPT question:', finalQuestion);
+
       return [finalQuestion];
     } catch (error) {
-      console.error('❌ Error generating prompts with OpenAI:', error);
-      
       // If we've retried and still failed, fall back to default prompts
-      console.log('🔄 Falling back to default prompts after GPT failure');
       return [getUniqueDefaultPrompt(cleanJournalText, cleanLocation)];
     }
   }, retries);
