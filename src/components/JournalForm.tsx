@@ -2674,12 +2674,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
         {/* Main content */}
         <div className="relative z-10 min-h-screen md:h-full flex flex-col">
           {/* Journal editor content - Bounded container for desktop */}
-          <div className="p-2 sm:p-4 md:p-3 lg:p-4 max-w-7xl mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden flex flex-col md:items-start items-center">
+          <div className="p-2 sm:p-4 md:p-3 lg:p-4 max-w-full mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden flex flex-col md:items-start items-center">
             {/* Desktop: Side by side layout */}
-            <div className="hidden md:grid md:grid-cols-2 gap-2 md:gap-4 max-w-[1600px] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden">
+            <div className="hidden md:grid md:grid-cols-2 gap-2 md:gap-4 w-full max-w-full mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden">
               
               {/* Journal Preview - Desktop only */}
-              <div className="hidden md:block bg-black rounded-2xl shadow-2xl border border-white/20 order-1 md:order-2 md:sticky md:top-0 flex flex-col min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] md:max-w-full">
+              <div className="hidden md:block bg-black rounded-2xl shadow-2xl border border-white/20 order-1 md:order-2 md:sticky md:top-0 flex flex-col min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] w-full max-w-full overflow-hidden">
                 {/* Collapsible journal content */}
                 <div className={`transition-all duration-700 ease-in-out flex-1 ${isJournalCollapsed ? 'max-h-0 opacity-0 md:max-h-none md:opacity-100' : 'min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] opacity-100 md:max-h-none'}`}>
                   <div className={`transition-all duration-700 ease-in-out min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] ${isJournalCollapsed ? 'p-0 md:p-2 md:p-3 lg:p-6 scale-95 md:scale-100' : 'p-2 md:p-3 lg:p-6 scale-100'}`}>
@@ -2750,7 +2750,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
               </div>
 
               {/* Input Form - Full width on mobile, left side on desktop */}
-              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[500px] md:h-full">
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[500px] md:h-full w-full max-w-full">
 
                 <div className="p-2 md:p-3 lg:p-4 border-b border-white/10 flex-shrink-0">
                   <div className="flex items-start justify-between gap-4">
@@ -2791,7 +2791,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             setDate(adjustedDate);
                           }
                         }}
-                        className="rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm w-36"
+                        className="rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm w-full min-w-[140px]"
                         dateFormat="MMM dd, yyyy"
                         popperPlacement="bottom-end"
                         required
@@ -2846,7 +2846,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       </div>
 
                       {/* Layout Toggle and Colors - Hidden on mobile */}
-                      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 w-full" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                         {/* Layout Toggle */}
                         <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
                           <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
@@ -2864,15 +2864,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </div>
 
                         {/* Colors */}
-                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
+                        <div className="bg-black/30 backdrop-blur-sm rounded-xl shadow-sm border border-white/10 p-3 overflow-hidden min-w-0">
                           <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                             </svg>
                             <span>Colors</span>
                           </label>
-                          <div className="flex justify-center">
-                            <SimpleColorPicker 
+                          <div className="w-full overflow-hidden">
+                            <SimpleColorPicker
                               colors={textColors}
                               onChange={handleColorChange}
                               images={submitted ? submittedData.images : images}
@@ -3123,17 +3123,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     </div>
 
                     {/* Colors - Mobile Horizontal Scroll */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 bg-black/20 backdrop-blur-sm rounded-xl border border-white/10 p-4">
                       <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
                         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                         </svg>
                         <span>Colors</span>
                       </label>
-                      <div className="overflow-x-auto pb-2 scrollbar-hide" style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
-                        <div className="flex gap-3 min-w-max px-1" style={{ paddingRight: '20px' }}>
+                      <div className="overflow-x-auto -mx-4 px-4 pb-2 scrollbar-hide" style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
+                        <div className="flex gap-3 min-w-max">
                           {[
-                            '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCF7F', 
+                            '#FF6B6B', '#FF8E53', '#FFD93D', '#6BCF7F',
                             '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
                             '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE',
                             '#85C1E9', '#F8C471', '#F1948A', '#A9DFBF'
@@ -3148,10 +3148,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                 };
                                 handleColorChange(newColors);
                               }}
-                              className={`w-12 h-12 rounded-full border-2 transition-all duration-200 hover:scale-110 ${
-                                textColors.locationColor === color 
-                                  ? 'border-white shadow-lg shadow-white/50' 
-                                  : 'border-white/30 hover:border-white/60'
+                              className={`w-11 h-11 flex-shrink-0 rounded-lg transition-all duration-200 ${
+                                textColors.locationColor === color
+                                  ? 'ring-2 ring-white shadow-lg scale-105'
+                                  : 'hover:scale-105 hover:shadow-md'
                               }`}
                               style={{ backgroundColor: color }}
                               title={`Color ${index + 1}`}

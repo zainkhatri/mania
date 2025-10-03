@@ -41,7 +41,7 @@
 body {
   font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
   color: #ffffff;
-  background-color: #000000;
+  background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
@@ -106,6 +106,8 @@ body {
     max-width: calc(100vw - 2rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   
   /* Ensure journal preview container stays within bounds */
@@ -123,21 +125,21 @@ body {
   }
   
   /* Ensure all rounded containers respect viewport boundaries */
-  .rounded-2xl {
+  .rounded-2xl:not(button) {
     max-width: calc(100vw - 2rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
   }
-  
+
   /* Ensure all rounded-lg containers also respect boundaries */
-  .rounded-lg {
+  .rounded-lg:not(button) {
     max-width: calc(100vw - 2rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
   }
-  
+
   /* Ensure rounded-xl containers respect boundaries */
-  .rounded-xl {
+  .rounded-xl:not(button) {
     max-width: calc(100vw - 2rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
@@ -148,6 +150,8 @@ body {
     max-width: calc(100vw - 2rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   
   /* Ensure individual grid items don't overflow */
@@ -155,6 +159,8 @@ body {
     max-width: calc(50vw - 3rem) !important;
     max-height: calc(100vh - 8rem) !important;
     overflow: hidden !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   
   /* Ensure the main journal form container respects boundaries */
@@ -229,7 +235,7 @@ html {
   height: 100vh;
   overflow-x: hidden;
   overflow-y: hidden;
-  background-color: #000000;
+  background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
   /* Handle overscroll areas */
   overscroll-behavior: none;
 }
@@ -241,7 +247,7 @@ html {
   overflow-x: hidden;
   overflow-y: hidden;
   position: relative;
-  background-color: #000000;
+  background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
 }
 
 
@@ -259,32 +265,36 @@ button, a {
 
 /* Vercel-inspired sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
+  border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 4px;
-  border: none;
-  transition: background-color 0.2s ease;
+  background: linear-gradient(135deg, #444444 0%, #333333 100%);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: linear-gradient(135deg, #666666 0%, #555555 100%);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: #777777;
+  background: linear-gradient(135deg, #888888 0%, #777777 100%);
+  background-clip: padding-box;
 }
 
 /* Firefox scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #333333 #000000;
+  scrollbar-color: #444444 #0a0a0a;
 }
 
 /* Animation keyframes */
@@ -301,6 +311,41 @@ button, a {
   animation: float 3s ease-in-out infinite;
 }
 
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 3s infinite;
+}
+
 /* Selection styling */
 ::selection {
   background-color: #AEBBED;
@@ -312,6 +357,7 @@ button, a {
   color: white;
   font-weight: 300;
   transition: all 0.3s ease;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
 }
 
 /* Logo hover effect removed - now uses home screen animation */
@@ -328,7 +374,7 @@ button, a {
 /* Add responsive styling for the journal interface elements */
 @media (min-width: 769px) {
   /* Default sizes for desktop */
-  input, 
+  input,
   textarea,
   select,
   button {
@@ -338,15 +384,70 @@ button, a {
 
   /* Ensure input fields have adequate height */
   input[type="text"],
-  input[type="date"],
-  textarea {
-    padding: 16px 18px !important;
-    min-height: 60px !important;
+  input[type="date"] {
+    padding: 18px 20px !important;
+    min-height: 64px !important;
+    border-radius: 12px !important;
+    transition: all 0.2s ease !important;
   }
-  
+
+  /* Textarea with less padding to prevent overflow */
+  textarea {
+    padding: 12px 16px !important;
+    min-height: 64px !important;
+    border-radius: 12px !important;
+    transition: all 0.2s ease !important;
+    overflow-y: auto !important;
+  }
+
+  /* Force journal entry textarea to be scrollable */
+  textarea#journalText {
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+  }
+
+  input[type="text"]:focus,
+  input[type="date"]:focus,
+  textarea:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
+  }
+
   /* Buttons */
   button {
-    padding: 14px 22px !important;
+    padding: 16px 24px !important;
+    border-radius: 10px !important;
+    transition: all 0.2s ease !important;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  /* Override for icon-only action buttons in nav */
+  nav button.w-11 {
+    padding: 0 !important;
+    border-radius: 1rem !important;
+  }
+
+  /* Override for color picker buttons - prevent padding from breaking grid */
+  .grid button.aspect-square {
+    padding: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Ensure color grid container respects boundaries */
+  .grid.grid-cols-4 {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 }
 
@@ -683,6 +784,7 @@ input[type="date"]::-webkit-clear-button {
     position: relative;
     z-index: 1;
     isolation: isolate;
+    background: linear-gradient(135deg, #000000 0%, #0f0f0f 100%);
   }
 
   /* Ensure mobile journal takes full height */
@@ -714,7 +816,7 @@ input[type="date"]::-webkit-clear-button {
   .mobile-journal textarea {
     font-size: 16px !important; /* Prevents zoom on iOS */
     -webkit-appearance: none;
-    border-radius: 12px !important;
+    border-radius: 16px !important;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: text;
@@ -725,6 +827,14 @@ input[type="date"]::-webkit-clear-button {
     pointer-events: auto !important;
     position: relative !important;
     z-index: 999 !important;
+    padding: 14px 18px !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .mobile-journal input:focus,
+  .mobile-journal textarea:focus {
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
   }
 
   /* Ensure inputs are above other elements */
@@ -736,9 +846,15 @@ input[type="date"]::-webkit-clear-button {
 
   /* Mobile touch targets */
   .mobile-journal button {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 48px;
+    min-width: 48px;
     touch-action: manipulation;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-journal button:active {
+    transform: scale(0.95);
+    opacity: 0.8;
   }
 
   /* Safe area handling */

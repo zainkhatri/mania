@@ -117,9 +117,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {!shouldHideNav && (
         <>
           {/* Navigation - Hidden on mobile */}
-          <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center h-14">
+          <nav className="relative z-50 py-4 border-b border-white/10 bg-gradient-to-r from-black/90 via-black/95 to-black/90 backdrop-blur-xl shadow-lg hidden md:block">
+            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-10">
+              <div className="flex justify-between items-center h-16">
                 <div className="flex items-center">
                   <Link to="/" className="flex-shrink-0 flex items-center">
                     <div className="text-4xl md:text-5xl text-white font-light">
@@ -133,7 +133,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 </div>
 
                 {/* Desktop action buttons */}
-                <div className="hidden md:flex items-center gap-2">
+                <div className="hidden md:flex items-center gap-3">
                   {/* Download Journal Button */}
                   <button
                     onClick={() => {
@@ -142,14 +142,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         window.handleHighQualityPDFExport();
                       }
                     }}
-                    className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white focus:outline-none transition-all duration-200"
+                    className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-blue-500/50 transform hover:scale-110 active:scale-95"
                     title="Download Journal"
                   >
-                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                   </button>
-                  
+
                   {/* Clear Journal Button */}
                   <button
                     onClick={() => {
@@ -158,11 +158,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                         window.handleReset();
                       }
                     }}
-                    className="inline-flex items-center justify-center p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white focus:outline-none transition-all duration-200"
+                    className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 text-white focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-black transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-red-500/50 transform hover:scale-110 active:scale-95"
                     title="Clear Journal"
                   >
-                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
                   </button>
                 </div>
@@ -194,11 +194,22 @@ function App() {
       console.log('🔍 MOBILE DEBUG: Window width:', window.innerWidth, 'Is mobile:', isMobileDevice);
       setIsMobile(isMobileDevice);
     };
-    
+
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => window.removeEventListener('resize', checkMobile);
+
+    // Debounce resize handler to prevent glitchy resizing
+    let resizeTimeout: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(checkMobile, 150);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimeout);
+    };
   }, []);
 
   // Memoize the journal element to prevent unnecessary re-renders

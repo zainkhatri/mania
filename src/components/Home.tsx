@@ -80,14 +80,15 @@ const Home: React.FC = () => {
         >
           {renderTitle()}
         </h1>
-        <p className="text-xl md:text-2xl text-white mb-8 md:mb-12 text-center max-w-md backdrop-blur-sm bg-black bg-opacity-20 p-4 rounded-lg">
+        <p className="text-xl md:text-2xl text-white/90 mb-8 md:mb-12 text-center max-w-md backdrop-blur-md bg-black/30 p-5 rounded-2xl shadow-2xl border border-white/10">
         Create zain's journals without the pen in your hand.
       </p>
       <button
         onClick={handleStart}
-          className="flex items-center px-8 md:px-10 py-5 md:py-6 bg-black bg-opacity-70 text-white text-2xl md:text-3xl font-bold rounded-2xl shadow-md hover:bg-opacity-90 transition-all active:transform active:scale-95 backdrop-blur-sm border border-white border-opacity-20"
+          className="group flex items-center px-10 md:px-12 py-6 md:py-7 bg-gradient-to-br from-white/10 to-white/5 text-white text-2xl md:text-3xl font-bold rounded-2xl shadow-2xl hover:shadow-white/20 transition-all duration-300 active:transform active:scale-95 backdrop-blur-lg border border-white/20 hover:border-white/40 hover:from-white/15 hover:to-white/10"
       >
-        <span className="mr-3">↓</span> Start Journaling
+        <span className="mr-3 group-hover:translate-y-1 transition-transform duration-300">↓</span>
+        <span>Start Journaling</span>
       </button>
       </div>
     </div>

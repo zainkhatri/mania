@@ -580,21 +580,49 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   }
   
   return (
-    <div className="p-5 bg-black/70 backdrop-blur-md rounded-lg border border-white/20">
+    <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden', padding: '2px' }}>
       {/* Image-derived colors */}
       {extractedColors.length > 0 && (
-        <div className="mb-6">
-          <div className="grid grid-cols-4 gap-4">
+        <div style={{ width: '100%', maxWidth: '100%' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '6px',
+              width: '100%',
+              maxWidth: '100%',
+            }}
+          >
             {sortedColors.map((color, i) => (
               <button
                 key={`image-${i}`}
-                className={`w-14 h-14 rounded-lg shadow hover:shadow-md transition-all duration-200 border-2 border-white ${
-                  colors.locationColor === color 
-                    ? 'ring-2 ring-offset-2 ring-white/70 transform scale-105' 
-                    : 'hover:scale-105'
-                }`}
-                style={{ 
+                className="rounded-lg transition-all duration-200"
+                style={{
                   backgroundColor: color,
+                  width: '100%',
+                  aspectRatio: '1',
+                  padding: 0,
+                  margin: 0,
+                  minWidth: 0,
+                  minHeight: 0,
+                  border: colors.locationColor === color ? '2px solid white' : 'none',
+                  boxSizing: 'border-box',
+                  boxShadow: colors.locationColor === color
+                    ? '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+                    : 'none',
+                  transform: colors.locationColor === color ? 'scale(0.95)' : 'scale(1)',
+                }}
+                onMouseEnter={(e) => {
+                  if (colors.locationColor !== color) {
+                    e.currentTarget.style.transform = 'scale(0.95)';
+                    e.currentTarget.style.boxShadow = '0 2px 4px -1px rgba(0, 0, 0, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (colors.locationColor !== color) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
                 }}
                 onClick={() => selectColor(color)}
                 title={color}
