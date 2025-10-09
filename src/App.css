@@ -694,6 +694,179 @@ input[type="date"]::-webkit-clear-button {
     isolation: isolate;
   }
 
+  /* Mobile UI Enhancements - All Mobile Devices */
+  @media (max-width: 768px) {
+    /* Mania theme background for mobile */
+    .mobile-journal {
+      background: #000000;
+      position: relative;
+    }
+
+    /* Add subtle TV static effect to mobile */
+    .mobile-journal::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.02),
+        rgba(255, 255, 255, 0.02) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Enhanced section separators */
+    .mobile-journal section {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Smooth scrolling for mobile */
+    .mobile-journal .overflow-y-auto {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Mania theme focus states for mobile inputs */
+    .mobile-journal input:focus,
+    .mobile-journal textarea:focus {
+      border-color: rgba(255, 255, 255, 0.6);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+    }
+
+    /* Button press animations */
+    .mobile-journal button:active {
+      transform: scale(0.95);
+    }
+
+    /* Monospace font styling */
+    .mobile-journal .font-mono {
+      font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+      letter-spacing: 0.05em;
+    }
+  }
+
+  /* Small Mobile Devices (up to 480px) */
+  @media (max-width: 480px) {
+    .mobile-journal section {
+      padding: 1rem !important;
+    }
+
+    .mobile-journal h2 {
+      font-size: 1.25rem !important;
+    }
+
+    .mobile-journal .grid.grid-cols-2 {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .mobile-journal input,
+    .mobile-journal textarea {
+      padding: 0.75rem 1rem !important;
+      font-size: 1rem !important;
+    }
+
+    .mobile-journal button {
+      padding: 1rem !important;
+      font-size: 1rem !important;
+    }
+
+    .mobile-journal .w-12.h-12 {
+      width: 2.5rem !important;
+      height: 2.5rem !important;
+    }
+
+    .mobile-journal .grid.grid-cols-4 {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+  }
+
+  /* Medium Mobile Devices (481px to 640px) */
+  @media (min-width: 481px) and (max-width: 640px) {
+    .mobile-journal section {
+      padding: 1.25rem !important;
+    }
+
+    .mobile-journal h2 {
+      font-size: 1.5rem !important;
+    }
+
+    .mobile-journal input,
+    .mobile-journal textarea {
+      padding: 1rem 1.25rem !important;
+    }
+  }
+
+  /* Large Mobile Devices (641px to 768px) */
+  @media (min-width: 641px) and (max-width: 768px) {
+    .mobile-journal section {
+      padding: 1.5rem !important;
+    }
+
+    .mobile-journal h2 {
+      font-size: 1.75rem !important;
+    }
+
+    .mobile-journal .grid.grid-cols-2 {
+      gap: 1.5rem;
+    }
+  }
+
+  /* Landscape Mobile Orientation */
+  @media (max-width: 768px) and (orientation: landscape) {
+    .mobile-journal section {
+      padding: 1rem 1.5rem !important;
+    }
+
+    .mobile-journal .bg-white.rounded-2xl.overflow-hidden.m-3 {
+      margin: 0.75rem !important;
+    }
+
+    /* Optimize textarea height for landscape */
+    .mobile-journal textarea {
+      min-height: 120px !important;
+      max-height: 160px !important;
+    }
+  }
+
+  /* Safe Area Utilities */
+  .pb-safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+
+  .pt-safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 1rem);
+  }
+
+  /* iOS specific enhancements */
+  @supports (-webkit-appearance: none) {
+    .mobile-journal {
+      /* Handle notch and dynamic island */
+      padding-top: env(safe-area-inset-top, 0);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+
+    /* Ensure proper spacing for iOS */
+    .mobile-journal section:first-child {
+      padding-top: max(1.5rem, env(safe-area-inset-top, 0) + 1rem);
+    }
+
+    .mobile-journal section:last-child {
+      padding-bottom: max(2rem, env(safe-area-inset-bottom, 0) + 1rem);
+    }
+  }
+
   /* Force all inputs to be above everything */
   .mobile-journal input,
   .mobile-journal textarea {

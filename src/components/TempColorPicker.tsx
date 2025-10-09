@@ -563,12 +563,12 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
         {sortedColors.map((color, i) => (
           <button
             key={`compact-${i}`}
-            className={`w-8 h-8 rounded-md shadow hover:shadow-md transition-all duration-200 border border-white/30 ${
-              colors.locationColor === color 
-                ? 'ring-2 ring-offset-1 ring-white/70 transform scale-110' 
-                : 'hover:scale-105'
+            className={`w-10 h-10 rounded-md border border-white/30 hover:border-white/60 transition-all duration-200 ${
+              colors.locationColor === color
+                ? 'border-white/80 ring-1 ring-white/50'
+                : ''
             }`}
-            style={{ 
+            style={{
               backgroundColor: color,
             }}
             onClick={() => selectColor(color)}

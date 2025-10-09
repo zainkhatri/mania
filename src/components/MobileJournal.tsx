@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import JournalCanvas, { JournalCanvasHandle } from './JournalCanvas';
 import TempColorPicker, { TextColors } from './TempColorPicker';
 
@@ -15,16 +16,49 @@ const DEFAULT_COLORS: TextColors = {
 
 // Color extraction is now handled by TempColorPicker
 
-// Icons
+// Modern SVG Icons
 const Icons = {
-  FaPen: () => <span className="text-lg">✏️</span>,
-  FaShare: () => <span className="text-lg">📤</span>,
-  FaCalendarAlt: () => <span className="text-lg">📅</span>,
-  FaMapMarkerAlt: () => <span className="text-lg">📍</span>,
-  FaPalette: () => <span className="text-lg">🎨</span>,
-  FaImage: () => <span className="text-lg">🖼️</span>,
-  FaDownload: () => <span className="text-lg">⬇️</span>,
-  FaTrash: () => <span className="text-lg">🗑️</span>,
+  FaPen: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  ),
+  FaShare: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+    </svg>
+  ),
+  FaCalendarAlt: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  FaMapMarkerAlt: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  FaPalette: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17v4a2 2 0 002 2h4" />
+    </svg>
+  ),
+  FaImage: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  FaDownload: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  FaTrash: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  ),
 };
 
 interface ImagePosition {
@@ -61,9 +95,56 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [imagePositions, setImagePositions] = useState<ImagePosition[]>([]);
 
+  // Mania logo animation states
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const [showGlitch, setShowGlitch] = useState(false);
+
+  const navigate = useNavigate();
   const canvasRef = useRef<JournalCanvasHandle>(null);
 
   console.log('🔍 MOBILE DEBUG: MobileJournal render - date:', date, 'location:', location, 'text:', text);
+
+  // Mania logo animation effect
+  useEffect(() => {
+    const styleInterval = setInterval(() => {
+      // Pick a random letter to highlight instead of cycling sequentially
+      const randomIndex = Math.floor(Math.random() * 5);
+      setHighlightIndex(randomIndex);
+    }, 200); // Fast random cycling
+
+    const glitchInterval = setInterval(() => {
+      // Random glitch effect
+      if (Math.random() > 0.7) {
+        setShowGlitch(true);
+        setTimeout(() => setShowGlitch(false), 150);
+      }
+    }, 1200);
+
+    return () => {
+      clearInterval(styleInterval);
+      clearInterval(glitchInterval);
+    };
+  }, []);
+
+  // Render the mania title with one highlighted letter at a time
+  const renderManiaTitle = () => {
+    const word = "mania";
+
+    return (
+      <span className="title-container">
+        {word.split('').map((letter, index) => (
+          <span
+            key={`letter-${index}-${highlightIndex}`}
+            className={index === highlightIndex
+              ? "letter-highlight"
+              : "letter-normal"}
+          >
+            {letter}
+          </span>
+        ))}
+      </span>
+    );
+  };
 
   const hasContent = useMemo(() => {
     const content = Boolean(location.trim() || text.trim() || images.length > 0);
@@ -243,16 +324,24 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   return (
     <div className="mobile-journal bg-black w-full min-h-screen flex flex-col relative select-none">
       {/* Single scrollable page with all sections */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Journal Preview Section */}
-        <section className="p-4 border-b border-white/10">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
-            Preview
-          </h2>
-          
-          <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+      <div className="flex-1 overflow-y-auto pb-safe-area-inset-bottom sm:pb-8">
+        {/* Mania Logo Section */}
+        <section className="p-6 border-b border-white/10">
+          <div className="flex flex-col items-center justify-center py-8">
+            <h1
+              className="font-bold text-7xl md:text-6xl mb-6 text-center mania-title text-white text-flicker"
+              style={{
+                filter: showGlitch ? 'hue-rotate(90deg) brightness(1.5)' : 'none',
+                transition: 'filter 0.1s'
+              }}
+            >
+              {renderManiaTitle()}
+            </h1>
+          </div>
+
+          <div className="relative bg-black/40 backdrop-blur-sm rounded-lg overflow-hidden border border-white/20 p-3">
             {/* Journal Canvas with Integrated Image Handling */}
-            <div className="relative w-full bg-white rounded-xl overflow-hidden" style={{ 
+            <div className="relative w-full bg-white rounded-lg overflow-hidden" style={{
               paddingTop: '141.4%', /* This creates a 1:√2 aspect ratio (A4 proportion) */
               height: 'auto',
               touchAction: 'none'
@@ -281,137 +370,161 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
 
         {/* Write Your Entry Section */}
-        <section className="p-4 border-b border-white/10">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
-            <Icons.FaPen />
-            Write Your Entry
-          </h2>
+        <section className="p-6 border-b border-white/10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-6 h-6 border border-white/30 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white font-mono tracking-wide">Write Your Entry</h2>
+          </div>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Date and Location Row */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-white">
-                  <Icons.FaCalendarAlt />
-                  Date
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-mono text-white/70 tracking-wider">
+                  <svg className="w-3 h-3 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  DATE
                 </label>
                 <input
                   type="date"
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white/60 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                  className="w-full bg-black/50 border border-white/30 rounded-lg px-4 py-3 text-white font-mono placeholder-white/50 focus:outline-none focus:border-white/60 transition-all duration-200"
                   value={new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0]}
                   onChange={(e) => setDate(new Date(e.target.value))}
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-white">
-                  <Icons.FaMapMarkerAlt />
-                  Location
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-mono text-white/70 tracking-wider">
+                  <svg className="w-3 h-3 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  LOCATION
                 </label>
                 <input
                   type="text"
                   placeholder="Where are you?"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                  className="w-full bg-black/50 border border-white/30 rounded-lg px-4 py-3 text-white font-mono placeholder-white/50 focus:outline-none focus:border-white/60 transition-all duration-200"
                 />
               </div>
             </div>
 
             {/* Add Images */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-white">
-                <Icons.FaImage />
-                Add Images
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 text-sm font-mono text-white/70 tracking-wider">
+                <svg className="w-3 h-3 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                ADD IMAGES
               </label>
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.multiple = true;
-                    input.onchange = (e) => {
-                      const target = e.target as HTMLInputElement;
-                      handleAddImages(target.files);
-                    };
-                    input.click();
-                  }}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white/60 hover:bg-white/20 hover:text-white transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <Icons.FaImage />
-                  Choose Files
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const target = e.target as HTMLInputElement;
+                    handleAddImages(target.files);
+                  };
+                  input.click();
+                }}
+                className="w-full bg-black/50 border border-white/30 rounded-lg px-4 py-4 text-white/80 hover:bg-black/70 hover:border-white/50 transition-all duration-200 flex items-center justify-center gap-3 font-mono"
+              >
+                <span className="text-lg">+</span>
+                <span>Choose Files</span>
+              </button>
             </div>
 
             {/* Journal Text */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-white">
-                <Icons.FaPen />
-                Your Thoughts
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 text-sm font-mono text-white/70 tracking-wider">
+                <svg className="w-3 h-3 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                YOUR THOUGHTS
               </label>
               <textarea
                 placeholder="Pour your heart out..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={7}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200 resize-none overflow-y-auto"
+                className="w-full bg-black/50 border border-white/30 rounded-lg px-4 py-4 text-white placeholder-white/50 focus:outline-none focus:border-white/60 transition-all duration-200 resize-none overflow-y-auto font-mono"
                 style={{
-                  maxHeight: '240px',
-                  minHeight: '180px',
-                  paddingTop: '24px',
-                  paddingBottom: '24px'
+                  maxHeight: '280px',
+                  minHeight: '200px'
                 }}
               />
             </div>
 
             {/* Text Colors */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-white">
-                <Icons.FaPalette />
-                Text Colors
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 text-sm font-mono text-white/70 tracking-wider">
+                <svg className="w-3 h-3 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17v4a2 2 0 002 2h4" />
+                </svg>
+                TEXT COLORS
               </label>
-              <TempColorPicker
-                colors={colors}
-                onChange={setColors}
-                images={images}
-                compact={true}
-              />
+              <div className="bg-black/40 border border-white/30 rounded-lg p-4">
+                <TempColorPicker
+                  colors={colors}
+                  onChange={setColors}
+                  images={images}
+                  compact={true}
+                />
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Share Section */}
-        <section className="p-4 pb-8">
+        {/* Actions Section */}
+        <section className="p-6 pb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-6 h-6 border border-white/30 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white font-mono tracking-wide">Actions</h2>
+          </div>
+
           {/* Action Buttons */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <button
-              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-2xl text-white hover:from-blue-600/30 hover:to-cyan-600/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-4 py-4 bg-black/50 border border-white/30 rounded-lg text-white hover:bg-black/70 hover:border-white/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-mono"
               onClick={exportPDF}
               disabled={isExporting || !hasContent}
             >
               {isExporting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span className="font-medium">Exporting...</span>
+                  <span>EXPORTING...</span>
                 </>
               ) : (
                 <>
-                  <Icons.FaDownload />
-                  <span className="font-medium">Save as PDF</span>
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>SAVE AS PDF</span>
                 </>
               )}
             </button>
-            
-
 
             <button
-              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-red-600/20 to-orange-600/20 border border-red-500/30 rounded-2xl text-white hover:from-red-600/30 hover:to-orange-600/30 transition-all duration-200"
+              className="w-full flex items-center justify-center gap-4 py-4 bg-black/50 border border-white/30 rounded-lg text-white hover:bg-black/70 hover:border-white/50 transition-all duration-200 font-mono"
               onClick={reset}
             >
-              <Icons.FaTrash />
-              <span className="font-medium">Reset Entry</span>
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>RESET ENTRY</span>
             </button>
           </div>
         </section>
