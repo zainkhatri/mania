@@ -1,9 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { TextColors } from './ColorPicker';
-import html2canvas from 'html2canvas';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
 import { jsPDF } from 'jspdf';
 
 // Performance configurations
@@ -219,8 +216,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   inspirationQuestion = '',
   ...props
 }, ref) => {
-  console.log('🔍 INPUT DEBUG: JournalCanvas component rendered with props:', { 
-    textSectionsLength: textSections?.length, 
+  console.log('🔍 INPUT DEBUG: JournalCanvas component rendered with props:', {
+    textSectionsLength: textSections?.length,
+    textSections: textSections,
     imagesLength: images?.length,
     textColors: textColors,
     layoutMode
@@ -571,9 +569,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Combine all text sections into one continuous text
   const getCombinedText = useCallback((): string => {
+    console.log('📝 getCombinedText called with textSections:', textSections);
     // If there's just a single string in the array, return it directly
-    // Otherwise join the text sections without adding any separators
-    return textSections.length === 1 ? textSections[0] : textSections.join('').trim();
+    // Otherwise join the text sections with spaces to preserve word boundaries
+    const combined = textSections.length === 1 ? textSections[0] : textSections.join(' ').trim();
+    console.log('📝 getCombinedText result length:', combined.length, 'preview:', combined.substring(0, 100));
+    return combined;
   }, [textSections]);
 
   // Preload template and images
@@ -1019,6 +1020,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
     console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
+    console.log('🖼️ PDF EXPORT DEBUG: textSections:', textSections);
+    console.log('🖼️ PDF EXPORT DEBUG: location:', location);
     console.log('📱 Device detection:', { isMobile, isIOS, userAgent: navigator.userAgent });
     
     // Force high quality mode for export
@@ -1062,296 +1065,279 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
       
+      // Validate canvas dimensions before proceeding
+      if (journalCanvas.width === 0 || journalCanvas.height === 0) {
+        console.error('🖼️ PDF EXPORT ERROR: Canvas has invalid dimensions, forcing redraw');
+        // Force a redraw and try again
+        forceRedraw();
+        setTimeout(() => {
+          const retryCanvas = canvasRef.current;
+          if (retryCanvas && retryCanvas.width > 0 && retryCanvas.height > 0) {
+            console.log('🖼️ PDF EXPORT DEBUG: Retry canvas dimensions:', retryCanvas.width, 'x', retryCanvas.height);
+            performExportWithCanvas(retryCanvas, savingToast);
+          } else {
+            console.error('🖼️ PDF EXPORT ERROR: Canvas still invalid after retry');
+            document.body.removeChild(savingToast);
+          }
+        }, 500);
+        return;
+      }
+      
+      performExportWithCanvas(journalCanvas, savingToast);
+    }
+    
+    function performExportWithCanvas(journalCanvas: HTMLCanvasElement, savingToast: HTMLElement) {
+
       try {
         // Create a mobile-optimized PNG snapshot
-        const exportScale = isMobile ? 2 : 4; // Lower scale on mobile to prevent memory issues
-        const exportQuality = isMobile ? 0.8 : 1.0; // Lower quality on mobile for smaller files
-        
-        console.log('📱 Export settings:', { exportScale, exportQuality, isMobile });
-        
-        html2canvas(journalCanvas, {
-          scale: exportScale, // Mobile-optimized scale
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#f5f2e9',
-          logging: false, // Disable logging to reduce console noise
-          letterRendering: true,
-          imageTimeout: isMobile ? 15000 : 10000, // Longer timeout on mobile
-          async: true,
-          removeContainer: true,
-          foreignObjectRendering: false, // Better quality with native canvas rendering
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: journalCanvas.width * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
-          windowHeight: journalCanvas.height * (isMobile ? 1.0 : 1.2), // No extra scaling on mobile
-          onclone: (documentClone: Document) => {
-            console.log('🖼️ PDF EXPORT DEBUG: Cloning document for export');
-            const canvas = documentClone.getElementById('journal-canvas') as HTMLCanvasElement;
-            if (canvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                console.log('🖼️ PDF EXPORT DEBUG: Canvas context prepared for export');
-              }
-            }
+        const exportQuality = isMobile ? 0.9 : 1.0; // Lower quality on mobile for smaller files
+
+        console.log('📱 Export settings:', { exportQuality, isMobile });
+        console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+
+        // Directly use the canvas's toDataURL - no need for html2canvas
+        let pngData: string;
+        try {
+          pngData = journalCanvas.toDataURL('image/png', exportQuality);
+          console.log('🖼️ PDF EXPORT DEBUG: PNG data created directly from canvas, length:', pngData.length);
+
+          // Validate PNG data
+          if (pngData.length < 1000) { // PNG should be at least 1KB
+            throw new Error(`PNG data too small: ${pngData.length} bytes`);
           }
-        }).then((canvas: HTMLCanvasElement) => {
-          console.log('🖼️ PDF EXPORT DEBUG: Canvas snapshot created, dimensions:', canvas.width, 'x', canvas.height);
-          
-          // Validate canvas data before proceeding
-          if (canvas.width === 0 || canvas.height === 0) {
-            throw new Error('Canvas snapshot has invalid dimensions');
-          }
-          
-          // Get PNG data with mobile-optimized quality
-          let pngData: string;
+        } catch (pngError) {
+          console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
+          document.body.removeChild(savingToast);
+          alert('Could not create export. Please try again.');
+          return;
+        }
+
+        // Create a new image element from the high-quality PNG
+        const img = new Image();
+        img.onload = () => {
+          console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
+
           try {
-            pngData = canvas.toDataURL('image/png', exportQuality);
-            console.log('🖼️ PDF EXPORT DEBUG: PNG data created, length:', pngData.length, 'quality:', exportQuality);
-            
-            // Validate PNG data
-            if (pngData.length < 1000) { // PNG should be at least 1KB
-              throw new Error(`PNG data too small: ${pngData.length} bytes`);
+            // Mobile-optimized PDF creation
+            let pdf;
+
+            if (isMobile) {
+              // On mobile, use smaller dimensions to prevent memory issues
+              const mobileWidth = Math.min(journalCanvas.width, 1200);
+              const mobileHeight = Math.min(journalCanvas.height, 1600);
+
+              console.log('📱 Mobile PDF dimensions:', { mobileWidth, mobileHeight, originalWidth: journalCanvas.width, originalHeight: journalCanvas.height });
+
+              pdf = new jsPDF(
+                'portrait',
+                'px',
+                [mobileWidth, mobileHeight],
+                true // Enable compression on mobile for smaller files
+              );
+            } else {
+              // Desktop: maximum quality
+              pdf = new jsPDF(
+                'portrait',
+                'px',
+                [journalCanvas.width, journalCanvas.height],
+                false // No compression
+              );
             }
-          } catch (pngError) {
-            console.error('🖼️ PDF EXPORT ERROR: Failed to create PNG data:', pngError);
-            throw new Error('Failed to create image data from canvas');
-          }
-          
-          // Create a new image element from the high-quality PNG
-          const img = new Image();
-          img.onload = () => {
-            console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
-            
-            try {
-              // Mobile-optimized PDF creation
-              let pdf;
-              
-              if (isMobile) {
-                // On mobile, use smaller dimensions to prevent memory issues
-                const mobileWidth = Math.min(journalCanvas.width, 1200);
-                const mobileHeight = Math.min(journalCanvas.height, 1600);
-                
-                console.log('📱 Mobile PDF dimensions:', { mobileWidth, mobileHeight, originalWidth: journalCanvas.width, originalHeight: journalCanvas.height });
-                
-                pdf = new jsPDF(
-                  'portrait', 
-                  'px', 
-                  [mobileWidth, mobileHeight],
-                  true // Enable compression on mobile for smaller files
-                );
-              } else {
-                // Desktop: maximum quality
-                pdf = new jsPDF(
-                  'portrait', 
-                  'px', 
-                  [journalCanvas.width, journalCanvas.height],
-                  false // No compression
-                );
-              }
-              
-              // Add the image to the PDF with mobile-optimized settings
-              pdf.addImage({
-                imageData: pngData,
-                x: 0,
-                y: 0,
-                width: pdf.internal.pageSize.getWidth(),
-                height: pdf.internal.pageSize.getHeight(),
-                compression: isMobile ? 'FAST' : 'NONE', // Fast compression on mobile
-                rotation: 0,
-                alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
-              });
-              
-              console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
-              
-              // Save the PDF with mobile-optimized filename
-              const date = new Date();
-              const filename = isMobile 
-                ? `journal-${date.toISOString().split('T')[0]}-mobile.pdf`
-                : `journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`;
-              
-              console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
-              
-              // Mobile-specific download handling
-              if (isMobile && isIOS) {
-                // Safari iOS: Use special handling for better compatibility
+
+            // Add the image to the PDF with mobile-optimized settings
+            pdf.addImage({
+              imageData: pngData,
+              x: 0,
+              y: 0,
+              width: pdf.internal.pageSize.getWidth(),
+              height: pdf.internal.pageSize.getHeight(),
+              compression: isMobile ? 'FAST' : 'NONE', // Fast compression on mobile
+              rotation: 0,
+              alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
+            });
+
+            console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
+
+            // Save the PDF with mobile-optimized filename
+            const date = new Date();
+            const filename = isMobile
+              ? `journal-${date.toISOString().split('T')[0]}-mobile.pdf`
+              : `journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`;
+
+            console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
+
+            // Mobile-specific download handling
+            if (isMobile && isIOS) {
+              // Safari iOS: Use special handling for better compatibility
+              try {
+                console.log('📱 Safari iOS detected, using special download method');
+
+                // Method 1: Try blob with download attribute
+                const pdfBlob = pdf.output('blob');
+                const url = URL.createObjectURL(pdfBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                console.log('📱 Safari iOS blob download initiated');
+
+                // Safari download handled silently
+
+              } catch (iosError) {
+                console.warn('📱 Safari iOS blob download failed, trying alternative method:', iosError);
+
+                // Method 2: Try opening in new tab for Safari
                 try {
-                  console.log('📱 Safari iOS detected, using special download method');
-                  
-                  // Method 1: Try blob with download attribute
-                  const pdfBlob = pdf.output('blob');
-                  const url = URL.createObjectURL(pdfBlob);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = filename;
-                  link.style.display = 'none';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  URL.revokeObjectURL(url);
-                  console.log('📱 Safari iOS blob download initiated');
-                  
-                  // Safari download handled silently
-                  
-                } catch (iosError) {
-                  console.warn('📱 Safari iOS blob download failed, trying alternative method:', iosError);
-                  
-                  // Method 2: Try opening in new tab for Safari
+                  const pdfDataUri = pdf.output('datauristring');
+                  const newWindow = window.open();
+                  if (newWindow) {
+                    newWindow.document.write(`
+                      <html>
+                        <head><title>Download PDF</title></head>
+                        <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
+                          <h2>PDF Ready for Download</h2>
+                          <p>Tap and hold the image below, then select "Save Image" or "Save to Files"</p>
+                          <img src="${pdfDataUri}" style="max-width:100%;border:1px solid #333;" />
+                          <p><small>If this doesn't work, try the PNG export instead.</small></p>
+                        </body>
+                      </html>
+                    `);
+                    console.log('📱 Safari iOS new window method initiated');
+                  }
+                } catch (windowError) {
+                  console.error('📱 Safari iOS all methods failed:', windowError);
+                  // Fall back to PNG
+                  throw new Error('Safari PDF download failed');
+                }
+              }
+            } else if (isMobile) {
+              // Other mobile devices: Standard save
+              pdf.save(filename);
+            } else {
+              // Desktop: Standard save
+              pdf.save(filename);
+            }
+
+            // Remove saving indicator
+            document.body.removeChild(savingToast);
+
+            // Show simple success notification
+            const successToast = document.createElement('div');
+            successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+            successToast.textContent = 'Export Complete';
+            document.body.appendChild(successToast);
+
+            // Remove success notification after 2 seconds
+            setTimeout(() => {
+              if (document.body.contains(successToast)) {
+                document.body.removeChild(successToast);
+              }
+            }, 2000);
+
+            console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
+          } catch (pdfError) {
+            console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
+
+            // On mobile, offer PNG fallback if PDF fails
+            if (isMobile) {
+              console.log('📱 PDF creation failed on mobile, offering PNG fallback');
+              try {
+                if (isIOS) {
+                  // Safari iOS: Use special PNG handling
+                  console.log('📱 Safari iOS PNG fallback initiated');
+
+                  // Method 1: Try blob download
                   try {
-                    const pdfDataUri = pdf.output('datauristring');
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+
+                    img.onload = () => {
+                      canvas.width = img.width;
+                      canvas.height = img.height;
+                      ctx?.drawImage(img, 0, 0);
+
+                      canvas.toBlob((blob) => {
+                        if (blob) {
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
+                          link.style.display = 'none';
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+
+                          // Safari PNG handled silently
+                        }
+                      }, 'image/png');
+                    };
+
+                    img.src = pngData;
+                  } catch (blobError) {
+                    console.warn('📱 Safari iOS blob PNG failed, trying data URI method:', blobError);
+
+                    // Method 2: Open PNG in new tab for Safari
                     const newWindow = window.open();
                     if (newWindow) {
                       newWindow.document.write(`
                         <html>
-                          <head><title>Download PDF</title></head>
+                          <head><title>Download PNG</title></head>
                           <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
-                            <h2>PDF Ready for Download</h2>
+                            <h2>PNG Ready for Download</h2>
                             <p>Tap and hold the image below, then select "Save Image" or "Save to Files"</p>
-                            <img src="${pdfDataUri}" style="max-width:100%;border:1px solid #333;" />
-                            <p><small>If this doesn't work, try the PNG export instead.</small></p>
+                            <img src="${pngData}" style="max-width:100%;border:1px solid #333;" />
                           </body>
                         </html>
                       `);
-                      console.log('📱 Safari iOS new window method initiated');
                     }
-                  } catch (windowError) {
-                    console.error('📱 Safari iOS all methods failed:', windowError);
-                    // Fall back to PNG
-                    throw new Error('Safari PDF download failed');
                   }
+                } else {
+                  // Other mobile: Standard PNG download
+                  const link = document.createElement('a');
+                  link.href = pngData;
+                  link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
+                  link.click();
                 }
-              } else if (isMobile) {
-                // Other mobile devices: Standard save
-                pdf.save(filename);
-              } else {
-                // Desktop: Standard save
-                pdf.save(filename);
-              }
-              
-              // Remove saving indicator
-              document.body.removeChild(savingToast);
-              
-              // Show simple success notification
-              const successToast = document.createElement('div');
-              successToast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-              successToast.textContent = 'Export Complete';
-              document.body.appendChild(successToast);
-              
-              // Remove success notification after 2 seconds
-              setTimeout(() => {
-                if (document.body.contains(successToast)) {
-                  document.body.removeChild(successToast);
-                }
-              }, 2000);
-              
-              console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
-            } catch (pdfError) {
-              console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
-              
-              // On mobile, offer PNG fallback if PDF fails
-              if (isMobile) {
-                console.log('📱 PDF creation failed on mobile, offering PNG fallback');
-                try {
-                  if (isIOS) {
-                    // Safari iOS: Use special PNG handling
-                    console.log('📱 Safari iOS PNG fallback initiated');
-                    
-                    // Method 1: Try blob download
-                    try {
-                      const canvas = document.createElement('canvas');
-                      const ctx = canvas.getContext('2d');
-                      const img = new Image();
-                      
-                      img.onload = () => {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx?.drawImage(img, 0, 0);
-                        
-                        canvas.toBlob((blob) => {
-                          if (blob) {
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(url);
-                            
-                            // Safari PNG handled silently
-                          }
-                        }, 'image/png');
-                      };
-                      
-                      img.src = pngData;
-                    } catch (blobError) {
-                      console.warn('📱 Safari iOS blob PNG failed, trying data URI method:', blobError);
-                      
-                      // Method 2: Open PNG in new tab for Safari
-                      const newWindow = window.open();
-                      if (newWindow) {
-                        newWindow.document.write(`
-                          <html>
-                            <head><title>Download PNG</title></head>
-                            <body style="margin:0;padding:20px;background:#000;color:#fff;font-family:sans-serif;">
-                              <h2>PNG Ready for Download</h2>
-                              <p>Tap and hold the image below, then select "Save Image" or "Save to Files"</p>
-                              <img src="${pngData}" style="max-width:100%;border:1px solid #333;" />
-                            </body>
-                          </html>
-                        `);
-                      }
-                    }
-                  } else {
-                    // Other mobile: Standard PNG download
-                    const link = document.createElement('a');
-                    link.href = pngData;
-                    link.download = `journal-${date.toISOString().split('T')[0]}-mobile.png`;
-                    link.click();
+
+                // Show simple fallback message
+                const fallbackToast = document.createElement('div');
+                fallbackToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+                fallbackToast.textContent = 'PNG Export Complete';
+                document.body.appendChild(fallbackToast);
+
+                setTimeout(() => {
+                  if (document.body.contains(fallbackToast)) {
+                    document.body.removeChild(fallbackToast);
                   }
-                  
-                  // Show simple fallback message
-                  const fallbackToast = document.createElement('div');
-                  fallbackToast.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
-                  fallbackToast.textContent = 'PNG Export Complete';
-                  document.body.appendChild(fallbackToast);
-                  
-                  setTimeout(() => {
-                    if (document.body.contains(fallbackToast)) {
-                      document.body.removeChild(fallbackToast);
-                    }
-                  }, 3000);
-                  
-                  console.log('📱 PNG fallback export completed');
-                } catch (fallbackError) {
-                  console.error('📱 PNG fallback also failed:', fallbackError);
-                  alert('Export failed. Please try again or use a different device.');
-                }
-              } else {
-                alert('Could not create PDF. Please try again.');
+                }, 3000);
+
+                console.log('📱 PNG fallback export completed');
+              } catch (fallbackError) {
+                console.error('📱 PNG fallback also failed:', fallbackError);
+                alert('Export failed. Please try again or use a different device.');
               }
-              
-              document.body.removeChild(savingToast);
+            } else {
+              alert('Could not create PDF. Please try again.');
             }
-          };
-          
-          img.onerror = (err) => {
-            console.error('🖼️ PDF EXPORT ERROR: Error loading high-resolution image for PDF:', err);
+
             document.body.removeChild(savingToast);
-            alert('Could not create crystal clear export. Please try again.');
-          };
-          
-          // Start loading the high-resolution image
-          img.src = pngData;
-        }).catch((error: Error) => {
-          console.error('🖼️ PDF EXPORT ERROR: Error creating canvas snapshot:', error);
+          }
+        };
+
+        img.onerror = (err) => {
+          console.error('🖼️ PDF EXPORT ERROR: Error loading high-resolution image for PDF:', err);
           document.body.removeChild(savingToast);
-          alert('Could not create export. Please try again.');
-        });
+          alert('Could not create crystal clear export. Please try again.');
+        };
+
+        // Start loading the high-resolution image
+        img.src = pngData;
       } catch (error: unknown) {
         console.error('🖼️ PDF EXPORT ERROR: Error in export process:', error);
         document.body.removeChild(savingToast);
@@ -1633,8 +1619,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     // Get combined text
     const journalText = getCombinedText();
+    console.log('📝 RENDER: journalText for canvas:', {
+      length: journalText.length,
+      preview: journalText.substring(0, 100),
+      textSections: textSections,
+      hasText: !!journalText
+    });
     // For freeflow layout, render even if there's no text (to show images)
-    if (!journalText && simpleImagePositions.length === 0) return;
+    if (!journalText && simpleImagePositions.length === 0) {
+      console.log('📝 RENDER: Early return - no text and no images');
+      return;
+    }
     
     // Calculate starting Y position for text (below date and location)
     const textStartY = 150 + (location && location.trim() ? maxDateFontSize + 80 : 40);
@@ -2341,59 +2336,43 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const deltaX = x - resizeStartData.startX;
             const deltaY = y - resizeStartData.startY;
             
-            // STRICT ASPECT RATIO PRESERVATION - NO STRETCHING ALLOWED
-            const originalAspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
-            
-            // Calculate new size based on mouse movement with improved algorithm
-            // Use diagonal distance for more natural scaling
-            const deltaMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            
-            // SUPER SIMPLE LOGIC: Top-left = shrink, bottom-right = grow
-            const dragDirectionX = e.clientX - resizeStartData.startX;
-            const dragDirectionY = e.clientY - resizeStartData.startY;
-            
-            // If dragging towards top-left: shrink, if dragging towards bottom-right: grow
-            const isShrinking = dragDirectionX < 0 || dragDirectionY < 0;
-            const isGrowing = dragDirectionX > 0 || dragDirectionY > 0;
-            
-            // Simple scale factor based on drag distance
-            const scaleFactor = isShrinking ? 
-              Math.max(0.01, 1 - (deltaMagnitude / 100)) : // Shrink: 1% to 100% of original
-              Math.min(2.0, 1 + (deltaMagnitude / 100));   // Grow: 100% to 200% of original
-            
-            // Apply scale factor while maintaining aspect ratio
-            let newWidth = Math.max(3, resizeStartData.startWidth * scaleFactor); // Reduced minimum from 10 to 3
-            let newHeight = newWidth / originalAspectRatio;
-            
-            // Ensure minimum height as well
-            if (newHeight < 3) { // Reduced minimum from 10 to 3
-              newHeight = 3;
-              newWidth = newHeight * originalAspectRatio;
-            }
-            
-            // Constrain to canvas bounds while preserving aspect ratio
+            // Use same simple logic as mobile for consistent behavior
+            // Calculate new dimensions based on drag direction (like mobile)
             if (!canvasRef.current) return;
-            const maxWidth = canvasRef.current.width - resizeStartData.startImageX;
-            const maxHeight = canvasRef.current.height - resizeStartData.startImageY;
-            
-            // Check if we need to scale down to fit bounds
-            if (newWidth > maxWidth) {
-              newWidth = maxWidth;
-              newHeight = newWidth / originalAspectRatio;
+
+            const canvasWidth = canvasRef.current.width;
+            const canvasHeight = canvasRef.current.height;
+            const newWidth = Math.max(100, Math.min(canvasWidth * 0.8, resizeStartData.startWidth + deltaX));
+            const newHeight = Math.max(100, Math.min(canvasHeight * 0.8, resizeStartData.startHeight + deltaY));
+
+            // Preserve aspect ratio (same as mobile)
+            const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+            let finalWidth = newWidth;
+            let finalHeight = newHeight;
+
+            if (newWidth / newHeight > aspectRatio) {
+              finalHeight = newWidth / aspectRatio;
+              if (finalHeight > canvasHeight * 0.8) {
+                finalHeight = canvasHeight * 0.8;
+                finalWidth = finalHeight * aspectRatio;
+              }
+            } else {
+              finalWidth = newHeight * aspectRatio;
+              if (finalWidth > canvasWidth * 0.8) {
+                finalWidth = canvasWidth * 0.8;
+                finalHeight = finalWidth / aspectRatio;
+              }
             }
-            if (newHeight > maxHeight) {
-              newHeight = maxHeight;
-              newWidth = newHeight * originalAspectRatio;
-            }
-            
-            // Final dimensions - guaranteed to maintain aspect ratio
-            const finalWidth = Math.round(newWidth);
-            const finalHeight = Math.round(newHeight);
+
+            // Final dimensions are already calculated above with aspect ratio preserved
+            // Just round them for pixel-perfect rendering
+            const finalWidthRounded = Math.round(finalWidth);
+            const finalHeightRounded = Math.round(finalHeight);
             
             newPositions[resizingSimpleImage] = {
               ...newPositions[resizingSimpleImage],
-              width: finalWidth,
-              height: finalHeight
+              width: finalWidthRounded,
+              height: finalHeightRounded
             };
             
             setSimpleImagePositions(newPositions);
@@ -2401,7 +2380,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             
             // Call the onImageResize callback if provided
             if (props.onImageResize) {
-              props.onImageResize(resizingSimpleImage, finalWidth, finalHeight);
+              props.onImageResize(resizingSimpleImage, finalWidthRounded, finalHeightRounded);
             }
             
             // Force a re-render to update text wrapping

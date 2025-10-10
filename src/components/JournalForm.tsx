@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import CustomNotification from './CustomNotification';
+import { useNotification } from '../hooks/useNotification';
 import { TextColors } from './ColorPicker';
 import JournalCanvas, { JournalCanvasHandle, ClickableTextArea } from './JournalCanvas';
 import LayoutToggle from './LayoutToggle';
@@ -381,7 +381,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
   saveButtonText = 'Create Journal'
 }) => {
   const navigate = useNavigate();
+  const { notification, loading, success, error: showError, update } = useNotification();
   const [location, setLocation] = useState('');
+
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
   
@@ -639,41 +641,45 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Function to save journal entry to Firestore
   const saveJournalToBackend = async () => {
 
-    // Show a loading toast
-    const toastId = toast.loading("Saving your journal...");
-    
+    // Show a loading notification
+    const notificationId = loading("Saving your journal...");
+
     // Set a timeout for the saving process
     const saveTimeout = setTimeout(() => {
-      toast.update(toastId, {
+      update(notificationId, {
         render: "Still working... Processing images takes time. Please wait.",
-        type: "info",
-        isLoading: true
+        type: "loading"
       });
     }, 5000);
 
     try {
+      // DEBUG: Log the current state when saving
+      console.log('💾 SAVE DEBUG: journalText length:', journalText.length);
+      console.log('💾 SAVE DEBUG: journalText content:', journalText.substring(0, 200));
+      console.log('💾 SAVE DEBUG: location:', location);
+      console.log('💾 SAVE DEBUG: images count:', images.length);
+      console.log('💾 SAVE DEBUG: submitted state:', submitted);
+      console.log('💾 SAVE DEBUG: submittedData:', submittedData);
+
       // Validate content before saving
       if (!location.trim()) {
         clearTimeout(saveTimeout);
-        toast.update(toastId, { 
-          render: "Location is required", 
-          type: "error", 
-          isLoading: false,
-          autoClose: 3000
+        update(notificationId, {
+          render: "Location is required",
+          type: "error"
         });
         return;
       }
 
       // Break the journal text into paragraphs
       const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
+      console.log('💾 SAVE DEBUG: textSections after split:', textSections);
       
       if (textSections.length === 0) {
         clearTimeout(saveTimeout);
-        toast.update(toastId, { 
-          render: "Journal content is required", 
-          type: "error", 
-          isLoading: false,
-          autoClose: 3000
+        update(notificationId, {
+          render: "Journal content is required",
+          type: "error"
         });
         return;
       }
@@ -684,40 +690,36 @@ const JournalForm: React.FC<JournalFormProps> = ({
       
       if (dateExists) {
         clearTimeout(saveTimeout);
-        toast.update(toastId, { 
-          render: "A journal entry for this date already exists in your gallery", 
-          type: "error", 
-          isLoading: false,
-          autoClose: 3000
+        update(notificationId, {
+          render: "A journal entry for this date already exists in your gallery",
+          type: "error"
         });
         return;
       }
       
-      // Update the toast to indicate we're processing images
-      toast.update(toastId, { render: "Processing images..." });
+      // Update the notification to indicate we're processing images
+      update(notificationId, { render: "Processing images..." });
       
       // Compress the images to reduce size
       const compressedImages = await compressJournalImages(images);
       
-      // Update the toast to indicate we're generating the preview
-      toast.update(toastId, { render: "Generating journal preview..." });
+      // Update the notification to indicate we're generating the preview
+      update(notificationId, { render: "Generating journal preview..." });
       
       // Generate a preview of the journal as a data URL for thumbnails
       const preview = await generateJournalPreview();
       
       if (!preview) {
         clearTimeout(saveTimeout);
-        toast.update(toastId, { 
-          render: "Failed to generate journal preview, please try again", 
-          type: "error", 
-          isLoading: false,
-          autoClose: 3000
+        update(notificationId, {
+          render: "Failed to generate journal preview, please try again",
+          type: "error"
         });
         return;
       }
       
-      // Update toast to indicate we're saving to Firestore
-      toast.update(toastId, { render: "Saving to your account..." });
+      // Update notification to indicate we're saving to Firestore
+      update(notificationId, { render: "Saving to your account..." });
       
       // Prepare journal data for Firestore
       const journalData = {
@@ -749,12 +751,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
       
       setSubmitted(true);
       
-      // Update toast to success
-      toast.update(toastId, { 
-        render: `Journal saved successfully to your account!`, 
-        type: "success", 
-        isLoading: false,
-        autoClose: 3000
+      // Update notification to success
+      update(notificationId, {
+        render: `Journal saved successfully to your account!`,
+        type: "success"
       });
       
       // Clear journal caches to start fresh next time
@@ -770,11 +770,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
       clearTimeout(saveTimeout);
       
       console.error("Error saving journal:", error);
-      toast.update(toastId, { 
-        render: `Failed to save journal: ${error instanceof Error ? error.message : "Please try again"}`, 
-        type: "error", 
-        isLoading: false,
-        autoClose: 4000
+      update(notificationId, {
+        render: `Failed to save journal: ${error instanceof Error ? error.message : "Please try again"}`,
+        type: "error"
       });
     }
   };
@@ -787,7 +785,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       
       if (!journalElement) {
         console.error('Journal container not found for preview generation');
-        toast.error('Could not generate journal preview. Please try again.');
+        showError('Could not generate journal preview. Please try again.');
         return '';
       }
 
@@ -823,7 +821,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       return canvas.toDataURL('image/jpeg', 0.6);
     } catch (error) {
       console.error('Failed to generate journal preview:', error);
-      toast.error('Could not generate journal preview. Please try again.');
+      showError('Could not generate journal preview. Please try again.');
       return '';
     }
   };
@@ -968,6 +966,32 @@ const JournalForm: React.FC<JournalFormProps> = ({
           // Default to freeflow if no saved layout mode
           setLayoutMode('freeflow');
         }
+
+        // IMPORTANT: Reconstruct journalText from the text array
+        // This is critical for saving to work properly later
+        console.log('💾 LOAD DEBUG: savedSubmittedJournal.text:', savedSubmittedJournal.text);
+        if (savedSubmittedJournal.text && Array.isArray(savedSubmittedJournal.text)) {
+          const reconstructedText = savedSubmittedJournal.text.join('\n\n');
+          console.log('💾 LOAD DEBUG: Reconstructed text length:', reconstructedText.length);
+          console.log('💾 LOAD DEBUG: Reconstructed text content:', reconstructedText.substring(0, 200));
+          setJournalText(reconstructedText);
+        } else {
+          console.log('💾 LOAD DEBUG: No text array found or not an array');
+        }
+
+        // Also restore location and images from submitted journal
+        if (savedSubmittedJournal.location) {
+          setLocation(savedSubmittedJournal.location);
+        }
+        if (savedSubmittedJournal.images) {
+          setImages(savedSubmittedJournal.images);
+        }
+        if (savedSubmittedJournal.date) {
+          const loadedDate = new Date(savedSubmittedJournal.date);
+          loadedDate.setHours(12, 0, 0, 0);
+          setDate(loadedDate);
+        }
+
         console.log('Restored submitted journal from localStorage');
         
         // EXTRACT COLORS FROM EXISTING IMAGES (Mobile-friendly)
@@ -1483,7 +1507,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           await new Promise(r => setTimeout(r, 100));
         } catch (error) {
           console.error('Error processing image:', error);
-          toast.error(error instanceof Error ? error.message : 'Failed to process image');
+          showError(error instanceof Error ? error.message : 'Failed to process image');
         }
       }
       return results;
@@ -1556,7 +1580,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           });
           
           // Show success message
-          toast.success(`Added ${originalImages.length} new image${originalImages.length > 1 ? 's' : ''}`);
+          success(`Added ${originalImages.length} new image${originalImages.length > 1 ? 's' : ''}`);
           
           // FORCE COLOR EXTRACTION: Extract colors from the first processed image
           if (originalImages.length > 0) {
@@ -1617,12 +1641,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
           saveJournalData();
         } catch (error) {
           console.error('Error processing images:', error);
-          toast.error('Could not process images. Please try again.');
+          showError('Could not process images. Please try again.');
         }
       })
       .catch(error => {
         console.error('Error processing images:', error);
-        toast.error('There was an error processing one or more images. Please try a different image.');
+        showError('There was an error processing one or more images. Please try a different image.');
       })
       .finally(() => {
         setIsLoadingImage(false);
@@ -1974,23 +1998,29 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const handleTextSectionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const index = parseInt(e.target.dataset.index || '0', 10);
-    
+
     const newTextSections = [...submittedData.text];
     newTextSections[index] = value;
-    
+
     const updatedData = {
       ...submittedData,
       text: newTextSections
     };
-    
+
     setSubmittedData(updatedData);
-    
+
+    // IMPORTANT: Keep journalText in sync with submittedData.text
+    // This is critical for saving to work properly
+    const updatedJournalText = newTextSections.join('\n\n');
+    setJournalText(updatedJournalText);
+    console.log('💾 SYNC DEBUG: Updated journalText from text sections, length:', updatedJournalText.length);
+
     // Save to localStorage
     const dataToSave = {
       ...updatedData,
       date: updatedData.date.toISOString()
     };
-    
+
     if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
       // Removed save notification
     } else {
@@ -2011,20 +2041,26 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Add a new text section
   const addNewTextSection = () => {
+    const newTextSections = [...submittedData.text, ''];
     const updatedData = {
       ...submittedData,
-      text: [...submittedData.text, '']
+      text: newTextSections
     };
-    
+
     setSubmittedData(updatedData);
     setActiveTextSection(submittedData.text.length);
-    
+
+    // IMPORTANT: Keep journalText in sync with submittedData.text
+    const updatedJournalText = newTextSections.join('\n\n');
+    setJournalText(updatedJournalText);
+    console.log('💾 SYNC DEBUG: Added new text section, updated journalText');
+
     // Save to localStorage
     const dataToSave = {
       ...updatedData,
       date: updatedData.date.toISOString()
     };
-    
+
     if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
       // Removed save notification
     } else {
@@ -2036,21 +2072,26 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const removeTextSection = (index: number) => {
     const newTextSections = [...submittedData.text];
     newTextSections.splice(index, 1);
-    
+
     const updatedData = {
       ...submittedData,
       text: newTextSections
     };
-    
+
     setSubmittedData(updatedData);
     setActiveTextSection(-1);
-    
+
+    // IMPORTANT: Keep journalText in sync with submittedData.text
+    const updatedJournalText = newTextSections.join('\n\n');
+    setJournalText(updatedJournalText);
+    console.log('💾 SYNC DEBUG: Removed text section, updated journalText');
+
     // Save to localStorage
     const dataToSave = {
       ...updatedData,
       date: updatedData.date.toISOString()
     };
-    
+
     if (saveToLocalStorage('webjournal_submitted', dataToSave)) {
       // Removed save notification
     } else {
@@ -2136,25 +2177,44 @@ const JournalForm: React.FC<JournalFormProps> = ({
     // This function is no longer needed for eyedropper - clicks handled directly on overlay
     console.log('Canvas image click at', x, y, 'Eyedropper active:', isEyedropperActive);
   };
-  
 
-  
+  // Clean image manipulation handlers (like mobile version)
+  const handleImageDrag = useCallback((index: number, x: number, y: number) => {
+    setImagePositions(prev => {
+      const newPositions = [...prev];
+      if (newPositions[index]) {
+        newPositions[index] = { ...newPositions[index], x, y };
+      }
+      return newPositions;
+    });
+  }, []);
+
+  const handleImageResize = useCallback((index: number, width: number, height: number) => {
+    setImagePositions(prev => {
+      const newPositions = [...prev];
+      if (newPositions[index]) {
+        newPositions[index] = { ...newPositions[index], width, height };
+      }
+      return newPositions;
+    });
+  }, []);
+
+  const handleImageDelete = useCallback((index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+    setImagePositions(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+
     // PDF export function
   const handleShare = async () => {
     
-    // Create a loading toast
-    const toastId = toast.loading("Creating high-quality PDF...", {
-      position: "bottom-center",
-      autoClose: false,
-      closeButton: false,
-      style: { maxWidth: '320px', width: '100%' }
-    });
+    // Create a loading notification
+    const notificationId = loading("Creating high-quality PDF...");
     
     try {
       // Step 1: Find the journal element - try multiple strategies
-      toast.update(toastId, {
-        render: "Finding journal content...",
-        isLoading: true
+      update(notificationId, {
+        render: "Finding journal content..."
       });
       
       let journalElement: HTMLElement | null = null;
@@ -2202,9 +2262,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       });
       
       // Step 2: Capture the journal with debugging
-      toast.update(toastId, {
-        render: "Capturing journal content...",
-        isLoading: true
+      update(notificationId, {
+        render: "Capturing journal content..."
       });
       
       // Wait a moment to ensure everything is rendered
@@ -2271,9 +2330,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       }
       
       // Step 3: Generate PDF with debugging
-      toast.update(toastId, {
-        render: "Generating PDF document...",
-        isLoading: true
+      update(notificationId, {
+        render: "Generating PDF document..."
       });
       
       const imgWidth = 210; // A4 width in mm
@@ -2323,9 +2381,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       }
       
       // Step 4: Download the PDF
-      toast.update(toastId, {
-        render: "Downloading PDF...",
-        isLoading: true
+      update(notificationId, {
+        render: "Downloading PDF..."
       });
       
       const filename = `journal-${format(date, 'yyyy-MM-dd')}.pdf`;
@@ -2334,22 +2391,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
       pdf.save(filename);
       
       // Success message
-      toast.update(toastId, {
+      update(notificationId, {
         render: "✅ High-quality PDF downloaded successfully!",
-        type: "success",
-        isLoading: false,
-        autoClose: 3000,
-        closeButton: true
+        type: "success"
       });
       
     } catch (error) {
       console.error("Error creating PDF:", error);
-      toast.update(toastId, {
+      update(notificationId, {
         render: `❌ Failed to create PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: "error",
-        isLoading: false,
-        autoClose: 8000,
-        closeButton: true
+        type: "error"
       });
     }
   };
@@ -2630,6 +2681,16 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   return (
     <div className="bg-black w-full min-h-screen md:h-screen md:overflow-hidden">
+      {/* Custom notification component */}
+      {notification && (
+        <CustomNotification
+          isVisible={notification.isVisible}
+          message={notification.message}
+          type={notification.type}
+          progress={notification.progress}
+        />
+      )}
+
       {/* Mobile Navbar - Only visible on mobile */}
       <div className="md:hidden relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -2669,21 +2730,43 @@ const JournalForm: React.FC<JournalFormProps> = ({
       </div>
 
       <div className="relative journal-form-container min-h-screen md:h-full">
-        {/* Black background instead of video */}
-        <div className="absolute w-full h-full bg-black z-0"></div>
+        {/* TV Static background video for professional ambiance */}
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover z-0 opacity-20"
+          style={{ filter: 'contrast(1.1) brightness(0.4)' }}
+        >
+          <source src="/background/static.webm" type="video/webm" />
+          <source src="/background/static.mp4" type="video/mp4" />
+        </video>
+        {/* Professional overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/75 to-black/80 z-1"></div>
         {/* Main content */}
         <div className="relative z-10 min-h-screen md:h-full flex flex-col">
           {/* Journal editor content - Bounded container for desktop */}
-          <div className="p-2 sm:p-4 md:p-3 lg:p-4 max-w-7xl mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden flex flex-col md:items-start items-center">
+          <div className="p-1 sm:p-2 md:p-2 lg:p-3 max-w-[95vw] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-4rem)] md:overflow-hidden flex flex-col md:items-start items-center">
             {/* Desktop: Side by side layout */}
-            <div className="hidden md:grid md:grid-cols-2 gap-2 md:gap-4 max-w-[1600px] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-6rem)] md:overflow-hidden">
-              
-              {/* Journal Preview - Desktop only */}
-              <div className="hidden md:block bg-black rounded-2xl shadow-2xl border border-white/20 order-1 md:order-2 md:sticky md:top-0 flex flex-col min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] md:max-w-full">
-                {/* Collapsible journal content */}
-                <div className={`transition-all duration-700 ease-in-out flex-1 ${isJournalCollapsed ? 'max-h-0 opacity-0 md:max-h-none md:opacity-100' : 'min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] opacity-100 md:max-h-none'}`}>
-                  <div className={`transition-all duration-700 ease-in-out min-h-[400px] md:h-full md:max-h-[calc(100vh-8rem)] ${isJournalCollapsed ? 'p-0 md:p-2 md:p-3 lg:p-6 scale-95 md:scale-100' : 'p-2 md:p-3 lg:p-6 scale-100'}`}>
-                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[300px] md:max-h-full" ref={journalRef} id="journal-container" data-journal-content>
+            <div className="hidden md:grid md:grid-cols-2 gap-3 max-w-[95vw] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-4rem)] md:overflow-hidden">
+
+              {/* Journal Preview - Left side on desktop */}
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-1 flex flex-col md:h-fit md:max-h-[calc(100vh-8rem)]">
+                {/* Journal preview content with buttons directly underneath */}
+                <div className="flex-1">
+                  <div className="p-2 md:p-3 lg:p-6">
+                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 md:h-[calc(100vh*0.85-1rem)]" ref={journalRef} id="journal-container" data-journal-content>
+                      {(() => {
+                        const sections = journalText.split('\n\n').filter(section => section.trim().length > 0);
+                        console.log('💾 RENDER DEBUG: Passing textSections to canvas:', {
+                          journalTextLength: journalText.length,
+                          journalTextPreview: journalText.substring(0, 100),
+                          sectionsCount: sections.length,
+                          sections: sections
+                        });
+                        return null;
+                      })()}
                       <JournalCanvas
                         ref={canvasRef}
                         date={date}
@@ -2696,61 +2779,57 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         layoutMode={layoutMode}
                         editMode={true}
                         onTextClick={handleTextClick}
-                        onImageDrag={(index, x, y) => {
-                          console.log(`🖼️ Image ${index} dragged to ${x},${y}`);
-                          // Save the new position for this image
-                          setImagePositions(prev => {
-                            console.log(`🖼️ Updating position for image ${index}. Previous:`, prev[index]);
-                            const newPositions = [...prev];
-                            // Ensure we have enough positions for all images
-                            while (newPositions.length <= index) {
-                              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
-                            }
-                            newPositions[index] = { ...newPositions[index], x, y };
-                            console.log(`🖼️ New position for image ${index}:`, newPositions[index]);
-                            return newPositions;
-                          });
-                          
-                          // Save to localStorage immediately when position changes
-                          setTimeout(() => {
-                            saveJournalData();
-                          }, 100);
-                        }}
-                        onImageResize={(index, width, height) => {
-                          console.log(`🖼️ Image ${index} resized to ${width}x${height}`);
-                          // Save the new size for this image
-                          setImagePositions(prev => {
-                            console.log(`🖼️ Updating size for image ${index}. Previous:`, prev[index]);
-                            const newPositions = [...prev];
-                            // Ensure we have enough positions for all images
-                            while (newPositions.length <= index) {
-                              newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
-                            }
-                            newPositions[index] = { ...newPositions[index], width, height };
-                            console.log(`🖼️ New size for image ${index}:`, newPositions[index]);
-                            return newPositions;
-                          });
-                          
-                          // Save to localStorage immediately when size changes
-                          setTimeout(() => {
-                            saveJournalData();
-                          }, 100);
-                        }}
+                        onImageDrag={handleImageDrag}
+                        onImageResize={handleImageResize}
                         onImageClick={handleCanvasImageClick}
-                        onImageDelete={removeImage}
+                        onImageDelete={handleImageDelete}
                         needInspiration={needInspiration}
                         inspirationQuestion={inspirationQuestion}
                         savedImagePositions={imagePositions}
                       />
                     </div>
+                    
+                    {/* Action buttons directly underneath journal preview - each half width, side by side */}
+                    <div className="mt-3 flex gap-2">
+                      {/* Download Journal Button */}
+                      <button
+                        onClick={() => {
+                          if (window.handleHighQualityPDFExport) {
+                            window.handleHighQualityPDFExport();
+                          }
+                        }}
+                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-white/30 focus:outline-none transition-all duration-200 backdrop-blur-sm"
+                        title="Download PDF"
+                      >
+                        <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span className="text-sm font-medium">Download</span>
+                      </button>
+
+                      {/* Clear Journal Button */}
+                      <button
+                        onClick={() => {
+                          if (window.handleReset) {
+                            window.handleReset();
+                          }
+                        }}
+                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-white/10 border border-white/20 text-white hover:bg-red-500/30 hover:border-red-500/40 focus:outline-none transition-all duration-200 backdrop-blur-sm"
+                        title="Clear Journal"
+                      >
+                        <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        <span className="text-sm font-medium">Clear</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-                
 
               </div>
 
               {/* Input Form - Full width on mobile, left side on desktop */}
-              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[500px] md:h-full">
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[600px] md:h-full md:max-h-[calc(100vh-5rem)]">
 
                 <div className="p-2 md:p-3 lg:p-4 border-b border-white/10 flex-shrink-0">
                   <div className="flex items-start justify-between gap-4">
@@ -2904,7 +2983,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                 setInspirationQuestion("Analyzing...");
                               }}
                               disabled={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10}
-                              className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ease-in-out text-sm font-medium ${
+                              className={`flex items-center gap-1.5 px-2 py-1 transition-all duration-300 ease-in-out text-xs font-medium ${
                                 journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 
                                   ? 'text-gray-500 cursor-not-allowed' 
                                   : 'text-white hover:text-blue-300 hover:bg-blue-900/20'
@@ -2912,8 +2991,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
                             >
                             
-                              <span className="hidden sm:inline">
-                                AI +
+                              <svg
+                                width="12"
+                                height="12"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                className="transition-colors duration-300"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                              </svg>
+                              <span className="hidden sm:inline text-xs">
+                                AI
                               </span>
                             </button>
                           </div>
@@ -2990,36 +3079,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       layoutMode={layoutMode}
                       editMode={true}
                       onTextClick={handleTextClick}
-                      onImageDrag={(index, x, y) => {
-                        console.log(`🖼️ Image ${index} dragged to ${x},${y}`);
-                        setImagePositions(prev => {
-                          const newPositions = [...prev];
-                          while (newPositions.length <= index) {
-                            newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
-                          }
-                          newPositions[index] = { ...newPositions[index], x, y };
-                          return newPositions;
-                        });
-                        setTimeout(() => {
-                          saveJournalData();
-                        }, 100);
-                      }}
-                      onImageResize={(index, width, height) => {
-                        console.log(`🖼️ Image ${index} resized to ${width}x${height}`);
-                        setImagePositions(prev => {
-                          const newPositions = [...prev];
-                          while (newPositions.length <= index) {
-                            newPositions.push({ x: 0, y: 0, width: 100, height: 100 });
-                          }
-                          newPositions[index] = { ...newPositions[index], width, height };
-                          return newPositions;
-                        });
-                        setTimeout(() => {
-                          saveJournalData();
-                        }, 100);
-                      }}
+                      onImageDrag={handleImageDrag}
+                      onImageResize={handleImageResize}
                       onImageClick={handleCanvasImageClick}
-                      onImageDelete={removeImage}
+                      onImageDelete={handleImageDelete}
                       needInspiration={needInspiration}
                       inspirationQuestion={inspirationQuestion}
                       savedImagePositions={imagePositions}

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import JournalForm from './components/JournalForm';
 import MobileJournal from './components/MobileJournal';
 import Home from './components/Home';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 
 // Extend Window interface for global functions
@@ -118,9 +118,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <>
           {/* Navigation - Hidden on mobile */}
           <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[95vw] mx-auto px-2 lg:px-3">
               <div className="flex justify-between items-center h-14">
-                <div className="flex items-center">
+                <div className="flex items-center w-1/2">
                   <Link to="/" className="flex-shrink-0 flex items-center">
                     <div className="text-4xl md:text-5xl text-white font-light">
                       {renderLogo()}
@@ -132,39 +132,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <div className="hidden md:flex items-center gap-6">
                 </div>
 
-                {/* Desktop action buttons */}
+                {/* Desktop action buttons - removed, moved to journal preview */}
                 <div className="hidden md:flex items-center gap-2">
-                  {/* Download Journal Button */}
-                  <button
-                    onClick={() => {
-                      // We'll need to pass this function from JournalForm
-                      if (window.handleHighQualityPDFExport) {
-                        window.handleHighQualityPDFExport();
-                      }
-                    }}
-                    className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white focus:outline-none transition-all duration-200"
-                    title="Download Journal"
-                  >
-                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                  </button>
-                  
-                  {/* Clear Journal Button */}
-                  <button
-                    onClick={() => {
-                      // We'll need to pass this function from JournalForm
-                      if (window.handleReset) {
-                        window.handleReset();
-                      }
-                    }}
-                    className="inline-flex items-center justify-center p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white focus:outline-none transition-all duration-200"
-                    title="Clear Journal"
-                  >
-                    <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                  </button>
                 </div>
               </div>
             </div>
@@ -184,8 +153,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-function App() {
+// AppContent component to use useLocation inside Router
+const AppContent: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
+  const location = useLocation();
 
   // Check if device is mobile on mount and resize
   useEffect(() => {
@@ -194,10 +165,10 @@ function App() {
       console.log('🔍 MOBILE DEBUG: Window width:', window.innerWidth, 'Is mobile:', isMobileDevice);
       setIsMobile(isMobileDevice);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -218,18 +189,18 @@ function App() {
   console.log('🔍 MOBILE DEBUG: Rendering journal element, isMobile:', isMobile);
 
   return (
-    <Router>
+    <>
       <div className="min-h-screen flex flex-col bg-black overflow-auto">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route 
-            path="/journal" 
+          <Route
+            path="/journal"
             element={journalElement}
           />
         </Routes>
       </div>
-      {/* Toast notifications container */}
-      <ToastContainer 
+
+      <ToastContainer
         position="bottom-center"
         autoClose={3000}
         hideProgressBar={false}
@@ -241,6 +212,14 @@ function App() {
         pauseOnHover
         theme="dark"
       />
+    </>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }

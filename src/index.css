@@ -96,10 +96,11 @@ p, span, div, button, a, input, textarea, label, li {
   color: white;
   font-family: 'ZainCustomFont', sans-serif !important;
   font-weight: 400;
-  transition: all 0.6s ease;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-block;
   position: relative;
   text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
 /* Highlighted letter style (Libre Baskerville for highlighted letters) */
@@ -110,7 +111,8 @@ p, span, div, button, a, input, textarea, label, li {
   display: inline-block;
   position: relative;
   text-transform: lowercase;
-  transition: all 0.6s ease;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
 }
 
 @keyframes letterHighlight {
@@ -253,6 +255,65 @@ video.static-bg {
 /* Removed save notification styling */
 
 /* Add any other custom styles from the original project */
+
+/* Enhanced desktop handwritten aesthetics */
+@media (min-width: 769px) {
+  /* Refined paper texture animation */
+  @keyframes paperTexture {
+    0%, 100% {
+      background-position: 0% 0%, 100% 100%;
+    }
+    50% {
+      background-position: 100% 100%, 0% 0%;
+    }
+  }
+
+  /* Ink blot animation for focus states */
+  @keyframes inkBlot {
+    0% {
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 20px 5px rgba(255, 255, 255, 0.05);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  /* Handwritten underline effect */
+  .handwritten-underline {
+    position: relative;
+  }
+
+  .handwritten-underline::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 20%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0.3) 80%,
+      transparent 100%);
+    border-radius: 1px;
+    transform: skewX(-12deg);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .handwritten-underline:hover::after {
+    opacity: 1;
+  }
+
+  /* Subtle quill pen cursor for text areas */
+  .journal-text-area {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>'), text !important;
+  }
+}
 
 /* Mobile image editor animations */
 @keyframes imageSelect {
