@@ -4,7 +4,7 @@ Digital journaling without the pen in your hand.
 
 ## What is Mania?
 
-Mania is a personal digital journaling app created by Zain that lets you create beautiful journal entries with images, text, and custom styling. Your entries are automatically saved as you type and can be exported as professional PDFs.
+Mania is a personal digital journaling app created that lets you create my journal entries with images, text, and custom styling. Your entries are automatically saved as you type and can be exported as professional PDFs.
 
 ## Key Features
 
