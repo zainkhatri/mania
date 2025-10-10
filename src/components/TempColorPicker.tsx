@@ -31,11 +31,11 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
       console.log('🔍 INPUT DEBUG: SimpleColorPicker: Extracting colors from images');
       // Force immediate color extraction with a clean state
       setIsExtracting(true);
-      extractColorsFromImages(images, 16);
+      extractColorsFromImages(images, 12);
     } else {
       console.log('🔍 INPUT DEBUG: SimpleColorPicker: No images available for color extraction');
       // Set default colors when no images are available
-      setExtractedColors(getDefaultColors(16));
+      setExtractedColors(getDefaultColors(12));
     }
   }, [images]);
 
@@ -580,20 +580,20 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   }
   
   return (
-    <div className="p-5 bg-black/70 backdrop-blur-md rounded-lg border border-white/20">
+    <div className="p-5 bg-black/40 backdrop-blur-md rounded-lg border border-white/20">
       {/* Image-derived colors */}
       {extractedColors.length > 0 && (
         <div className="mb-6">
-          <div className="grid grid-cols-4 gap-4">
-            {sortedColors.map((color, i) => (
+          <div className="grid grid-cols-6 gap-4 p-1">
+            {sortedColors.slice(0, 12).map((color, i) => (
               <button
                 key={`image-${i}`}
-                className={`w-14 h-14 rounded-lg shadow hover:shadow-md transition-all duration-200 border-2 border-white ${
-                  colors.locationColor === color 
-                    ? 'ring-2 ring-offset-2 ring-white/70 transform scale-105' 
-                    : 'hover:scale-105'
+                className={`w-12 h-12 rounded-lg shadow-md hover:shadow-xl transition-all duration-200 border-2 ${
+                  colors.locationColor === color
+                    ? 'border-white ring-2 ring-white/40 ring-offset-2 ring-offset-black/40 scale-95'
+                    : 'border-white/50 hover:border-white hover:scale-95'
                 }`}
-                style={{ 
+                style={{
                   backgroundColor: color,
                 }}
                 onClick={() => selectColor(color)}

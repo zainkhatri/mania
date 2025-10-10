@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import CustomNotification from './CustomNotification';
@@ -454,6 +454,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [inspirationQuestion, setInspirationQuestion] = useState<string>("");
   const [isGeneratingInspiration, setIsGeneratingInspiration] = useState<boolean>(false);
   const [hasGeneratedInspiration, setHasGeneratedInspiration] = useState<boolean>(false);
+  const [displayedQuestion, setDisplayedQuestion] = useState<string>("");
+  const [showQuestionOverlay, setShowQuestionOverlay] = useState<boolean>(false);
+  const [isQuestionTyping, setIsQuestionTyping] = useState<boolean>(false);
 
   // Generate inspiration question when journal text changes
   useEffect(() => {
@@ -2706,14 +2709,20 @@ const JournalForm: React.FC<JournalFormProps> = ({
               {/* Download Journal Button */}
               <button
                 onClick={handleHighQualityPDFExport}
-                className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white focus:outline-none transition-all duration-200"
+                className="inline-flex items-center justify-center p-2 rounded-lg text-white focus:outline-none transition-all duration-200"
+                style={{
+                  backgroundColor: textColors.locationColor,
+                  opacity: 0.9
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
                 title="Download Journal"
               >
                 <svg className="block h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
               </button>
-              
+
               {/* Clear Journal Button */}
               <button
                 onClick={handleReset}
@@ -2798,7 +2807,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             window.handleHighQualityPDFExport();
                           }
                         }}
-                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-white/30 focus:outline-none transition-all duration-200 backdrop-blur-sm"
+                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded text-white focus:outline-none transition-all duration-200"
+                        style={{
+                          backgroundColor: `${textColors.locationColor}90`,
+                          borderColor: textColors.locationColor,
+                          borderWidth: '1px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = textColors.locationColor;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = `${textColors.locationColor}90`;
+                        }}
                         title="Download PDF"
                       >
                         <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2814,7 +2834,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             window.handleReset();
                           }
                         }}
-                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-white/10 border border-white/20 text-white hover:bg-red-500/30 hover:border-red-500/40 focus:outline-none transition-all duration-200 backdrop-blur-sm"
+                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-red-600 border border-red-500 text-white hover:bg-red-700 hover:border-red-600 focus:outline-none transition-all duration-200"
                         title="Clear Journal"
                       >
                         <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2870,11 +2890,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             setDate(adjustedDate);
                           }
                         }}
-                        className="rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm w-36"
-                        dateFormat="MMM dd, yyyy"
+                        className="rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm w-full min-w-[180px]"
+                        dateFormat="MMMM dd, yyyy"
                         popperPlacement="bottom-end"
                         required
-                        wrapperClassName="text-gray-400"
+                        wrapperClassName="text-gray-400 w-full"
                       />
                     </div>
                   </div>
@@ -2887,57 +2907,38 @@ const JournalForm: React.FC<JournalFormProps> = ({
                   >
                     {/* Desktop layout */}
                     <div className="space-y-4 md:space-y-5 lg:space-y-6 md:pb-8 md:max-w-full">
-                      {/* Images */}
-                      <div className="space-y-3">
-                        <label className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2">
-                          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                          </svg>
-                          <span>Images ({images.length})</span>
-                        </label>
-                        
-                                                 {/* Image upload area - always show */}
-                         <div 
-                           className="border-2 border-dashed rounded-xl p-4 md:p-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/30 backdrop-blur-sm hover:border-white/50 hover:bg-black/40"
-                           onClick={() => fileInputRef.current?.click()}
-
-                         >
-                          {isLoadingImage && (
-                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
-                              <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
-                            </div>
-                          )}
-                          <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                          </svg>
-                          <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
-                            Upload Images
-                          </p>
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            multiple
-                            style={{ display: 'none' }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Layout Toggle and Colors - Hidden on mobile */}
+                      {/* Images and Colors side by side - Hidden on mobile */}
                       <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        {/* Layout Toggle */}
+                        {/* Images */}
                         <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
                           <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                             </svg>
-                            <span>Layout</span>
+                            <span>Images ({images.length})</span>
                           </label>
-                          <div className="flex justify-center">
-                            <LayoutToggle
-                              layoutMode={layoutMode}
-                              setLayoutMode={setLayoutMode}
+                          <div
+                            className="border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/40 backdrop-blur-sm hover:border-white/50 hover:bg-black/50"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            {isLoadingImage && (
+                              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
+                                <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
+                              </div>
+                            )}
+                            <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
+                              Upload Images
+                            </p>
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleImageUpload}
+                              accept="image/*"
+                              multiple
+                              style={{ display: 'none' }}
                             />
                           </div>
                         </div>
@@ -2951,7 +2952,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             <span>Colors</span>
                           </label>
                           <div className="flex justify-center">
-                            <SimpleColorPicker 
+                            <SimpleColorPicker
                               colors={textColors}
                               onChange={handleColorChange}
                               images={submitted ? submittedData.images : images}
@@ -2973,78 +2974,198 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       {/* Journal Entry */}
                       <div className="space-y-3">
                         <div className="relative">
-                          {/* AI Insights Button - Same x-coordinate as before, but at Journal Entry y-coordinate */}
-                          <div className="absolute right-2" style={{ top: '-62px' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNeedInspiration(true);
-                                setHasGeneratedInspiration(false);
-                                setInspirationQuestion("Analyzing...");
-                              }}
-                              disabled={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10}
-                              className={`flex items-center gap-1.5 px-2 py-1 transition-all duration-300 ease-in-out text-xs font-medium ${
-                                journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 
-                                  ? 'text-gray-500 cursor-not-allowed' 
-                                  : 'text-white hover:text-blue-300 hover:bg-blue-900/20'
-                              } rounded-md`}
-                              title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
-                            >
-                            
-                              <svg
-                                width="12"
-                                height="12"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                className="transition-colors duration-300"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                              </svg>
-                              <span className="hidden sm:inline text-xs">
-                                AI
-                              </span>
-                            </button>
-                          </div>
-                                                     <textarea
-                             ref={textareaRef}
-                             id="journalText"
-                             value={journalText}
-                             onChange={(e) => {
-                               setJournalText(e.target.value);
-                             }}
-                             placeholder="Write your journal entry here..."
-                             className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                             style={{ fontSize: '18px' }}
-                             required
-                           />
+                          <textarea
+                            ref={textareaRef}
+                            id="journalText"
+                            value={journalText}
+                            onChange={(e) => {
+                              setJournalText(e.target.value);
+                              // Hide the AI question when user starts typing
+                              if (showQuestionOverlay && e.target.value.length > journalText.length) {
+                                setShowQuestionOverlay(false);
+                                setDisplayedQuestion("");
+                                setIsQuestionTyping(false);
+                              }
+                            }}
+                            disabled={isQuestionTyping}
+                            placeholder="Write your journal entry here..."
+                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[280px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                            style={{ fontSize: '18px' }}
+                            required
+                          />
                         </div>
 
-                        {/* AI Insights Box - Below Journal Entry */}
-                        {needInspiration && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.3, ease: 'easeInOut' }}
-                            className="mt-2 px-3 py-2 bg-blue-900/20 border border-blue-500/30 rounded-md backdrop-blur-sm"
-                          >
-                            {isGeneratingInspiration ? (
-                              <div className="flex items-center gap-2 text-blue-300">
-                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
-                                <span style={{ fontSize: '22px' }}>AI is analyzing your journal entry...</span>
-                              </div>
-                            ) : inspirationQuestion && inspirationQuestion !== "Analyzing..." ? (
-                              <p className="text-blue-200 italic" style={{ fontSize: '22px' }}>{inspirationQuestion}</p>
-                            ) : inspirationQuestion === "Analyzing..." ? (
-                              <p className="text-blue-300" style={{ fontSize: '22px' }}>AI is analyzing...</p>
-                            ) : journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? (
-                              <p className="text-blue-300" style={{ fontSize: '22px' }}>✍️ Write at least 10 words to get AI insights.</p>
-                            ) : (
-                              <p className="text-blue-300" style={{ fontSize: '18px' }}></p>
-                            )}
-                          </motion.div>
-                        )}
+                        {/* AI Button and Question Box - Unified Container */}
+                        <div className="w-full mt-4">
+                          <div className="flex items-center w-full bg-black/40 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden shadow-lg transition-all duration-300">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                  const wordCount = journalText.trim().split(/\s+/).filter(word => word.length > 0).length;
+
+                                  setIsGeneratingInspiration(true);
+                                  setIsQuestionTyping(true);
+
+                                  try {
+                                    let question = "";
+
+                                    // If journal is empty, use critical thinking starter questions
+                                    if (wordCount === 0) {
+                                      const starterQuestions = [
+                                        "What's one thing that surprised you today?",
+                                        "If you could relive one moment from today, which would it be and why?",
+                                        "What's something you've been avoiding thinking about?",
+                                        "What would you do differently if you could start this day over?",
+                                        "What's the most honest thing you can say about how you're feeling right now?",
+                                        "What's something you learned about yourself recently?",
+                                        "If you had to describe today in one word, what would it be and why?",
+                                        "What's a question you've been asking yourself lately?",
+                                        "What's one thing you're grateful for that you haven't acknowledged yet?",
+                                        "What would your future self want to remember about this moment?",
+                                        "What's something you did today that made you proud, even if it was small?",
+                                        "What's been taking up the most mental space in your mind?",
+                                        "If you could have a conversation with anyone right now, who would it be and what would you say?",
+                                        "What's a belief you held strongly that's starting to change?",
+                                        "What's something you wish someone would ask you about?"
+                                      ];
+                                      question = starterQuestions[Math.floor(Math.random() * starterQuestions.length)];
+                                    } else if (wordCount < 10) {
+                                      // Less than 10 words, give encouraging prompt
+                                      const encouragementQuestions = [
+                                        "Tell me more about that...",
+                                        "What else is on your mind?",
+                                        "Keep going... what happened next?",
+                                        "Interesting... can you expand on that?",
+                                        "What made you think of that?"
+                                      ];
+                                      question = encouragementQuestions[Math.floor(Math.random() * encouragementQuestions.length)];
+                                    } else {
+                                      // 10+ words, generate AI-based question
+                                      const questions = await generateJournalPrompts(journalText, location);
+                                      question = questions[0] || "What's really going on here?";
+                                    }
+
+                                    // Show overlay and type question character by character
+                                    setShowQuestionOverlay(true);
+                                    setDisplayedQuestion("");
+
+                                    let currentIndex = 0;
+                                    const typeInterval = setInterval(() => {
+                                      if (currentIndex < question.length) {
+                                        setDisplayedQuestion(question.substring(0, currentIndex + 1));
+                                        currentIndex++;
+                                      } else {
+                                        clearInterval(typeInterval);
+                                        // Keep disabled for 1 second after typing finishes
+                                        setTimeout(() => {
+                                          setIsQuestionTyping(false);
+                                        }, 1000);
+                                      }
+                                    }, 30);
+
+                                  } catch (error) {
+                                    console.error('Error generating AI question:', error);
+                                    const fallbackQuestions = [
+                                      "What's really going on here?",
+                                      "What's the real story?",
+                                      "What happened?",
+                                      "What's bothering you?",
+                                      "What's on your mind?"
+                                    ];
+                                    const fallbackQuestion = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
+
+                                    // Show overlay and type fallback question
+                                    setShowQuestionOverlay(true);
+                                    setDisplayedQuestion("");
+
+                                    let currentIndex = 0;
+                                    const typeInterval = setInterval(() => {
+                                      if (currentIndex < fallbackQuestion.length) {
+                                        setDisplayedQuestion(fallbackQuestion.substring(0, currentIndex + 1));
+                                        currentIndex++;
+                                      } else {
+                                        clearInterval(typeInterval);
+                                        // Keep disabled for 1 second after typing finishes
+                                        setTimeout(() => {
+                                          setIsQuestionTyping(false);
+                                        }, 1000);
+                                      }
+                                    }, 30);
+                                  } finally {
+                                    setIsGeneratingInspiration(false);
+                                  }
+                                }}
+                                disabled={isGeneratingInspiration || isQuestionTyping}
+                                className={`flex items-center justify-center gap-2 px-4 py-3 transition-all duration-300 ease-in-out font-semibold flex-shrink-0 text-white ${
+                                  isGeneratingInspiration || isQuestionTyping
+                                    ? 'cursor-not-allowed opacity-60'
+                                    : ''
+                                }`}
+                                style={{
+                                  backgroundColor: isGeneratingInspiration || isQuestionTyping ? `${textColors.locationColor}60` : `${textColors.locationColor}90`,
+                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}30` : 'none'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isGeneratingInspiration && !isQuestionTyping) {
+                                    e.currentTarget.style.backgroundColor = textColors.locationColor;
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isGeneratingInspiration && !isQuestionTyping) {
+                                    e.currentTarget.style.backgroundColor = `${textColors.locationColor}90`;
+                                  }
+                                }}
+                                title="Get AI-powered journal prompts"
+                              >
+                              {isGeneratingInspiration ? (
+                                <div
+                                  className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"
+                                ></div>
+                              ) : (
+                                <span className="text-base">AI+</span>
+                              )}
+                              </button>
+
+                            {/* AI Question - Slides in from left */}
+                            <AnimatePresence>
+                              {showQuestionOverlay && (
+                                <motion.div
+                                  initial={{ opacity: 0, x: -20, width: 0 }}
+                                  animate={{ opacity: 1, x: 0, width: '100%' }}
+                                  exit={{ opacity: 0, x: -20, width: 0 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 300,
+                                    damping: 30,
+                                    duration: 0.4
+                                  }}
+                                  className="flex items-center px-4 py-3 overflow-hidden"
+                                  style={{ backgroundColor: `${textColors.locationColor}05` }}
+                                >
+                                  <p
+                                    className="text-lg leading-relaxed flex-1 whitespace-normal"
+                                    style={{
+                                      color: textColors.locationColor,
+                                      fontWeight: 500,
+                                      fontSize: '18px'
+                                    }}
+                                  >
+                                    {displayedQuestion}
+                                    {isQuestionTyping && (
+                                      <motion.span
+                                        animate={{ opacity: [1, 0] }}
+                                        transition={{ duration: 0.6, repeat: Infinity, repeatType: "reverse" }}
+                                        className="ml-0.5"
+                                      >
+                                        |
+                                      </motion.span>
+                                    )}
+                                  </p>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -3235,72 +3356,190 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </label>
                       </div>
                       <div className="relative">
-                        <div className="absolute -top-8 right-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNeedInspiration(true);
-                              setHasGeneratedInspiration(false);
-                              setInspirationQuestion("Analyzing...");
+                        <textarea
+                          id="journalText"
+                          value={journalText}
+                          onChange={(e) => {
+                            setJournalText(e.target.value);
+                            // Don't fade away question when user types in main journal
+                          }}
+                          disabled={isQuestionTyping}
+                          placeholder="Write your journal entry here..."
+                          className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[280px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                          style={{ fontSize: '18px', minHeight: '100px' }}
+                          required
+                        />
+                      </div>
+
+                      {/* AI Button Below Journal Box */}
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const wordCount = journalText.trim().split(/\s+/).filter(word => word.length > 0).length;
+
+                            setIsGeneratingInspiration(true);
+                            setIsQuestionTyping(true);
+
+                              try {
+                                let question = "";
+
+                                // If journal is empty, use critical thinking starter questions
+                                if (wordCount === 0) {
+                                  const starterQuestions = [
+                                    "What's one thing that surprised you today?",
+                                    "If you could relive one moment from today, which would it be and why?",
+                                    "What's something you've been avoiding thinking about?",
+                                    "What would you do differently if you could start this day over?",
+                                    "What's the most honest thing you can say about how you're feeling right now?",
+                                    "What's something you learned about yourself recently?",
+                                    "If you had to describe today in one word, what would it be and why?",
+                                    "What's a question you've been asking yourself lately?",
+                                    "What's one thing you're grateful for that you haven't acknowledged yet?",
+                                    "What would your future self want to remember about this moment?",
+                                    "What's something you did today that made you proud, even if it was small?",
+                                    "What's been taking up the most mental space in your mind?",
+                                    "If you could have a conversation with anyone right now, who would it be and what would you say?",
+                                    "What's a belief you held strongly that's starting to change?",
+                                    "What's something you wish someone would ask you about?"
+                                  ];
+                                  question = starterQuestions[Math.floor(Math.random() * starterQuestions.length)];
+                                } else if (wordCount < 10) {
+                                  // Less than 10 words, give encouraging prompt
+                                  const encouragementQuestions = [
+                                    "Tell me more about that...",
+                                    "What else is on your mind?",
+                                    "Keep going... what happened next?",
+                                    "Interesting... can you expand on that?",
+                                    "What made you think of that?"
+                                  ];
+                                  question = encouragementQuestions[Math.floor(Math.random() * encouragementQuestions.length)];
+                                } else {
+                                  // 10+ words, generate AI-based question
+                                  const questions = await generateJournalPrompts(journalText, location);
+                                  question = questions[0] || "What's really going on here?";
+                                }
+
+                                // Show overlay and type question character by character
+                                setShowQuestionOverlay(true);
+                                setDisplayedQuestion("");
+
+                                let currentIndex = 0;
+                                const typeInterval = setInterval(() => {
+                                  if (currentIndex < question.length) {
+                                    setDisplayedQuestion(question.substring(0, currentIndex + 1));
+                                    currentIndex++;
+                                  } else {
+                                    clearInterval(typeInterval);
+                                    // Keep disabled for 1 second after typing finishes
+                                    setTimeout(() => {
+                                      setIsQuestionTyping(false);
+                                    }, 1000);
+                                  }
+                                }, 30);
+
+                              } catch (error) {
+                                console.error('Error generating AI question:', error);
+                                const fallbackQuestions = [
+                                  "What's really going on here?",
+                                  "What's the real story?",
+                                  "What happened?",
+                                  "What's bothering you?",
+                                  "What's on your mind?"
+                                ];
+                                const fallbackQuestion = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
+
+                                // Show overlay and type fallback question
+                                setShowQuestionOverlay(true);
+                                setDisplayedQuestion("");
+
+                                let currentIndex = 0;
+                                const typeInterval = setInterval(() => {
+                                  if (currentIndex < fallbackQuestion.length) {
+                                    setDisplayedQuestion(fallbackQuestion.substring(0, currentIndex + 1));
+                                    currentIndex++;
+                                  } else {
+                                    clearInterval(typeInterval);
+                                    // Keep disabled for 1 second after typing finishes
+                                    setTimeout(() => {
+                                      setIsQuestionTyping(false);
+                                    }, 1000);
+                                  }
+                                }, 30);
+                              } finally {
+                                setIsGeneratingInspiration(false);
+                              }
                             }}
-                            disabled={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10}
-                            className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ease-in-out text-sm font-medium ${
-                              journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 
-                                ? 'text-gray-500 cursor-not-allowed' 
-                                : 'text-white hover:text-blue-300 hover:bg-blue-900/20'
-                            } rounded-md`}
-                            title={journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? "Write at least 10 words to get AI insights" : "Get AI insights based on your journal entry"}
+                            disabled={isGeneratingInspiration || isQuestionTyping}
+                            className={`flex items-center gap-2 px-4 py-2 transition-all duration-300 ease-in-out text-sm font-medium rounded-lg ${
+                              isGeneratingInspiration || isQuestionTyping
+                                ? 'cursor-not-allowed opacity-50'
+                                : 'hover:opacity-80 hover:scale-105'
+                            }`}
+                            style={{
+                              color: textColors.locationColor,
+                              backgroundColor: `${textColors.locationColor}20`
+                            }}
+                            title="Get AI-powered journal prompts"
                           >
-                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className={`${journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? 'text-gray-500' : 'text-blue-400'}`}>
+                          {isGeneratingInspiration ? (
+                            <div
+                              className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent"
+                              style={{ borderColor: textColors.locationColor }}
+                            ></div>
+                          ) : (
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
                             </svg>
-                            <span className="hidden sm:inline">
-                              Get AI Insights
+                          )}
+                            <span className="text-sm">
+                              AI Question
                             </span>
                           </button>
                         </div>
-                                                   <textarea
-                             id="journalText"
-                             value={journalText}
-                             onChange={(e) => {
-                               setJournalText(e.target.value);
-                             }}
-                             placeholder="Write your journal entry here..."
-                             className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[160px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                             style={{ fontSize: '18px', minHeight: '100px' }}
-                             required
-                           />
-                      </div>
 
-                      {/* AI Insights Box */}
-                      {needInspiration && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3, ease: 'easeInOut' }}
-                          className="mt-2 px-3 py-2 bg-blue-900/20 border border-blue-500/30 rounded-md backdrop-blur-sm"
-                        >
-                          {isGeneratingInspiration ? (
-                            <div className="flex items-center gap-2 text-blue-300">
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
-                              <span style={{ fontSize: '22px' }}>AI is analyzing your journal entry...</span>
-                            </div>
-                          ) : inspirationQuestion && inspirationQuestion !== "Analyzing..." ? (
-                            <p className="text-blue-200 italic" style={{ fontSize: '22px' }}>{inspirationQuestion}</p>
-                          ) : inspirationQuestion === "Analyzing..." ? (
-                            <p className="text-blue-300" style={{ fontSize: '22px' }}>AI is analyzing...</p>
-                          ) : journalText.trim().split(/\s+/).filter(word => word.length > 0).length < 10 ? (
-                            <p className="text-blue-300" style={{ fontSize: '22px' }}>✍️ Write at least 10 words to get AI insights.</p>
-                          ) : (
-                            <p className="text-blue-300" style={{ fontSize: '18px' }}></p>
-                          )}
-                        </motion.div>
-                      )}
+                      {/* AI Question Text Box Below */}
+                      <AnimatePresence>
+                        {showQuestionOverlay && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 300,
+                              damping: 25,
+                              duration: 0.5
+                            }}
+                            className="relative"
+                          >
+                            <textarea
+                              value={displayedQuestion}
+                              readOnly
+                              className="w-full rounded-lg border shadow-lg focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[120px] transition-all duration-200 resize-none overflow-y-auto backdrop-blur-sm"
+                              style={{
+                                fontSize: '18px',
+                                color: textColors.locationColor,
+                                backgroundColor: `${textColors.locationColor}10`,
+                                borderColor: textColors.locationColor
+                              }}
+                            />
+                            {isQuestionTyping && (
+                              <motion.div
+                                className="absolute bottom-3 right-3"
+                                animate={{ opacity: [1, 0] }}
+                                transition={{ duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
+                              >
+                                <span style={{ color: textColors.locationColor, fontSize: '18px' }}>|</span>
+                              </motion.div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
               </div>
             </div>
           </div>
