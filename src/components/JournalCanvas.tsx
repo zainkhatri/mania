@@ -1077,11 +1077,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
             // Debug statement removed
 
-            // Save the PDF with mobile-optimized filename
-            const date = new Date();
-            const filename = isMobile
-              ? `journal-${date.toISOString().split('T')[0]}-mobile.pdf`
-              : `journal-${date.toISOString().split('T')[0]}-crystalHD.pdf`;
+            // Save the PDF with mania-MM-DD-YYYY.pdf format
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const year = now.getFullYear();
+            const filename = `mania-${month}-${day}-${year}.pdf`;
 
             console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
 

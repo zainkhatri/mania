@@ -410,7 +410,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   const navigate = useNavigate();
   const { notification, loading, success, error: showError, update, hide } = useNotification();
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState('MANIA, LA JOLLA, CA');
+  const [isLocationDefault, setIsLocationDefault] = useState(true);
 
   const [journalText, setJournalText] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -587,8 +588,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
 
   const [textColors, setTextColors] = useState<TextColors>({
-    locationColor: '#2D9CDB',
-    locationShadowColor: '#1D3557',
+    locationColor: '#FFFFFF',
+    locationShadowColor: '#000000',
   });
   const [submittedData, setSubmittedData] = useState<{
     date: Date;
@@ -1003,6 +1004,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         // Also restore location and images from submitted journal
         if (savedSubmittedJournal.location) {
           setLocation(savedSubmittedJournal.location);
+          setIsLocationDefault(false);
         }
         if (savedSubmittedJournal.images) {
           setImages(savedSubmittedJournal.images);
@@ -1069,7 +1071,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
     const savedDraftJournal = loadFromLocalStorage('webjournal_draft');
     if (savedDraftJournal) {
       try {
-        setLocation(savedDraftJournal.location || '');
+        const draftLocation = savedDraftJournal.location || '';
+        setLocation(draftLocation);
+        if (draftLocation && draftLocation !== 'MANIA, LA JOLLA, CA') {
+          setIsLocationDefault(false);
+        }
         setJournalText(savedDraftJournal.journalText || '');
         setImages(savedDraftJournal.images || []);
         
@@ -1915,8 +1921,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
     saveJournalToBackend();
   };
   
+  const handleLocationFocus = () => {
+    if (isLocationDefault) {
+      setIsLocationDefault(false);
+    }
+  };
+
+  const handleLocationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocation(e.target.value);
+    if (isLocationDefault) {
+      setIsLocationDefault(false);
+    }
+  };
+
   const handleReset = () => {
-    setLocation('');
+    setLocation('MANIA, LA JOLLA, CA');
+    setIsLocationDefault(true);
     setJournalText('');
     setImages([]);
     setImagePositions([]); // Clear image positions when resetting
@@ -2870,8 +2890,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                               <input
                           type="text"
                           id="location"
-                          value={location}
-                          onChange={(e) => setLocation(e.target.value)}
+                          value={isLocationDefault ? '' : location}
+                          onChange={handleLocationInput}
+                          onFocus={handleLocationFocus}
                           placeholder="e.g., MANIA, LA JOLLA, CA"
                           className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base location-input-responsive placeholder-gray-400"
                           required
@@ -3250,8 +3271,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                                    <input
                              type="text"
                              id="location"
-                             value={location}
-                             onChange={(e) => setLocation(e.target.value)}
+                             value={isLocationDefault ? '' : location}
+                             onChange={handleLocationInput}
+                             onFocus={handleLocationFocus}
                              placeholder="e.g., MANIA, LA JOLLA, CA"
                              className="w-full h-10 rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-2 py-2 md:px-3 md:py-2 text-gray-400 transition-all duration-200 bg-black/40 backdrop-blur-sm text-sm md:text-base placeholder-gray-400"
                              required

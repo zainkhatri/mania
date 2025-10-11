@@ -118,9 +118,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <>
           {/* Navigation - Hidden on mobile */}
           <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
-            <div className="w-full max-w-7xl mx-auto px-2 lg:px-3">
+            <div className="w-full px-4 lg:px-6">
               <div className="flex justify-between items-center h-14">
-                <div className="flex items-center w-1/2">
+                <div className="flex items-center">
                   <Link to="/" className="flex-shrink-0 flex items-center">
                     <div className="text-4xl md:text-5xl text-white font-light">
                       {renderLogo()}
