@@ -47,15 +47,14 @@
         font-display: swap;
       }
       
-      /* Add Libre Baskerville for the "m" in "mania" */
-      @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap');
-      
       body {
         font-family: 'ZainCustomFont', sans-serif !important;
+        margin: 0;
+        padding: 0;
       }
-      
+
       .mania-title .m {
-        font-family: 'Libre Baskerville', Georgia, serif !important;
+        font-family: Georgia, serif !important; /* Use system font - no external load */
       }
     </style>
   </head>

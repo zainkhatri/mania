@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -18,6 +18,9 @@ import { useNavigate } from 'react-router-dom';
 import { clearJournalCache } from '../utils/storageUtils';
 import { format } from 'date-fns';
 import imageCompression from 'browser-image-compression';
+
+// Memoized JournalCanvas to prevent unnecessary re-renders
+const MemoizedJournalCanvas = memo(JournalCanvas);
 
 // Enhanced date formatting function from sample.js
 const formatDate = (date: Date): string => {
@@ -376,12 +379,37 @@ interface JournalFormProps {
   saveButtonText?: string;
 }
 
-const JournalForm: React.FC<JournalFormProps> = ({ 
+const JournalForm: React.FC<JournalFormProps> = ({
   templateUrl = '/templates/cream-black-template.jpg',
   saveButtonText = 'Create Journal'
 }) => {
+  // DEBUG: Track JournalForm lifecycle
+  useEffect(() => {
+    console.log('🟢🟢🟢 JOURNALFORM MOUNTED 🟢🟢🟢');
+    console.log('🟢 Checking for duplicate JournalForm instances...');
+
+    // Check for duplicate journal form containers
+    const journalContainers = document.querySelectorAll('.journal-form-container');
+    console.log('🟢 Number of .journal-form-container elements:', journalContainers.length);
+
+    // Check for duplicate grids
+    const gridElements = document.querySelectorAll('.grid.grid-cols-1');
+    console.log('🟢 Number of .grid elements:', gridElements.length);
+
+    // Log all children of root
+    const root = document.getElementById('root');
+    console.log('🟢 Root children:', root?.children.length);
+    Array.from(root?.children || []).forEach((child, i) => {
+      console.log(`🟢   [${i}]:`, child.className, child.tagName);
+    });
+
+    return () => {
+      console.log('🟢🟢🟢 JOURNALFORM UNMOUNTED 🟢🟢🟢');
+    };
+  }, []);
+
   const navigate = useNavigate();
-  const { notification, loading, success, error: showError, update } = useNotification();
+  const { notification, loading, success, error: showError, update, hide } = useNotification();
   const [location, setLocation] = useState('');
 
   const [journalText, setJournalText] = useState('');
@@ -405,6 +433,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [layoutMode, setLayoutMode] = useState<'standard' | 'mirrored' | 'freeflow'>('freeflow');
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [loadingImageCount, setLoadingImageCount] = useState(0);
   const [needInspiration, setNeedInspiration] = useState(false);
   
   // Logo state for typewriter effect
@@ -461,37 +490,32 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Generate inspiration question when journal text changes
   useEffect(() => {
     const generateInspiration = async () => {
-      console.log('🔍 Inspiration check:', { 
-        hasGeneratedInspiration, 
-        needInspiration, 
-        wordCount: journalText.trim().split(/\s+/).filter(word => word.length > 0).length,
-        isGeneratingInspiration 
-      });
+      // Debug statement removed
       
       // Count words in journal text
       const wordCount = journalText.trim().split(/\s+/).filter(word => word.length > 0).length;
       
       // Auto-enable inspiration when word count reaches 10
       if (wordCount >= 10 && !needInspiration && !hasGeneratedInspiration) {
-        console.log('🎯 Auto-enabling inspiration at 10 words');
+        // Debug statement removed
         setNeedInspiration(true);
         return; // Let the next effect run handle the generation
       }
       
       // Don't generate if already generated or if inspiration is off
       if (hasGeneratedInspiration || !needInspiration) {
-        console.log('❌ Skipping inspiration generation:', { hasGeneratedInspiration, needInspiration });
+        // Debug statement removed
         return;
       }
       
       // Only generate if we have at least 10 words and haven't generated yet
       if (wordCount < 10) {
-        console.log('❌ Word count too low:', wordCount);
+        // Debug statement removed
         return;
       }
 
       if (isGeneratingInspiration) {
-        console.log('❌ Already generating inspiration');
+        // Debug statement removed
         return;
       }
 
@@ -501,7 +525,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       try {
         console.log('📞 Calling GPT service with:', { journalText: journalText.substring(0, 50) + '...', location });
         const questions = await generateJournalPrompts(journalText, location);
-        console.log('📝 Received questions from GPT:', questions);
+        // Debug statement removed
         const question = questions[0] || "";
         setInspirationQuestion(question);
         setHasGeneratedInspiration(true);
@@ -527,7 +551,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           "What's the situation?"
         ];
         const fallbackQuestion = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
-        console.log('🎯 Selected fallback question:', fallbackQuestion);
+        // Debug statement removed
         setInspirationQuestion(fallbackQuestion);
         setHasGeneratedInspiration(true);
         
@@ -657,12 +681,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
     try {
       // DEBUG: Log the current state when saving
-      console.log('💾 SAVE DEBUG: journalText length:', journalText.length);
-      console.log('💾 SAVE DEBUG: journalText content:', journalText.substring(0, 200));
-      console.log('💾 SAVE DEBUG: location:', location);
-      console.log('💾 SAVE DEBUG: images count:', images.length);
-      console.log('💾 SAVE DEBUG: submitted state:', submitted);
-      console.log('💾 SAVE DEBUG: submittedData:', submittedData);
+      // Debug statements removed
 
       // Validate content before saving
       if (!location.trim()) {
@@ -676,7 +695,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
       // Break the journal text into paragraphs
       const textSections = journalText.split('\n\n').filter(section => section.trim().length > 0);
-      console.log('💾 SAVE DEBUG: textSections after split:', textSections);
+      // Debug statement removed
       
       if (textSections.length === 0) {
         clearTimeout(saveTimeout);
@@ -972,14 +991,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
         // IMPORTANT: Reconstruct journalText from the text array
         // This is critical for saving to work properly later
-        console.log('💾 LOAD DEBUG: savedSubmittedJournal.text:', savedSubmittedJournal.text);
+        // Debug statement removed
         if (savedSubmittedJournal.text && Array.isArray(savedSubmittedJournal.text)) {
           const reconstructedText = savedSubmittedJournal.text.join('\n\n');
-          console.log('💾 LOAD DEBUG: Reconstructed text length:', reconstructedText.length);
-          console.log('💾 LOAD DEBUG: Reconstructed text content:', reconstructedText.substring(0, 200));
+          // Debug statements removed
           setJournalText(reconstructedText);
         } else {
-          console.log('💾 LOAD DEBUG: No text array found or not an array');
+          // Debug statement removed
         }
 
         // Also restore location and images from submitted journal
@@ -1028,17 +1046,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
               
               console.log("Setting colors from existing submitted images:", newColors);
               setTextColors(newColors);
-              
-              // Force canvas redraw with the new colors
+
+              // Update colors without forced redraw
               setTimeout(() => {
                 window.CURRENT_COLORS = newColors;
-                if (window.forceCanvasRedraw) {
-                  requestAnimationFrame(() => {
-                    if (typeof window.forceCanvasRedraw === 'function') {
-                      window.forceCanvasRedraw();
-                    }
-                  });
-                }
+                // Removed forceCanvasRedraw to prevent page flash
               }, 300);
             }
           } catch (colorError) {
@@ -1079,10 +1091,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
         }
         // Restore image positions if available
         if (savedDraftJournal.imagePositions) {
-          console.log('🖼️ Restoring image positions from localStorage:', savedDraftJournal.imagePositions);
+          // Debug statement removed
           setImagePositions(savedDraftJournal.imagePositions);
         } else {
-          console.log('🖼️ No saved image positions found in localStorage');
+          // Debug statement removed
         }
         console.log('Restored draft journal from localStorage');
       } catch (error) {
@@ -1141,6 +1153,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Use proper type for canvasRef to ensure method exists
   const canvasRef = useRef<JournalCanvasHandle>(null);
+  // const mobileCanvasRef = useRef<JournalCanvasHandle>(null); // Temporarily disabled
+
+  // Helper function to get the current active canvas ref
+  const getCurrentCanvasRef = () => {
+    // Always return desktop canvas ref since mobile canvas is temporarily disabled
+    return canvasRef.current;
+  };
+
+  // Debug state tracking removed to prevent unnecessary re-renders
 
   // Focus the appropriate input when editing starts
   useEffect(() => {
@@ -1495,9 +1516,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
     
     // Allow unlimited images - no replacement logic needed
     const maxFiles = files.length; // Use all selected files
-    
-    // Show loading indicator 
+
+    // Show loading state in the Images section
     setIsLoadingImage(true);
+    setLoadingImageCount(files.length);
     
     // Process files one at a time to reduce memory pressure on mobile
     const processFilesSequentially = async () => {
@@ -1539,52 +1561,50 @@ const JournalForm: React.FC<JournalFormProps> = ({
           // Preserve existing image positions and add properly sized positions for new images
           setImagePositions(prev => {
             const newPositions = [...prev];
+            const existingImageCount = prev.length; // Number of existing images
             // Add properly sized positions for any new images
             for (let i = 0; i < newImageDimensions.length; i++) {
               const dimensions = newImageDimensions[i];
-              
-              // Center images on the page with slight offsets to prevent overlap
+
+              // Spread images out across the canvas to prevent overlap
               const canvasWidth = 3100; // Canvas width
               const canvasHeight = 4370; // Canvas height
               const centerX = (canvasWidth - dimensions.width) / 2;
               const centerY = (canvasHeight - dimensions.height) / 2;
-              
-              // Add slight random offset to prevent perfect stacking
-              const offsetRange = 50; // Maximum offset in pixels
-              const randomOffsetX = (Math.random() - 0.5) * offsetRange;
-              const randomOffsetY = (Math.random() - 0.5) * offsetRange;
-              
-              // For the first new image, place it in the center
-              if (i === 0) {
-                newPositions.push({ 
-                  x: centerX,
-                  y: centerY,
-                  width: dimensions.width, 
-                  height: dimensions.height
-                });
-              } else {
-                // For additional images, place them near center with slight offsets
-                const x = centerX + randomOffsetX;
-                const y = centerY + randomOffsetY;
-                
-                // Ensure images don't go off the canvas edges
-                const finalX = Math.max(50, Math.min(x, canvasWidth - dimensions.width - 50));
-                const finalY = Math.max(50, Math.min(y, canvasHeight - dimensions.height - 50));
-                
-                newPositions.push({ 
-                  x: finalX,
-                  y: finalY,
-                  width: dimensions.width, 
-                  height: dimensions.height
-                });
-              }
+
+              // Spread images out significantly more
+              const offsetRange = 400; // Larger offset to spread images
+              const imageIndex = existingImageCount + i; // Account for existing images
+
+              // Use a grid-like pattern with randomness for better spread
+              const gridCols = 3;
+              const gridX = (imageIndex % gridCols) - 1; // -1, 0, 1
+              const gridY = Math.floor(imageIndex / gridCols);
+
+              const baseOffsetX = gridX * (dimensions.width + 100);
+              const baseOffsetY = gridY * (dimensions.height + 100);
+
+              // Add randomness to avoid perfect grid
+              const randomOffsetX = (Math.random() - 0.5) * 100;
+              const randomOffsetY = (Math.random() - 0.5) * 100;
+
+              const x = centerX + baseOffsetX + randomOffsetX;
+              const y = centerY + baseOffsetY + randomOffsetY;
+
+              // Ensure images don't go off the canvas edges
+              const finalX = Math.max(50, Math.min(x, canvasWidth - dimensions.width - 50));
+              const finalY = Math.max(50, Math.min(y, canvasHeight - dimensions.height - 50));
+
+              newPositions.push({
+                x: finalX,
+                y: finalY,
+                width: dimensions.width,
+                height: dimensions.height
+              });
             }
             return newPositions;
           });
-          
-          // Show success message
-          success(`Added ${originalImages.length} new image${originalImages.length > 1 ? 's' : ''}`);
-          
+
           // FORCE COLOR EXTRACTION: Extract colors from the first processed image
           if (originalImages.length > 0) {
             try {
@@ -1619,17 +1639,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 
                 // Add a delay before forcing redraw to prevent UI freeze
                 setTimeout(() => {
-                  // Force canvas redraw with memory cleanup
+                  // Update colors without forced redraw to prevent blinking
                   window.CURRENT_COLORS = newColors;
-                  if (window.forceCanvasRedraw) {
-                    // Request animation frame to ensure browser is ready
-                    requestAnimationFrame(() => {
-                      // Check again in case it was undefined between frames
-                      if (typeof window.forceCanvasRedraw === 'function') {
-                        window.forceCanvasRedraw();
-                      }
-                    });
-                  }
+                  // Removed forceCanvasRedraw to prevent page flash
+                  // The canvas will update automatically when colors change
                   
                   // Show notification with the extracted color
                   // Removed save notification
@@ -1642,17 +1655,21 @@ const JournalForm: React.FC<JournalFormProps> = ({
           
           // Save to local storage
           saveJournalData();
+
+          // Hide loading state
+          setIsLoadingImage(false);
         } catch (error) {
           console.error('Error processing images:', error);
+          setIsLoadingImage(false);
           showError('Could not process images. Please try again.');
         }
       })
       .catch(error => {
         console.error('Error processing images:', error);
+        setIsLoadingImage(false);
         showError('There was an error processing one or more images. Please try a different image.');
       })
       .finally(() => {
-        setIsLoadingImage(false);
         // Clear the file input
         if (e.target) {
           e.target.value = '';
@@ -1712,17 +1729,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
               
               console.log("Setting colors from replaced image:", newColors);
               setTextColors(newColors);
-              
-              // Force canvas redraw with the new colors
+
+              // Update colors without forced redraw
               setTimeout(() => {
                 window.CURRENT_COLORS = newColors;
-                if (window.forceCanvasRedraw) {
-                  requestAnimationFrame(() => {
-                    if (typeof window.forceCanvasRedraw === 'function') {
-                      window.forceCanvasRedraw();
-                    }
-                  });
-                }
+                // Removed forceCanvasRedraw to prevent page flash
               }, 300);
             }
           } catch (colorError) {
@@ -1753,9 +1764,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
   
   // Remove image from form before submission
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-    // Also remove the corresponding position
-    setImagePositions(prev => prev.filter((_, i) => i !== index));
+    // Batch updates to prevent multiple re-renders
+    React.startTransition(() => {
+      setImages(prev => prev.filter((_, i) => i !== index));
+      setImagePositions(prev => prev.filter((_, i) => i !== index));
+    });
   };
   
   // Add an image after journal generation
@@ -1807,17 +1820,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
               
               console.log("Setting colors from added image:", newColors);
               setTextColors(newColors);
-              
-              // Force canvas redraw with the new colors
+
+              // Update colors without forced redraw
               setTimeout(() => {
                 window.CURRENT_COLORS = newColors;
-                if (window.forceCanvasRedraw) {
-                  requestAnimationFrame(() => {
-                    if (typeof window.forceCanvasRedraw === 'function') {
-                      window.forceCanvasRedraw();
-                    }
-                  });
-                }
+                // Removed forceCanvasRedraw to prevent page flash
               }, 300);
             }
           } catch (colorError) {
@@ -1960,15 +1967,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
     };
     
     setSubmittedData(updatedData);
-    
-    // Try to force canvas redraw using the exposed method
-    if (window.forceCanvasRedraw) {
-      setTimeout(() => {
-        // @ts-ignore
-        window.forceCanvasRedraw();
-      }, 50);
-    }
-    
+
+    // Removed forceCanvasRedraw to prevent page flash
+    // Canvas will update automatically when colors change
+
     // We're removing the auto-save logic here to allow experimenting with colors
     // without triggering automatic saves
   };
@@ -2016,7 +2018,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     // This is critical for saving to work properly
     const updatedJournalText = newTextSections.join('\n\n');
     setJournalText(updatedJournalText);
-    console.log('💾 SYNC DEBUG: Updated journalText from text sections, length:', updatedJournalText.length);
+    // Debug statement removed
 
     // Save to localStorage
     const dataToSave = {
@@ -2056,7 +2058,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     // IMPORTANT: Keep journalText in sync with submittedData.text
     const updatedJournalText = newTextSections.join('\n\n');
     setJournalText(updatedJournalText);
-    console.log('💾 SYNC DEBUG: Added new text section, updated journalText');
+    // Debug statement removed
 
     // Save to localStorage
     const dataToSave = {
@@ -2087,7 +2089,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     // IMPORTANT: Keep journalText in sync with submittedData.text
     const updatedJournalText = newTextSections.join('\n\n');
     setJournalText(updatedJournalText);
-    console.log('💾 SYNC DEBUG: Removed text section, updated journalText');
+    // Debug statement removed
 
     // Save to localStorage
     const dataToSave = {
@@ -2416,8 +2418,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   // New high-quality PDF export function using the canvas export
   const handleHighQualityPDFExport = async () => {
-    if (canvasRef.current && canvasRef.current.exportUltraHDPDF) {
-      canvasRef.current.exportUltraHDPDF();
+    const currentCanvas = getCurrentCanvasRef();
+    if (currentCanvas && currentCanvas.exportUltraHDPDF) {
+      currentCanvas.exportUltraHDPDF();
     } else {
       // Fallback to regular PDF export
       handleShare();
@@ -2438,7 +2441,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
       imagePositions
     };
     
-    console.log('🖼️ Saving journal data with image positions:', imagePositions);
+    // Debug statement removed
     saveToLocalStorage('webjournal_draft', draftData);
   };
   
@@ -2656,20 +2659,21 @@ const JournalForm: React.FC<JournalFormProps> = ({
     const fileArray = Array.from(files);
     console.log(`Processing ${fileArray.length} stickers...`);
     
-    if (canvasRef.current) {
+    const currentCanvas = getCurrentCanvasRef();
+    if (currentCanvas) {
       try {
         // Pass all files to canvas component
         console.log("Canvas ref exists, adding stickers...");
-        canvasRef.current.addMultipleStickers(fileArray);
+        currentCanvas.addMultipleStickers(fileArray);
       } catch (error) {
         console.error("Error adding stickers:", error);
         // Try accessing method differently as fallback
         // @ts-ignore - Force call for debugging
-        if (typeof canvasRef.current.addMultipleStickers === 'function') {
+        if (typeof currentCanvas.addMultipleStickers === 'function') {
           console.log("Method exists but failed, trying direct call");
-          canvasRef.current.addMultipleStickers(fileArray);
+          currentCanvas.addMultipleStickers(fileArray);
         } else {
-          console.error("Method doesn't exist on ref:", canvasRef.current);
+          console.error("Method doesn't exist on ref:", currentCanvas);
         }
       }
     } else {
@@ -2682,8 +2686,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
 
 
+  // Debug statement removed to prevent unnecessary re-renders
+
   return (
-    <div className="bg-black w-full min-h-screen md:h-screen md:overflow-hidden">
+    <div className="bg-black w-full min-h-dvh overflow-x-clip">
       {/* Custom notification component */}
       {notification && (
         <CustomNotification
@@ -2738,7 +2744,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
         </div>
       </div>
 
-      <div className="relative journal-form-container min-h-screen md:h-full">
+      <div
+        className="relative journal-form-container min-h-screen md:h-full"
+        data-debug-component="journal-form-container"
+        style={{
+          boxSizing: 'border-box',
+          position: 'relative'
+        }}
+      >
         {/* TV Static background video for professional ambiance */}
         <video
           autoPlay
@@ -2754,29 +2767,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
         {/* Professional overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/75 to-black/80 z-1"></div>
         {/* Main content */}
-        <div className="relative z-10 min-h-screen md:h-full flex flex-col">
+        <div className="relative z-10 h-full flex flex-col overflow-hidden">
           {/* Journal editor content - Bounded container for desktop */}
-          <div className="p-1 sm:p-2 md:p-2 lg:p-3 max-w-[95vw] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-4rem)] md:overflow-hidden flex flex-col md:items-start items-center">
+          <div className="p-1 sm:p-2 md:p-2 lg:p-3 w-full max-w-[1600px] mx-auto h-full flex flex-col md:items-start items-center overflow-hidden">
             {/* Desktop: Side by side layout */}
-            <div className="hidden md:grid md:grid-cols-2 gap-3 max-w-[95vw] mx-auto min-h-screen md:h-full md:max-h-[calc(100vh-4rem)] md:overflow-hidden">
+            <div className="hidden md:grid gap-3 w-full max-w-[1600px] mx-auto h-full overflow-hidden" style={{ gridTemplateColumns: '700px 1fr' }}>
 
               {/* Journal Preview - Left side on desktop */}
-              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-1 flex flex-col md:h-fit md:max-h-[calc(100vh-8rem)]">
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 overflow-hidden order-1 flex flex-col h-full">
                 {/* Journal preview content with buttons directly underneath */}
                 <div className="flex-1">
                   <div className="p-2 md:p-3 lg:p-6">
                     <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 md:h-[calc(100vh*0.85-1rem)]" ref={journalRef} id="journal-container" data-journal-content>
-                      {(() => {
-                        const sections = journalText.split('\n\n').filter(section => section.trim().length > 0);
-                        console.log('💾 RENDER DEBUG: Passing textSections to canvas:', {
-                          journalTextLength: journalText.length,
-                          journalTextPreview: journalText.substring(0, 100),
-                          sectionsCount: sections.length,
-                          sections: sections
-                        });
-                        return null;
-                      })()}
-                      <JournalCanvas
+                      {/* Debug statement removed */}
+                      {/* Desktop canvas debug removed */}
+                      <MemoizedJournalCanvas
+                        key="desktop-journal-canvas"
                         ref={canvasRef}
                         date={date}
                         location={location}
@@ -2849,7 +2855,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
               </div>
 
               {/* Input Form - Full width on mobile, left side on desktop */}
-              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 md:overflow-hidden order-2 md:order-1 flex flex-col min-h-[600px] md:h-full md:max-h-[calc(100vh-5rem)]">
+              <div className="bg-black md:rounded-2xl md:shadow-2xl md:border md:border-white/20 overflow-hidden order-2 md:order-1 flex flex-col h-full">
 
                 <div className="p-2 md:p-3 lg:p-4 border-b border-white/10 flex-shrink-0">
                   <div className="flex items-start justify-between gap-4">
@@ -2899,7 +2905,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="p-2 md:p-3 lg:p-4 flex-1 md:overflow-y-auto md:max-h-[calc(100vh-8rem)] md:max-w-full relative">
+                <div className="p-2 md:p-3 lg:p-4 flex-1 overflow-y-auto relative" style={{ scrollbarGutter: 'stable' }}>
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -2910,23 +2916,24 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       {/* Images and Colors side by side - Hidden on mobile */}
                       <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         {/* Images */}
-                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
-                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
+                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col">
+                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-2">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                             </svg>
                             <span>Images ({images.length})</span>
                           </label>
                           <div
-                            className="border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/40 backdrop-blur-sm hover:border-white/50 hover:bg-black/50"
+                            className="border-2 border-dashed rounded-xl py-4 px-2 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/40 backdrop-blur-sm hover:border-white/50 hover:bg-black/50 flex-1"
                             onClick={() => fileInputRef.current?.click()}
                           >
                             {isLoadingImage && (
-                              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
-                                <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
+                              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10 gap-2">
+                                <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                                <p className="text-white text-sm">Processing {loadingImageCount} image{loadingImageCount > 1 ? 's' : ''}...</p>
                               </div>
                             )}
-                            <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <svg className="w-6 h-6 mb-1 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                             </svg>
                             <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
@@ -2944,14 +2951,14 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         </div>
 
                         {/* Colors */}
-                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 md:p-4">
-                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-3">
+                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col">
+                          <label className="block text-lg font-medium text-white flex items-center gap-2 mb-2">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                             </svg>
                             <span>Colors</span>
                           </label>
-                          <div className="flex justify-center">
+                          <div className="flex justify-center items-center flex-1">
                             <SimpleColorPicker
                               colors={textColors}
                               onChange={handleColorChange}
@@ -3188,8 +3195,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 </div>
                 <div className="p-4">
                   <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 min-h-[400px]" id="journal-container" data-journal-content>
-                    <JournalCanvas
-                      ref={canvasRef}
+                    {/* Mobile canvas debug temporarily disabled */}
+                    {/* TEMPORARILY DISABLED TO FIX GLITCHING ISSUE */}
+                    {/* <JournalCanvas
+                      key="mobile-journal-canvas"
+                      ref={mobileCanvasRef}
                       date={date}
                       location={location}
                       textSections={journalText.split('\n\n').filter(section => section.trim().length > 0)}
@@ -3207,7 +3217,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       needInspiration={needInspiration}
                       inspirationQuestion={inspirationQuestion}
                       savedImagePositions={imagePositions}
-                    />
+                    /> */}
+                    <div className="flex items-center justify-center h-64 text-white/50">
+                      <p>Mobile preview temporarily disabled to fix glitching</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3285,8 +3298,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         onClick={() => fileInputRef.current?.click()}
                       >
                         {isLoadingImage && (
-                          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
-                            <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"></div>
+                          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10 gap-2">
+                            <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                            <p className="text-white text-sm">Processing {loadingImageCount} image{loadingImageCount > 1 ? 's' : ''}...</p>
                           </div>
                         )}
                         <svg className="w-6 h-6 mb-2 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

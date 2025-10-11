@@ -71,6 +71,7 @@
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "@types/uuid": "^10.0.0",
+    "@vercel/node": "^5.3.26",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "prettier": "^3.5.3",

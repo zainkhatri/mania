@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { TextColors } from './ColorPicker';
 import { jsPDF } from 'jspdf';
@@ -203,7 +203,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     fontSize: '16px',
     lineHeight: '1.5',
     textAlign: 'left',
-    padding: '40px',
+    padding: '0px',
     borderRadius: '12px',
     showDate: true,
     showLocation: true,
@@ -216,13 +216,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   inspirationQuestion = '',
   ...props
 }, ref) => {
-  console.log('🔍 INPUT DEBUG: JournalCanvas component rendered with props:', {
-    textSectionsLength: textSections?.length,
-    textSections: textSections,
-    imagesLength: images?.length,
-    textColors: textColors,
-    layoutMode
-  });
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -235,15 +228,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [templateImage, setTemplateImage] = useState<HTMLImageElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fontLoaded, setFontLoaded] = useState(false);
-  const [forceRender, setForceRender] = useState(0); // Add state to force re-renders
-  const [renderCount, setRenderCount] = useState(0);
+  
+  // Debug statements removed
+  
   const [stickers, setStickers] = useState<StickerImage[]>([]);
   const [showLocationShadow, setShowLocationShadow] = useState(false);
-  
-  // Debug: Log stickers state changes
-  useEffect(() => {
-    console.log("Stickers state updated:", stickers.length, stickers);
-  }, [stickers]);
+
+  // Guard refs to prevent double-initialization from React StrictMode
+  const didInitFonts = useRef(false);
+  const didInitTemplate = useRef(false);
 
   // Add persistence for stickers - save to localStorage whenever stickers change
   useEffect(() => {
@@ -266,8 +259,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }, [stickers, date, location]);
 
-  // Load stickers from localStorage on component mount
+  // Load stickers from localStorage on component mount (runs once per date/location change)
   useEffect(() => {
+    if (didInitTemplate.current) return; // Prevent double-load
+    didInitTemplate.current = true;
     try {
       const stickerKey = `stickers_${date.toISOString().split('T')[0]}_${location}`;
       const savedStickers = localStorage.getItem(stickerKey);
@@ -334,24 +329,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     } catch (error) {
       console.error("Failed to load stickers from localStorage:", error);
     }
-  }, [date, location]); // Only reload when date or location changes
 
-  // Clear stickers when component unmounts or when date/location changes significantly
-  useEffect(() => {
+    // Cleanup function - revoke any object URLs to prevent memory leaks
     return () => {
-      // Cleanup function - revoke any object URLs to prevent memory leaks
       stickers.forEach(sticker => {
         if (sticker.originalUrl) {
           URL.revokeObjectURL(sticker.originalUrl);
         }
       });
+      didInitTemplate.current = false; // Reset on unmount
     };
-  }, [stickers]);
-  
-  // Debug: Log stickers state changes
-  useEffect(() => {
-    console.log("Stickers state updated:", stickers.length, stickers);
-  }, [stickers]);
+  }, [date, location]); // Only reload when date or location changes
   const [activeSticker, setActiveSticker] = useState<number | null>(null);
   const [stickerDragOffset, setStickerDragOffset] = useState<StickerDragData | null>(null);
   const [stickerAction, setStickerAction] = useState<'move' | 'resize' | 'rotate' | null>(null);
@@ -412,9 +400,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [isImageInteraction, setIsImageInteraction] = useState(false);
   const previousCanvasDataRef = useRef<ImageData | null>(null);
   
-  // Function to trigger a re-render when needed
+  // Function to trigger a re-render when needed (now handled by React's dependency tracking)
   const renderJournal = useCallback(() => {
-    setForceRender(prev => prev + 1); // Increment to trigger a re-render
+    // Re-renders are now handled automatically by useEffect dependencies
   }, []);
 
   // iOS-optimized throttled render function
@@ -444,83 +432,61 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     });
   }, [renderJournal, isDraggingSticker, settings]);
   
-  // Font loading using FontFace API
+  // Font loading using FontFace API - runs once on mount
   useEffect(() => {
+    if (didInitFonts.current) return; // Stop StrictMode double-run
+    didInitFonts.current = true;
+
+    let cancelled = false; // Track if component unmounted
+
     // Add timestamp to prevent caching of the font files
     const timestamp = new Date().getTime();
-    const contentFontUrl = `${process.env.PUBLIC_URL}/font/zain.ttf?v=${timestamp}`; // For journal content
-    const titleFontUrl = `${process.env.PUBLIC_URL}/font/titles.ttf?v=${timestamp}`; // Corrected font name for location
-    
+    const contentFontUrl = `${process.env.PUBLIC_URL}/font/zain.ttf?v=${timestamp}`;
+    const titleFontUrl = `${process.env.PUBLIC_URL}/font/titles.ttf?v=${timestamp}`;
+
     // Load the fonts
     const loadFonts = async () => {
       try {
-        console.log('Starting to load custom fonts...');
-        
         // Load content font
         const contentFont = new FontFace('ZainCustomFont', `url(${contentFontUrl})`, {
           style: 'normal',
           weight: '900',
           display: 'swap'
         });
-        
+
         // Load title font
         const headingFont = new FontFace('TitleFont', `url(${titleFontUrl})`, {
           style: 'normal',
-          weight: '700', // Make title font bold for better visibility
+          weight: '700',
           display: 'swap'
         });
-        
-        try {
-          // Attempt to clear font cache
-          if ('fonts' in document) {
-            document.fonts.clear();
-            console.log('Font cache cleared');
-          }
-        } catch (e) {
-          console.warn('Failed to clear font cache, continuing anyway:', e);
-        }
-        
-        // Load both fonts and add to document
-        const loadedContentFont = await contentFont.load();
-        document.fonts.add(loadedContentFont);
-        console.log('Content font loaded successfully');
-        
-        try {
-          const loadedTitleFont = await headingFont.load();
-          document.fonts.add(loadedTitleFont);
-          console.log('Title font loaded successfully: ', titleFontUrl);
-          
-          // Force a redraw when fonts are loaded
-          setTimeout(() => {
-            console.log('Forcing redraw after font load');
-            setForceRender(prev => prev + 1);
-          }, 100);
-        } catch (titleErr) {
-          console.warn('Failed to load title font, continuing with standard fonts:', titleErr);
-        }
-        
-        // Mark fonts as loaded and remove loading state
+
+        // Load both fonts in parallel
+        await Promise.all([
+          contentFont.load().then(font => document.fonts.add(font)),
+          headingFont.load().then(font => document.fonts.add(font)).catch(() => {
+            // Title font is optional
+          })
+        ]);
+
+        if (cancelled) return;
+
+        // Mark fonts as loaded - flip isLoading ONCE
         setFontLoaded(true);
         setIsLoading(false);
       } catch (err) {
-        console.error('Error loading fonts:', err);
-        // Continue without custom fonts
+        if (cancelled) return;
         setFontLoaded(false);
         setIsLoading(false);
       }
     };
-    
+
     loadFonts();
-    
-    // Add a fallback to ensure loading state is cleared even if fonts fail
-    const timeout = setTimeout(() => {
-      if (isLoading) {
-        console.warn('Font loading timed out, continuing without custom fonts');
-        setIsLoading(false);
-      }
-    }, 3000); // 3 second timeout
-    
-    return () => clearTimeout(timeout);
+
+    return () => {
+      cancelled = true;
+      didInitFonts.current = false;
+    };
   }, []);
   
   // Format date in handwritten style
@@ -569,120 +535,92 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Combine all text sections into one continuous text
   const getCombinedText = useCallback((): string => {
-    console.log('📝 getCombinedText called with textSections:', textSections);
+    // Debug statement removed
     // If there's just a single string in the array, return it directly
     // Otherwise join the text sections with spaces to preserve word boundaries
     const combined = textSections.length === 1 ? textSections[0] : textSections.join(' ').trim();
-    console.log('📝 getCombinedText result length:', combined.length, 'preview:', combined.substring(0, 100));
+    // Debug statement removed
     return combined;
   }, [textSections]);
 
+  // Memoize draw dependencies to prevent unnecessary re-draws
+  const drawParams = useMemo(() => ({
+    hasTemplate: !!templateImage,
+    textCount: textSections.length,
+    imageCount: images.length,
+    stickerCount: stickers.length
+  }), [templateImage, textSections.length, images.length, stickers.length]);
+
   // Preload template and images
   useEffect(() => {
-    if (isLoading) return; // Wait for font loading state to be cleared
-    
-    console.log('Starting to load template and images');
+    if (isLoading || !fontLoaded) return; // Wait for fonts first
+
     setIsLoading(true);
+    let cancelled = false;
+
     const loadTemplateAndImages = async () => {
       try {
         // Load template first
         const template = new Image();
-        template.crossOrigin = 'anonymous'; // In case the template is hosted elsewhere
-        
-        console.log('Attempting to load template from:', templateUrl);
-        
+        template.crossOrigin = 'anonymous';
+
         const templatePromise = new Promise<HTMLImageElement | null>((resolve) => {
-          template.onload = () => {
-            console.log('Template loaded successfully:', template.width, 'x', template.height);
-            resolve(template);
-          };
-          template.onerror = (err) => {
-            console.error('Failed to load template image with cache buster:', err);
-            // Try loading without cache buster
-            console.log('Attempting to load template without cache buster:', templateUrl);
+          template.onload = () => resolve(template);
+          template.onerror = () => {
+            // Try without cache buster
             template.src = templateUrl;
-            template.onload = () => {
-              console.log('Template loaded successfully without cache buster:', template.width, 'x', template.height);
-              resolve(template);
-            };
-            template.onerror = () => {
-              console.error('Failed to load template image even without cache buster');
-              // Try one more time with a different path
-              const altPath = templateUrl.startsWith('/') ? templateUrl.slice(1) : '/' + templateUrl;
-              console.log('Attempting to load template with alternate path:', altPath);
-              template.src = altPath;
-              template.onload = () => {
-                console.log('Template loaded successfully with alternate path:', template.width, 'x', template.height);
-                resolve(template);
-              };
-              template.onerror = () => {
-                console.error('All template loading attempts failed');
-                resolve(null);
-              };
-            };
+            template.onload = () => resolve(template);
+            template.onerror = () => resolve(null);
           };
-          // Add timestamp to prevent caching issues
           const cacheBuster = `?v=${new Date().getTime()}`;
           template.src = templateUrl.includes('?') ? templateUrl : templateUrl + cacheBuster;
         });
-        
+
         const loadedTemplate = await templatePromise;
-        if (!loadedTemplate) {
-          console.error('Could not load template, falling back to default background');
-        } else {
-          console.log('Template loaded and ready to use:', loadedTemplate.width, 'x', loadedTemplate.height);
-        }
-        setTemplateImage(loadedTemplate);
-        
-        // Then load the regular images
+        if (cancelled) return;
+
+        setTemplateImage(prev => prev === loadedTemplate ? prev : loadedTemplate); // No-op if same
+
+        // Load regular images
         const loadedImages: HTMLImageElement[] = [];
-        
-        // Create an array of promises for loading each image
         const imagePromises = images.map((src, index) => {
           return new Promise<HTMLImageElement | null>((resolve) => {
             const img = new Image();
-            img.crossOrigin = 'anonymous'; // Set crossOrigin for all images to prevent tainted canvas
-            img.onload = () => {
-              resolve(img);
-            };
-            img.onerror = (err) => {
-              console.error(`Failed to load image ${index}:`, err);
-              resolve(null);
-            };
-            // Determine source type
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+
             if (typeof src === 'string') {
-              // Use the direct source without cache busting to avoid rendering issues
               img.src = src;
             } else {
-              // Blob (File) object
               img.src = URL.createObjectURL(src);
             }
-            
-            // Standard decoding is more reliable
             img.decoding = 'auto';
           });
         });
-        
-        // Resolve all promises
+
         if (imagePromises.length > 0) {
           const results = await Promise.all(imagePromises);
-          // Fix the linter error by using type guard to filter out nulls
+          if (cancelled) return;
           const validImages = results.filter((img): img is HTMLImageElement => img !== null);
           loadedImages.push(...validImages);
         }
-        
+
+        if (cancelled) return;
         setImageObjects(loadedImages);
-        // Force a re-render when images are loaded
-        renderJournal();
       } catch (err) {
         console.error('Error loading template or images:', err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
-    
+
     loadTemplateAndImages();
-  }, [images, templateUrl, fontLoaded, renderJournal]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [images, templateUrl, fontLoaded]);
 
   // Helper to draw images preserving aspect ratio, border, rotation, flipping, and quality
   const drawImagePreservingAspectRatio = (
@@ -699,7 +637,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
     
     try {
@@ -739,36 +677,40 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         ctx.strokeRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       }
       
-      // Use a two-step drawing process for better quality:
-      // 1. Draw to an intermediate canvas at full resolution
-      // 2. Draw the intermediate canvas to the final canvas
-      
-      // Create temporary canvas for higher quality rendering
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d', { 
-        alpha: true,
-        colorSpace: 'srgb',
-        desynchronized: false
-      });
-      
-      if (tempCtx) {
-        // High quality mode for main images
-      // Use larger canvas for better scaling
-      const scaleFactor = 1.5;
-      tempCanvas.width = Math.max(img.width * scaleFactor, drawWidth * 1.5);
-      tempCanvas.height = Math.max(img.height * scaleFactor, drawHeight * 1.5);
-      
-      // Apply maximum quality settings
-      tempCtx.imageSmoothingEnabled = true;
-      tempCtx.imageSmoothingQuality = 'high';
-      
-      // First draw image to temp canvas at larger size for better quality
-      tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-      
-      // Now draw from the temp canvas to the main canvas
-      ctx.drawImage(tempCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      // OPTIMIZED: Skip expensive double-buffering during interactions
+      // Only use temp canvas for static/export quality when not dragging
+      const shouldUseHighQuality = enhancedQuality && !isDraggingSticker && !draggedSimpleImage && !resizingSimpleImage;
+
+      if (shouldUseHighQuality) {
+        // High quality mode: Create temporary canvas for better rendering
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d', {
+          alpha: true,
+          colorSpace: 'srgb',
+          desynchronized: false
+        });
+
+        if (tempCtx) {
+          // Use larger canvas for better scaling
+          const scaleFactor = 1.5;
+          tempCanvas.width = Math.max(img.width * scaleFactor, drawWidth * 1.5);
+          tempCanvas.height = Math.max(img.height * scaleFactor, drawHeight * 1.5);
+
+          // Apply maximum quality settings
+          tempCtx.imageSmoothingEnabled = true;
+          tempCtx.imageSmoothingQuality = 'high';
+
+          // First draw image to temp canvas at larger size for better quality
+          tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+          // Now draw from the temp canvas to the main canvas
+          ctx.drawImage(tempCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        } else {
+          // Fallback to direct drawing
+          ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        }
       } else {
-        // Fallback to direct drawing if tempCtx fails
+        // Fast mode during interactions: Direct drawing for smooth performance
         ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       }
       
@@ -810,83 +752,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
 
 
-  // Draw the canvas with all elements - INSTANT updates for real-time experience
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    if (isLoading) return; // Don't draw while loading
-    
-    // INSTANT rendering - no debouncing for real-time experience
-    const renderCanvas = () => {
-      // Check for global flag to force redraw
-      if (window.FORCE_CANVAS_REDRAW) {
-        window.FORCE_CANVAS_REDRAW = false;
-      }
-      
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      // Get device pixel ratio for mobile optimization
-      const dpr = window.devicePixelRatio || 1;
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-      
-      // Use optimized high-resolution settings - reduced from 3100x4370 to 1860x2620
-      let canvasWidth, canvasHeight;
-      canvasWidth = 1860;  // Reduced from 3100
-      canvasHeight = 2620; // Reduced from 4370
-      
-      // Set canvas size
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw template
-      if (templateImage) {
-        // Save current context state
-        ctx.save();
-        
-        // Ensure high quality rendering for template
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Draw template to fill the entire canvas exactly
-        try {
-          ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-        } catch (err) {
-          // If drawing fails, try to draw at original size
-          try {
-            ctx.drawImage(templateImage, 0, 0, templateImage.width, templateImage.height);
-          } catch (err) {
-            // If all else fails, draw a background color
-            ctx.fillStyle = template.backgroundColor || '#f5f5f5';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-          }
-        }
-        
-        ctx.restore();
-      } else {
-        // Fallback background
-        ctx.fillStyle = template.backgroundColor || '#f5f5f5';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      
-      // Draw content based on layout mode
-      if (layoutMode === 'freeflow') {
-        renderSimpleTextFlow(ctx);
-      } else {
-        // For now, just use the freeflow layout as fallback
-        renderSimpleTextFlow(ctx);
-      }
-    };
-    
-    console.log('🔍 INPUT DEBUG: Main rendering useEffect executing INSTANTLY');
-    renderCanvas();
-  }, [templateImage, textColors, layoutMode, stickers, isLoading, textSections, images, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]); // Added image-related dependencies
-  
+  // Removed duplicate rendering useEffect - will be added after renderCanvas callback definition
+
   // Show location shadow when location is available
   useEffect(() => {
     if (location && location.trim()) {
@@ -898,7 +765,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   useEffect(() => {
     // INSTANT updates - no debouncing for real-time experience
     if (textSections.some(text => text.trim()) || images.length > 0) {
-      console.log('🔍 INPUT DEBUG: Content changed, canvas updating INSTANTLY');
+      // Debug statement removed
     }
   }, [textSections, images]);
 
@@ -917,11 +784,32 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
   }, []);
 
+  // Add debounce mechanism to prevent excessive re-renders
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRenderTimeRef = useRef<number>(0);
+  const RENDER_DEBOUNCE_MS = 16; // ~60fps
+
   // Add this before the main useEffect
   const renderCanvas = useCallback(() => {
-    console.log('🔍 INPUT DEBUG: renderCanvas function called');
+    const now = Date.now();
+    // Debug statement removed
+    
     if (!canvasRef.current) return;
     if (isLoading) return;
+
+    // Debounce rapid calls
+    if (now - lastRenderTimeRef.current < RENDER_DEBOUNCE_MS) {
+      // Debug statement removed
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+      renderTimeoutRef.current = setTimeout(() => {
+        renderCanvas();
+      }, RENDER_DEBOUNCE_MS - (now - lastRenderTimeRef.current));
+      return;
+    }
+
+    lastRenderTimeRef.current = now;
     
     // Check for global flag to force redraw
     if (window.FORCE_CANVAS_REDRAW) {
@@ -940,9 +828,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     canvasHeight = 2620; // Reduced from 4370 for better performance
           
           // Create an optimized rendering context with identical settings for all devices
-    const ctx = canvas.getContext('2d', { 
-      alpha: true, 
-      willReadFrequently: false, // Disable for better performance
+    const ctx = canvas.getContext('2d', {
+      alpha: true,
+      willReadFrequently: true, // Enable for better performance with frequent readback operations
       desynchronized: false, // Changed to false for better text quality
     });
     if (!ctx) return;
@@ -1005,7 +893,51 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     } catch (error) {
       console.error('Error rendering canvas:', error);
     }
-  }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCount]);
+  }, [date, location, textSections, images, textColors, layoutMode, templateImage, isLoading, props.savedImagePositions, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage]);
+
+  // Single rendering useEffect to prevent flash when adding/deleting images
+  useEffect(() => {
+    console.log('🔥 CANVAS RENDER TRIGGERED', {
+      hasCanvas: !!canvasRef.current,
+      isLoading,
+      hasTemplate: !!templateImage,
+      textSections: textSections.length,
+      images: images.length,
+      isDragging: !!draggedSimpleImage,
+      timestamp: Date.now()
+    });
+
+    if (!canvasRef.current) {
+      console.log('🔥 SKIPPED: No canvas ref');
+      return;
+    }
+    if (isLoading) {
+      console.log('🔥 SKIPPED: Still loading');
+      return;
+    }
+
+    // Allow rendering during drag for smooth visual feedback
+    // RAF throttling in mousemove handles performance
+
+    console.log('🔥 WILL RENDER on next frame');
+    // Use requestAnimationFrame for smooth, synchronized rendering
+    const frameId = requestAnimationFrame(() => {
+      console.log('🔥 RENDERING CANVAS NOW');
+      const startTime = performance.now();
+      renderCanvas();
+      const endTime = performance.now();
+      console.log(`🔥 CANVAS RENDER COMPLETE in ${(endTime - startTime).toFixed(2)}ms`);
+    });
+
+    return () => {
+      // Debug statement removed
+      cancelAnimationFrame(frameId);
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+        renderTimeoutRef.current = null;
+      }
+    };
+  }, [templateImage, textColors, layoutMode, stickers, isLoading, textSections, images, simpleImagePositions, selectedImage, hoveredImage, draggedSimpleImage, resizingSimpleImage, renderCanvas]);
 
   // Mobile-optimized PDF export function
   const exportUltraHDPDF = () => {
@@ -1018,11 +950,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
-    console.log('🖼️ PDF EXPORT DEBUG: Starting export with images:', simpleImagePositions.length);
-    console.log('🖼️ PDF EXPORT DEBUG: Current image positions:', simpleImagePositions);
-    console.log('🖼️ PDF EXPORT DEBUG: textSections:', textSections);
-    console.log('🖼️ PDF EXPORT DEBUG: location:', location);
-    console.log('📱 Device detection:', { isMobile, isIOS, userAgent: navigator.userAgent });
+    // Debug statements removed
+    // Debug statement removed
     
     // Force high quality mode for export
     const wasHighQuality = isHighQualityMode;
@@ -1063,23 +992,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         return;
       }
       
-      console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+      // Debug statement removed
       
       // Validate canvas dimensions before proceeding
       if (journalCanvas.width === 0 || journalCanvas.height === 0) {
-        console.error('🖼️ PDF EXPORT ERROR: Canvas has invalid dimensions, forcing redraw');
-        // Force a redraw and try again
-        forceRedraw();
-        setTimeout(() => {
-          const retryCanvas = canvasRef.current;
-          if (retryCanvas && retryCanvas.width > 0 && retryCanvas.height > 0) {
-            console.log('🖼️ PDF EXPORT DEBUG: Retry canvas dimensions:', retryCanvas.width, 'x', retryCanvas.height);
-            performExportWithCanvas(retryCanvas, savingToast);
-          } else {
-            console.error('🖼️ PDF EXPORT ERROR: Canvas still invalid after retry');
-            document.body.removeChild(savingToast);
-          }
-        }, 500);
+        console.error('🖼️ PDF EXPORT ERROR: Canvas has invalid dimensions');
+        document.body.removeChild(savingToast);
+        alert('Export failed: Canvas not ready. Please try again.');
         return;
       }
       
@@ -1093,13 +1012,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const exportQuality = isMobile ? 0.9 : 1.0; // Lower quality on mobile for smaller files
 
         console.log('📱 Export settings:', { exportQuality, isMobile });
-        console.log('🖼️ PDF EXPORT DEBUG: Canvas dimensions:', journalCanvas.width, 'x', journalCanvas.height);
+        // Debug statement removed
 
         // Directly use the canvas's toDataURL - no need for html2canvas
         let pngData: string;
         try {
           pngData = journalCanvas.toDataURL('image/png', exportQuality);
-          console.log('🖼️ PDF EXPORT DEBUG: PNG data created directly from canvas, length:', pngData.length);
+          // Debug statement removed
 
           // Validate PNG data
           if (pngData.length < 1000) { // PNG should be at least 1KB
@@ -1115,7 +1034,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Create a new image element from the high-quality PNG
         const img = new Image();
         img.onload = () => {
-          console.log('🖼️ PDF EXPORT DEBUG: High-res image loaded, creating PDF');
+          // Debug statement removed
 
           try {
             // Mobile-optimized PDF creation
@@ -1156,7 +1075,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               alias: `journal-${Date.now()}` // Unique alias to prevent caching issues
             });
 
-            console.log('🖼️ PDF EXPORT DEBUG: PDF created, saving...');
+            // Debug statement removed
 
             // Save the PDF with mobile-optimized filename
             const date = new Date();
@@ -1238,7 +1157,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               }
             }, 2000);
 
-            console.log('🖼️ PDF EXPORT DEBUG: Export completed successfully');
+            // Debug statement removed
           } catch (pdfError) {
             console.error('🖼️ PDF EXPORT ERROR: Error creating PDF:', pdfError);
 
@@ -1253,7 +1172,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   // Method 1: Try blob download
                   try {
                     const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
                     const img = new Image();
 
                     img.onload = () => {
@@ -1619,15 +1538,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     // Get combined text
     const journalText = getCombinedText();
-    console.log('📝 RENDER: journalText for canvas:', {
-      length: journalText.length,
-      preview: journalText.substring(0, 100),
-      textSections: textSections,
-      hasText: !!journalText
-    });
+    // Debug statement removed
     // For freeflow layout, render even if there's no text (to show images)
     if (!journalText && simpleImagePositions.length === 0) {
-      console.log('📝 RENDER: Early return - no text and no images');
+      // Debug statement removed
       return;
     }
     
@@ -2124,10 +2038,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         
         if (distanceToDelete <= deleteBtnRadius) {
           console.log("🗑️ Delete button clicked, deleting image:", i);
+          // Clear selection immediately before deleting
+          setSelectedImage(null);
+          setDraggedSimpleImage(null);
+          setResizingSimpleImage(null);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
-          // Keep selection on the deleted image until it's actually removed
           return;
         }
         
@@ -2159,7 +2076,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             mouseY >= imagePos.y && mouseY <= imagePos.y + imagePos.height) {
           
           clickedImage = true;
-          console.log("🖼️ Image body clicked:", i);
+          // Debug statement removed
           
           // ALWAYS select the image when clicked - no exceptions
           if (selectedImage !== i) {
@@ -2219,17 +2136,14 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Add smooth animation state for image operations
   const [isResizing, setIsResizing] = React.useState(false);
   const lastUpdateTime = React.useRef(0);
-  const THROTTLE_MS = 16; // ~60fps
+  const lastRenderTime = React.useRef(0);
+  const THROTTLE_MS = 16; // ~60fps for position tracking
+  const RENDER_THROTTLE_MS = 16; // Smooth 60fps dragging
+  const dragPositionRef = React.useRef<{x: number, y: number} | null>(null);
+  const pendingDragUpdate = React.useRef<boolean>(false);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !props.editMode) return;
-    
-    // Throttle updates for smooth performance
-    const now = Date.now();
-    if (now - lastUpdateTime.current < THROTTLE_MS) {
-      return;
-    }
-    lastUpdateTime.current = now;
     
     try {
       const rect = canvasRef.current.getBoundingClientRect();
@@ -2240,153 +2154,121 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Handle freeflow layout image dragging and resizing
       if (layoutMode === 'freeflow') {
-        // Check for image hover
-        let foundHoveredImage = false;
-        for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
-          const imagePos = simpleImagePositions[i];
-          if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
-              y >= imagePos.y && y <= imagePos.y + imagePos.height) {
-            setHoveredImage(i);
-            foundHoveredImage = true;
-            break;
+        // Only check for image hover when NOT dragging (avoid unnecessary re-renders)
+        if (draggedSimpleImage === null && resizingSimpleImage === null) {
+          let foundHoveredImage = false;
+          for (let i = simpleImagePositions.length - 1; i >= 0; i--) {
+            const imagePos = simpleImagePositions[i];
+            if (x >= imagePos.x && x <= imagePos.x + imagePos.width &&
+                y >= imagePos.y && y <= imagePos.y + imagePos.height) {
+              if (hoveredImage !== i) {
+                setHoveredImage(i);
+              }
+              foundHoveredImage = true;
+              break;
+            }
           }
-        }
-        if (!foundHoveredImage) {
-          setHoveredImage(null);
+          if (!foundHoveredImage && hoveredImage !== null) {
+            setHoveredImage(null);
+          }
         }
         
         // Handle dragging of images (only when dragging is explicitly enabled)
         if (draggedSimpleImage !== null) {
-          // Cancel any pending animation frame
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
+          const newX = x - dragOffset.x;
+          const newY = y - dragOffset.y;
+
+          // Constrain to canvas bounds
+          const constrainedX = Math.max(0, Math.min(canvasRef.current.width - simpleImagePositions[draggedSimpleImage].width, newX));
+          const constrainedY = Math.max(0, Math.min(canvasRef.current.height - simpleImagePositions[draggedSimpleImage].height, newY));
+
+          // Store position in ref for immediate visual feedback
+          dragPositionRef.current = { x: constrainedX, y: constrainedY };
+
+          // Schedule RAF update for smooth 60fps rendering
+          if (!pendingDragUpdate.current) {
+            pendingDragUpdate.current = true;
+
+            requestAnimationFrame(() => {
+              pendingDragUpdate.current = false;
+
+              if (draggedSimpleImage === null || !dragPositionRef.current) return;
+
+              // Update state to trigger canvas redraw
+              const newPositions = simpleImagePositions.map((pos, idx) =>
+                idx === draggedSimpleImage && dragPositionRef.current
+                  ? { ...pos, x: dragPositionRef.current.x, y: dragPositionRef.current.y }
+                  : pos
+              );
+
+              setSimpleImagePositions(newPositions);
+
+              // Call the onImageDrag callback if provided
+              if (props.onImageDrag && dragPositionRef.current) {
+                props.onImageDrag(draggedSimpleImage, dragPositionRef.current.x, dragPositionRef.current.y);
+              }
+            });
           }
-          
-          // Use requestAnimationFrame for smooth updates
-          animationFrameRef.current = requestAnimationFrame(() => {
-            const newPositions = [...simpleImagePositions];
-            const newX = x - dragOffset.x;
-            const newY = y - dragOffset.y;
-            
-            // Constrain to canvas bounds
-            const constrainedX = Math.max(0, Math.min(canvasRef.current!.width - newPositions[draggedSimpleImage].width, newX));
-            const constrainedY = Math.max(0, Math.min(canvasRef.current!.height - newPositions[draggedSimpleImage].height, newY));
-            
-            newPositions[draggedSimpleImage] = {
-              ...newPositions[draggedSimpleImage],
-              x: constrainedX,
-              y: constrainedY
-            };
-            
-            setSimpleImagePositions(newPositions);
-            setIsDragging(true);
-            
-            // Call the onImageDrag callback if provided
-            if (props.onImageDrag) {
-              props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
-            }
-          });
-          
-          return;
-        }
-        
-        if (draggedSimpleImage !== null) {
-          // Cancel any pending animation frame
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-          }
-          
-          // Use requestAnimationFrame for smooth updates
-          animationFrameRef.current = requestAnimationFrame(() => {
-            const newPositions = [...simpleImagePositions];
-            const newX = x - dragOffset.x;
-            const newY = y - dragOffset.y;
-            
-            // Constrain to canvas bounds
-            const constrainedX = Math.max(0, Math.min(canvasRef.current!.width - newPositions[draggedSimpleImage].width, newX));
-            const constrainedY = Math.max(0, Math.min(canvasRef.current!.height - newPositions[draggedSimpleImage].height, newY));
-            
-            newPositions[draggedSimpleImage] = {
-              ...newPositions[draggedSimpleImage],
-              x: constrainedX,
-              y: constrainedY
-            };
-            
-            setSimpleImagePositions(newPositions);
-            setIsDragging(true);
-            
-            // Call the onImageDrag callback if provided
-            if (props.onImageDrag) {
-              props.onImageDrag(draggedSimpleImage, constrainedX, constrainedY);
-            }
-          });
-          
+
           return;
         }
         
         if (resizingSimpleImage !== null && resizeStartData) {
-          // Cancel any pending animation frame
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
+          const deltaX = x - resizeStartData.startX;
+          const deltaY = y - resizeStartData.startY;
+
+          const canvasWidth = canvasRef.current.width;
+          const canvasHeight = canvasRef.current.height;
+          const newWidth = Math.max(100, Math.min(canvasWidth * 0.8, resizeStartData.startWidth + deltaX));
+          const newHeight = Math.max(100, Math.min(canvasHeight * 0.8, resizeStartData.startHeight + deltaY));
+
+          // Preserve aspect ratio
+          const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
+          let finalWidth = newWidth;
+          let finalHeight = newHeight;
+
+          if (newWidth / newHeight > aspectRatio) {
+            finalHeight = newWidth / aspectRatio;
+            if (finalHeight > canvasHeight * 0.8) {
+              finalHeight = canvasHeight * 0.8;
+              finalWidth = finalHeight * aspectRatio;
+            }
+          } else {
+            finalWidth = newHeight * aspectRatio;
+            if (finalWidth > canvasWidth * 0.8) {
+              finalWidth = canvasWidth * 0.8;
+              finalHeight = finalWidth / aspectRatio;
+            }
           }
-          
-          // Use requestAnimationFrame for smooth updates
-          animationFrameRef.current = requestAnimationFrame(() => {
-            const newPositions = [...simpleImagePositions];
-            const deltaX = x - resizeStartData.startX;
-            const deltaY = y - resizeStartData.startY;
-            
-            // Use same simple logic as mobile for consistent behavior
-            // Calculate new dimensions based on drag direction (like mobile)
-            if (!canvasRef.current) return;
 
-            const canvasWidth = canvasRef.current.width;
-            const canvasHeight = canvasRef.current.height;
-            const newWidth = Math.max(100, Math.min(canvasWidth * 0.8, resizeStartData.startWidth + deltaX));
-            const newHeight = Math.max(100, Math.min(canvasHeight * 0.8, resizeStartData.startHeight + deltaY));
+          const finalWidthRounded = Math.round(finalWidth);
+          const finalHeightRounded = Math.round(finalHeight);
 
-            // Preserve aspect ratio (same as mobile)
-            const aspectRatio = resizeStartData.startWidth / resizeStartData.startHeight;
-            let finalWidth = newWidth;
-            let finalHeight = newHeight;
+          // Schedule single RAF update if not already pending
+          if (!pendingDragUpdate.current) {
+            pendingDragUpdate.current = true;
 
-            if (newWidth / newHeight > aspectRatio) {
-              finalHeight = newWidth / aspectRatio;
-              if (finalHeight > canvasHeight * 0.8) {
-                finalHeight = canvasHeight * 0.8;
-                finalWidth = finalHeight * aspectRatio;
+            requestAnimationFrame(() => {
+              pendingDragUpdate.current = false;
+
+              if (resizingSimpleImage === null) return;
+
+              // Batch update
+              const newPositions = simpleImagePositions.map((pos, idx) =>
+                idx === resizingSimpleImage
+                  ? { ...pos, width: finalWidthRounded, height: finalHeightRounded }
+                  : pos
+              );
+
+              setSimpleImagePositions(newPositions);
+
+              // Call the onImageResize callback if provided
+              if (props.onImageResize) {
+                props.onImageResize(resizingSimpleImage, finalWidthRounded, finalHeightRounded);
               }
-            } else {
-              finalWidth = newHeight * aspectRatio;
-              if (finalWidth > canvasWidth * 0.8) {
-                finalWidth = canvasWidth * 0.8;
-                finalHeight = finalWidth / aspectRatio;
-              }
-            }
+            });
+          }
 
-            // Final dimensions are already calculated above with aspect ratio preserved
-            // Just round them for pixel-perfect rendering
-            const finalWidthRounded = Math.round(finalWidth);
-            const finalHeightRounded = Math.round(finalHeight);
-            
-            newPositions[resizingSimpleImage] = {
-              ...newPositions[resizingSimpleImage],
-              width: finalWidthRounded,
-              height: finalHeightRounded
-            };
-            
-            setSimpleImagePositions(newPositions);
-            setIsResizing(true);
-            
-            // Call the onImageResize callback if provided
-            if (props.onImageResize) {
-              props.onImageResize(resizingSimpleImage, finalWidthRounded, finalHeightRounded);
-            }
-            
-            // Force a re-render to update text wrapping
-            debouncedRender();
-          });
-          
           return;
         }
       }
@@ -2688,12 +2570,26 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Update handleMouseUp to handle dragging
   const handleMouseUp = () => {
-    // Stop simple layout image dragging
-    if (draggedSimpleImage !== null) {
+    // Commit final position from ref when stopping drag
+    if (draggedSimpleImage !== null && dragPositionRef.current) {
+      const finalPositions = [...simpleImagePositions];
+      finalPositions[draggedSimpleImage] = {
+        ...finalPositions[draggedSimpleImage],
+        x: dragPositionRef.current.x,
+        y: dragPositionRef.current.y
+      };
+      setSimpleImagePositions(finalPositions);
+
+      // Call the onImageDrag callback with final position
+      if (props.onImageDrag) {
+        props.onImageDrag(draggedSimpleImage, dragPositionRef.current.x, dragPositionRef.current.y);
+      }
+
+      dragPositionRef.current = null;
       setDraggedSimpleImage(null);
       setDragOffset({x: 0, y: 0});
     }
-    
+
     // Stop simple layout image resizing
     if (resizingSimpleImage !== null) {
       setResizingSimpleImage(null);
@@ -2758,10 +2654,13 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         
         if (distanceToDelete <= deleteBtnRadius) {
           console.log("🗑️ Delete button touched, deleting image:", i);
+          // Clear selection immediately before deleting
+          setSelectedImage(null);
+          setDraggedSimpleImage(null);
+          setResizingSimpleImage(null);
           if (props.onImageDelete) {
             props.onImageDelete(i);
           }
-          // Keep selection on the deleted image until it's actually removed
           return;
         }
         
@@ -2793,7 +2692,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             y >= imagePos.y && y <= imagePos.y + imagePos.height) {
           
           touchedImage = true;
-          console.log("🖼️ Image body touched:", i);
+          // Debug statement removed
           
           // ALWAYS select the image when touched - no exceptions
           if (selectedImage !== i) {
@@ -2983,32 +2882,28 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
 
 
-  // Function to force a redraw from outside
-  const forceRedraw = useCallback(() => {
-    console.log('Force redraw called');
-    setRenderCount(prev => prev + 1);
-  }, []);
-
-  // Expose the forceRedraw method to the window for direct access
-  useEffect(() => {
-    // @ts-ignore
-    window.forceCanvasRedraw = forceRedraw;
-    return () => {
-      // @ts-ignore
-      delete window.forceCanvasRedraw;
-    };
-  }, [forceRedraw]);
+  // Note: Removed forceRedraw function - React automatically re-renders when state changes
   
   // Update simple image positions when images prop changes
+  // Use ref to track if we've initialized positions for current images
+  const initializedImagesRef = useRef<Set<string | Blob>>(new Set());
+
   useEffect(() => {
     if (layoutMode === 'freeflow' && images.length > 0) {
-      console.log('🖼️ CANVAS DEBUG: Images changed, updating positions. Images count:', images.length);
-      console.log('🖼️ CANVAS DEBUG: Saved positions:', props.savedImagePositions);
-      console.log('🖼️ CANVAS DEBUG: Current simpleImagePositions:', simpleImagePositions);
-      
-      // Preserve existing positions and only add new ones for new images
+      // Debug statement removed
+
+      // Use functional update to check if update is needed AND update in one go
       setSimpleImagePositions(prevPositions => {
-        console.log('🖼️ CANVAS DEBUG: Previous positions:', prevPositions);
+        // Check if we need to update - only if images actually changed
+        const needsUpdate = images.length !== prevPositions.length ||
+                           images.some((img, i) => prevPositions[i]?.image !== img);
+
+        if (!needsUpdate) {
+          // Debug statement removed
+          return prevPositions; // Return same reference to prevent re-render
+        }
+
+        // Debug statement removed
         
         const newImagePositions: Array<{
           x: number;
@@ -3051,18 +2946,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         
         // Process images synchronously for better performance
         images.forEach((image, index) => {
-          // Check if we already have a position for this image index
-          const existingPosition = prevPositions[index];
-          
+          // Find existing position by matching the actual image, not by index
+          // This prevents teleporting when images are deleted
+          const existingPosition = prevPositions.find(pos => {
+            // Compare image URLs or blob objects
+            if (typeof pos.image === 'string' && typeof image === 'string') {
+              return pos.image === image;
+            } else if (pos.image === image) {
+              return true;
+            }
+            return false;
+          });
+
             if (existingPosition) {
-              console.log(`🖼️ Preserving position for image ${index}:`, existingPosition);
+              // Debug statement removed
               // Preserve existing position, size, and rotation, but update the image reference
               newImagePositions.push({
                 ...existingPosition,
                 image
               });
             } else {
-              console.log(`🖼️ Creating new position for image ${index}`);
+              // Debug statement removed
             
             // Use default dimensions for initial positioning (will be updated when image loads)
             const imageWidth = 400; // Reduced from 800
@@ -3078,35 +2982,35 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               x = props.savedImagePositions[index].x;
               y = props.savedImagePositions[index].y;
               savedRotation = props.savedImagePositions[index].rotation || 0;
-              console.log(`🖼️ Using saved position for image ${index}:`, { x, y, rotation: savedRotation });
+              // Debug statement removed
             } else {
-              // Center all images on the page with slight offsets to prevent overlap
-            // Use the new canvas dimensions (1860x2620)
-            const canvasWidth = 1860;
-            const canvasHeight = 2620;
+              // Spread images out using grid pattern to prevent overlap
+              // Use the new canvas dimensions (1860x2620)
+              const canvasWidth = 1860;
+              const canvasHeight = 2620;
               const centerX = (canvasWidth - imageWidth) / 2;
               const centerY = (canvasHeight - imageHeight) / 2;
-              
-              // Add slight random offset to prevent perfect stacking
-              const offsetRange = 50; // Maximum offset in pixels
-              const randomOffsetX = (Math.random() - 0.5) * offsetRange;
-              const randomOffsetY = (Math.random() - 0.5) * offsetRange;
-              
-              // For the first image, place it in the center of the page
-              if (index === 0) {
-                x = centerX;
-                y = centerY;
-              } else {
-                // For additional images, place them near center with slight offsets
-                // This creates a more natural, scattered look while keeping them centered
-                x = centerX + randomOffsetX;
-                y = centerY + randomOffsetY;
-                
-                // Ensure images don't go off the canvas edges
-                x = Math.max(50, Math.min(x, canvasWidth - imageWidth - 50));
-                y = Math.max(50, Math.min(y, canvasHeight - imageHeight - 50));
-              }
-              console.log(`🖼️ Using centered position for image ${index}:`, { x, y });
+
+              // Use a grid-like pattern with randomness for better spread
+              const gridCols = 3;
+              const gridX = (index % gridCols) - 1; // -1, 0, 1
+              const gridY = Math.floor(index / gridCols);
+
+              const baseOffsetX = gridX * (imageWidth + 100);
+              const baseOffsetY = gridY * (imageHeight + 100);
+
+              // Add randomness to avoid perfect grid
+              const randomOffsetX = (Math.random() - 0.5) * 100;
+              const randomOffsetY = (Math.random() - 0.5) * 100;
+
+              x = centerX + baseOffsetX + randomOffsetX;
+              y = centerY + baseOffsetY + randomOffsetY;
+
+              // Ensure images don't go off the canvas edges
+              x = Math.max(50, Math.min(x, canvasWidth - imageWidth - 50));
+              y = Math.max(50, Math.min(y, canvasHeight - imageHeight - 50));
+
+              // Debug statement removed
             }
             
             newImagePositions.push({
@@ -3120,79 +3024,82 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           }
         });
         
-        console.log('🖼️ Final new positions:', newImagePositions);
+        // Debug statement removed
         return newImagePositions;
       });
-      
-      // Force a re-render when images are added to freeflow layout
-      renderJournal();
+
+      // Note: Removed renderJournal() call - React automatically re-renders when simpleImagePositions changes
     } else if (layoutMode !== 'freeflow') {
-      // Clear positions when not in freeflow mode
-      setSimpleImagePositions([]);
+      // Clear positions when not in freeflow mode - use functional update
+      setSimpleImagePositions(prev => prev.length > 0 ? [] : prev);
     }
-  }, [images, layoutMode, renderJournal, props.savedImagePositions]);
+  }, [images, layoutMode, props.savedImagePositions]);
 
   // Update image dimensions when they load (preserving positions)
+  // Note: Only depend on images.length to avoid re-render loop
   useEffect(() => {
-    if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
+    if (layoutMode === 'freeflow' && images.length > 0) {
       const updateImageDimensions = async () => {
-        const updatedPositions = [...simpleImagePositions];
-        let hasChanges = false;
+        // Use functional update to get latest positions without depending on them
+        setSimpleImagePositions(currentPositions => {
+          if (currentPositions.length === 0) return currentPositions;
 
-        for (let i = 0; i < updatedPositions.length; i++) {
-          const position = updatedPositions[i];
-          const image = images[i];
-          
-          if (image && (position.width === 400 || position.height === 300)) {
-            // This image still has default dimensions, calculate proper ones
-            try {
-              // Calculate dimensions inline to avoid scope issues
-              const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                  const aspectRatio = img.naturalWidth / img.naturalHeight;
-                  const maxDimension = 600; // Reduced from 1200
-                  
-                  let width, height;
-                  if (aspectRatio > 1) {
-                    width = maxDimension;
-                    height = maxDimension / aspectRatio;
-                  } else {
-                    height = maxDimension;
-                    width = maxDimension * aspectRatio;
-                  }
-                  
-                  resolve({ width: Math.round(width), height: Math.round(height) });
-                };
-                img.onerror = () => {
-                  resolve({ width: 800, height: 600 });
-                };
-                img.src = typeof image === 'string' ? image : URL.createObjectURL(image);
-              });
+          const updatedPositions = [...currentPositions];
+          let hasChanges = false;
 
-              if (dimensions.width !== position.width || dimensions.height !== position.height) {
-                updatedPositions[i] = {
-                  ...position,
-                  width: dimensions.width,
-                  height: dimensions.height
-                };
-                hasChanges = true;
-                console.log(`🖼️ Updated dimensions for image ${i}: ${dimensions.width}x${dimensions.height}`);
-              }
-            } catch (error) {
-              console.error(`Failed to calculate dimensions for image ${i}:`, error);
+          // Process dimensions asynchronously
+          images.forEach((image, i) => {
+            const position = currentPositions[i];
+
+            if (position && image && (position.width === 400 || position.height === 300)) {
+              // This image still has default dimensions, calculate proper ones
+              const img = new Image();
+              img.onload = () => {
+                const aspectRatio = img.naturalWidth / img.naturalHeight;
+                const maxDimension = 600;
+
+                let width, height;
+                if (aspectRatio > 1) {
+                  width = maxDimension;
+                  height = maxDimension / aspectRatio;
+                } else {
+                  height = maxDimension;
+                  width = maxDimension * aspectRatio;
+                }
+
+                const finalWidth = Math.round(width);
+                const finalHeight = Math.round(height);
+
+                if (finalWidth !== position.width || finalHeight !== position.height) {
+                  // Update only this specific position
+                  setSimpleImagePositions(prev => {
+                    const newPositions = [...prev];
+                    if (newPositions[i]) {
+                      newPositions[i] = {
+                        ...newPositions[i],
+                        width: finalWidth,
+                        height: finalHeight
+                      };
+                      // Debug statement removed
+                    }
+                    return newPositions;
+                  });
+                }
+              };
+              img.onerror = () => {
+                console.error(`Failed to load image ${i} for dimension calculation`);
+              };
+              img.src = typeof image === 'string' ? image : URL.createObjectURL(image);
             }
-          }
-        }
+          });
 
-        if (hasChanges) {
-          setSimpleImagePositions(updatedPositions);
-        }
+          return currentPositions; // Return unchanged initially
+        });
       };
 
       updateImageDimensions();
     }
-  }, [simpleImagePositions, images, layoutMode]);
+  }, [images.length, layoutMode]);
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
@@ -3750,11 +3657,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
   }
 
-  // BULLETPROOF SELECTION STATE MONITORING
+  // Clear all image interaction states when images are deleted to prevent teleporting
+  useEffect(() => {
+    if (selectedImage !== null && selectedImage >= images.length) {
+      console.log("🔄 Image deleted, clearing selection state");
+      setSelectedImage(null);
+    }
+    if (draggedSimpleImage !== null && draggedSimpleImage >= images.length) {
+      console.log("🔄 Image deleted, clearing drag state");
+      setDraggedSimpleImage(null);
+    }
+    if (resizingSimpleImage !== null && resizingSimpleImage >= images.length) {
+      console.log("🔄 Image deleted, clearing resize state");
+      setResizingSimpleImage(null);
+    }
+  }, [images.length, selectedImage, draggedSimpleImage, resizingSimpleImage]);
+
+  // BULLETPROOF SELECTION STATE MONITORING - without forced re-renders
   useEffect(() => {
     if (props.editMode && layoutMode === 'freeflow') {
-      console.log("🎯 Image selection changed, forcing re-render. Selected:", selectedImage);
-      
+      // Debug statement removed
+
       // Validate selection state
       if (selectedImage !== null) {
         if (selectedImage < 0 || selectedImage >= simpleImagePositions.length) {
@@ -3764,65 +3687,78 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         }
         console.log("✅ Selection state validated:", selectedImage);
       }
-      
-      setRenderCount(prev => prev + 1);
+      // Removed setRenderCount - React already re-renders when state changes
     }
   }, [selectedImage, props.editMode, layoutMode, simpleImagePositions.length]);
 
-  // Force re-render when image positions change
+  // Note: Removed forced re-render on position changes - React handles this automatically
+
+  // Track canvas ref changes to debug glitching
   useEffect(() => {
-    if (props.editMode && layoutMode === 'freeflow') {
-      console.log("Image positions changed, forcing re-render");
-      setRenderCount(prev => prev + 1);
-    }
-  }, [simpleImagePositions, props.editMode, layoutMode]);
+    // Debug statement removed
+  }, [canvasRef.current]);
+
+  // Track component mount/unmount
+  useEffect(() => {
+    // Debug statement removed
+    return () => {
+      // Debug statement removed
+    };
+  }, []);
+
+  // Debug statement removed
 
   return (
-    <div className="relative w-full overflow-hidden">
-      {isLoading ? (
-        <div className="bg-gray-100 animate-pulse w-full h-96 rounded-lg flex items-center justify-center">
-          <span className="text-gray-400">Loading journal...</span>
-        </div>
-      ) : (
-        <>
-          <motion.canvas
+    <div
+      className="relative w-full overflow-hidden"
+      style={{
+        contain: 'layout size style paint',
+        aspectRatio: '1860 / 2620',
+        willChange: 'contents',
+        isolation: 'isolate',
+        maxWidth: '100%',
+        minHeight: 0
+      }}
+    >
+      {/* Removed conditional rendering to prevent flash */}
+      <>
+        <canvas
+            key="journal-canvas-stable"
             ref={canvasRef}
             id="journal-canvas"
-            className="w-full h-auto max-w-full bg-[#f5f2e9] rounded-lg shadow-lg"
-            style={{ 
-              aspectRatio: '1240 / 1748',
+            className="w-full h-auto max-w-full bg-[#f5f2e9]"
+            style={{
+              aspectRatio: '1860 / 2620', // Match actual canvas dimensions
               width: '100%',
               maxWidth: '100%',
+              minWidth: '100%', // Lock width during operations
+              minHeight: '0', // But allow height to flex with aspect ratio
               margin: '0 auto',
               cursor: canvasCursor,
-              touchAction: 'none', // Prevent default touch behaviors for better performance
+              touchAction: 'none', // Prevent default touch behaviors
               WebkitTouchCallout: 'none',
               WebkitUserSelect: 'none',
               userSelect: 'none',
-              // GOODNOTES-QUALITY: Maximum image rendering quality
-              imageRendering: 'auto', // Force high quality scaling
-              // Remove any transforms that could degrade quality
-              transform: 'none', // No transform to preserve quality
-              // Disable filters that could affect quality
+              imageRendering: 'auto', // High quality scaling
               filter: 'none',
-              willChange: 'auto' // Don't hint for transforms
+              display: 'block', // Prevent layout shifts
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)', // Static shadow instead of motion
+              contain: 'layout size style paint', // Isolate canvas layout
+              contentVisibility: 'visible', // Always visible to prevent collapse
+              willChange: 'contents', // Hint for GPU, but not transform (keeps size)
+              visibility: isLoading ? 'visible' : 'visible' // Always visible even when loading
             }}
-            whileHover={{ boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
+            onPointerDown={handleMouseDown}
+            onPointerMove={handleMouseMove}
+            onPointerUp={handleMouseUp}
+            onPointerLeave={handleMouseLeave}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
           />
           
           {/* Add sticker button is now moved to parent component */}
         </>
-      )}
     </div>
   );
 });

@@ -22,7 +22,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLogoHovered, setIsLogoHovered] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [showGlitch, setShowGlitch] = useState(false);
-  
+
   // Exclude header/footer from home page
   const shouldHideNav = location.pathname === '/';
   
@@ -118,7 +118,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <>
           {/* Navigation - Hidden on mobile */}
           <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
-            <div className="max-w-[95vw] mx-auto px-2 lg:px-3">
+            <div className="w-full max-w-7xl mx-auto px-2 lg:px-3">
               <div className="flex justify-between items-center h-14">
                 <div className="flex items-center w-1/2">
                   <Link to="/" className="flex-shrink-0 flex items-center">
@@ -155,42 +155,51 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 // AppContent component to use useLocation inside Router
 const AppContent: React.FC = () => {
-  const [isMobile, setIsMobile] = useState(false);
+  // Compute isMobile once on mount - no flapping
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const location = useLocation();
 
-  // Check if device is mobile on mount and resize
+  // Throttle resize detection to prevent layout shift
   useEffect(() => {
-    const checkMobile = () => {
-      const isMobileDevice = window.innerWidth <= 768;
-      console.log('🔍 MOBILE DEBUG: Window width:', window.innerWidth, 'Is mobile:', isMobileDevice);
-      setIsMobile(isMobileDevice);
+    let rafId = 0;
+    const onResize = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const nextMobile = window.innerWidth <= 768;
+        // Only update if value CHANGED (crosses breakpoint)
+        setIsMobile(prev => prev === nextMobile ? prev : nextMobile);
+      });
     };
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('resize', onResize);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', onResize);
+    };
   }, []);
 
   // Memoize the journal element to prevent unnecessary re-renders
   const journalElement = useMemo(() => {
-    console.log('🔍 MOBILE DEBUG: Creating journal element, isMobile:', isMobile);
     return isMobile ? (
-      <div className="mobile-journal-wrapper">
-        <MobileJournal />
+      <div key="mobile-journal-wrapper" className="mobile-journal-wrapper">
+        <MobileJournal key="mobile-journal-form" />
       </div>
     ) : (
-      <Layout>
-        <JournalForm />
+      <Layout key="desktop-layout">
+        <JournalForm key="desktop-journal-form" />
       </Layout>
     );
   }, [isMobile]);
 
-  console.log('🔍 MOBILE DEBUG: Rendering journal element, isMobile:', isMobile);
-
   return (
     <>
-      <div className="min-h-screen flex flex-col bg-black overflow-auto">
+      <div
+        className="min-h-dvh w-full flex flex-col bg-black overflow-x-clip"
+        data-debug-component="appcontent-wrapper"
+        style={{
+          boxSizing: 'border-box'
+        }}
+      >
         <Routes>
           <Route path="/" element={<Home />} />
           <Route

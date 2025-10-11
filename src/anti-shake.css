@@ -1,0 +1,56 @@
+/* Anti-shake baseline - Import this FIRST in index.tsx */
+
+html {
+  overflow-y: scroll;              /* always reserve vertical gutter */
+  scrollbar-gutter: stable both-edges;
+}
+
+body {
+  overflow-x: clip;                /* stricter than hidden; no horizontal nudge */
+}
+
+/* Common offenders - safety overrides */
+[style*="width:100vw"], .w-screen {
+  width: 100% !important;
+}
+
+/* Full-bleed backgrounds: make them fixed to viewport */
+.bg-100vw::before,
+.bg-100vw::after,
+[class*="bg-gradient"]::before,
+[class*="bg-gradient"]::after {
+  position: fixed !important;
+  inset: 0 !important;
+  width: auto !important;
+}
+
+/* Freeze modal lib shenanigans */
+html.modal-open,
+body.modal-open,
+html.ReactModal__Html--open,
+body.ReactModal__Body--open {
+  padding-right: 0 !important;
+  overflow-y: scroll !important;
+}
+
+/* Canvas stability */
+.canvas-shell {
+  aspect-ratio: 1860 / 2620; /* Match actual canvas dimensions */
+  width: 100%;
+  max-width: 100%;
+  contain: layout size style paint;
+  isolation: isolate;
+}
+
+#journal-canvas {
+  aspect-ratio: 1860 / 2620;
+  width: 100%;
+  max-width: 100%;
+  min-width: 100%; /* Lock width */
+  contain: layout size style paint;
+}
+
+#journal-container {
+  contain: layout style paint;
+  isolation: isolate;
+}

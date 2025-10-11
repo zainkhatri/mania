@@ -33,11 +33,12 @@ This application uses the OpenAI API to generate personalized journal prompts:
 
 1. Create an account on [OpenAI](https://openai.com) if you don't have one already
 2. Get your API key from the [API keys page](https://platform.openai.com/account/api-keys)
-3. Create a `.env` file in the root directory with the following content:
+3. Create a `.env` file in the root directory with the following content (note: now server-side only for security):
    ```
-   REACT_APP_OPENAI_API_KEY=your_openai_api_key_here
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
-4. The app uses the `gpt-4o-mini` model for the best balance of quality and cost efficiency
+4. For Vercel deployment, add the `OPENAI_API_KEY` environment variable in your Vercel project settings
+5. The app uses the `gpt-4o-mini` model for the best balance of quality and cost efficiency
 
 ## Tech Stack
 

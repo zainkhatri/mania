@@ -13,7 +13,7 @@ interface ColorPickerProps {
 }
 
 export default function SimpleColorPicker({ colors, onChange, images = [], compact = false }: ColorPickerProps) {
-  console.log('🔍 INPUT DEBUG: SimpleColorPicker component rendered with images count:', images?.length);
+  // Debug statement removed
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -21,23 +21,33 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   const [shadowOffsetX, setShadowOffsetX] = useState(5);
   const [shadowOffsetY, setShadowOffsetY] = useState(8);
 
+  // Track previous image count to detect add vs delete
+  const prevImageCountRef = React.useRef(images.length);
+
   // Extract colors from images when the component mounts or images change
   useEffect(() => {
-    console.log('🔍 INPUT DEBUG: SimpleColorPicker images useEffect triggered with images count:', images.length);
-    // Always reset the extracted colors when images prop changes
-    setExtractedColors([]);
-    
-    if (images && images.length > 0) {
-      console.log('🔍 INPUT DEBUG: SimpleColorPicker: Extracting colors from images');
-      // Force immediate color extraction with a clean state
+    const currentCount = images.length;
+    const prevCount = prevImageCountRef.current;
+
+    // Only re-extract on ADD, not on DELETE (prevents collapse)
+    const isAdd = currentCount > prevCount;
+
+    prevImageCountRef.current = currentCount;
+
+    if (currentCount === 0) {
+      setExtractedColors(getDefaultColors(12));
+      setIsExtracting(false);
+      return;
+    }
+
+    // Only extract if images were added, not removed
+    if (isAdd || extractedColors.length === 0) {
+      setExtractedColors([]);
       setIsExtracting(true);
       extractColorsFromImages(images, 12);
-    } else {
-      console.log('🔍 INPUT DEBUG: SimpleColorPicker: No images available for color extraction');
-      // Set default colors when no images are available
-      setExtractedColors(getDefaultColors(12));
     }
-  }, [images]);
+    // On delete: keep existing colors, don't re-extract
+  }, [images, extractedColors.length]);
 
   // Simplified function to get shadow color
   const getShadowColor = (color: string, darknessLevel: number = 0.7): string => {

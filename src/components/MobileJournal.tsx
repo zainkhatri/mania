@@ -80,13 +80,20 @@ interface MobileJournalProps {
 }
 
 const MobileJournal: React.FC<MobileJournalProps> = ({
-  initialDate = new Date(),
+  initialDate,
   initialLocation = '',
   initialText = '',
   initialImages = [],
   initialColors = DEFAULT_COLORS
 }) => {
-  const [date, setDate] = useState<Date>(initialDate);
+  // Initialize with today's date at noon to avoid timezone issues
+  const getTodayAtNoon = () => {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    return today;
+  };
+
+  const [date, setDate] = useState<Date>(initialDate || getTodayAtNoon());
   const [location, setLocation] = useState<string>(initialLocation);
   const [text, setText] = useState<string>(initialText);
   const [images, setImages] = useState<(string | Blob)[]>(initialImages);
@@ -102,7 +109,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   const navigate = useNavigate();
   const canvasRef = useRef<JournalCanvasHandle>(null);
 
-  console.log('🔍 MOBILE DEBUG: MobileJournal render - date:', date, 'location:', location, 'text:', text);
+  // Debug statement removed
 
   // Mania logo animation effect
   useEffect(() => {
@@ -148,7 +155,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   const hasContent = useMemo(() => {
     const content = Boolean(location.trim() || text.trim() || images.length > 0);
-    console.log('🔍 INPUT DEBUG: hasContent memoized:', { location: location.trim(), text: text.trim(), imagesCount: images.length, hasContent: content });
+    // Debug statement removed
     return content;
   }, [location, text, images]);
 
@@ -190,7 +197,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   const handleAddImages = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
-    console.log('🖼️ MOBILE DEBUG: Adding images:', files.length);
+    // Debug statement removed
     
     const newImages: (string | Blob)[] = Array.from(files);
     const newPositions: ImagePosition[] = [];
@@ -214,11 +221,11 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         originalHeight: dimensions.originalHeight
       };
       
-      console.log('🖼️ MOBILE DEBUG: Created position for image', i, ':', newPosition);
+      // Debug statement removed
       newPositions.push(newPosition);
     }
     
-    console.log('🖼️ MOBILE DEBUG: Setting new images and positions');
+    // Debug statement removed
     setImages(prev => [...prev, ...newImages]);
     setImagePositions(prev => [...prev, ...newPositions]);
 
@@ -271,7 +278,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Reset functionality
   const reset = useCallback(() => {
-    setDate(new Date());
+    setDate(getTodayAtNoon());
     setLocation('');
     setText('');
     setImages([]);
@@ -281,7 +288,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Convert imagePositions to the format expected by JournalCanvas
   const canvasImagePositions = useMemo(() => {
-    console.log('🖼️ MOBILE DEBUG: Converting imagePositions to canvas format:', imagePositions);
+    // Debug statement removed
     
     // Ensure we have positions for all images
     const result = images.map((_, index) => {
@@ -306,7 +313,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
       }
     });
     
-    console.log('🖼️ MOBILE DEBUG: Result:', result);
+    // Debug statement removed
     return result;
   }, [images, imagePositions]);
 
@@ -314,20 +321,16 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Debug effect to track state changes
   useEffect(() => {
-    console.log('🖼️ MOBILE DEBUG: State changed:', {
-      images: images.length,
-      imagePositions: imagePositions.length,
-      canvasImagePositions: canvasImagePositions.length
-    });
+    // Debug statement removed
   }, [images, imagePositions, canvasImagePositions]);
 
   return (
     <div className="mobile-journal bg-black w-full min-h-screen flex flex-col relative select-none">
       {/* Single scrollable page with all sections */}
-      <div className="flex-1 overflow-y-auto pb-safe-area-inset-bottom sm:pb-8">
+      <div className="flex-1 overflow-y-auto pb-safe-area-inset-bottom sm:pb-8" style={{ scrollbarGutter: 'stable' }}>
         {/* Mania Logo Section */}
-        <section className="p-6 border-b border-white/10">
-          <div className="flex flex-col items-center justify-center py-8">
+        <section className="!p-0 border-b border-white/10">
+          <div className="flex flex-col items-center justify-center py-8 px-6">
             <h1
               className="font-bold text-7xl md:text-6xl mb-6 text-center mania-title text-white text-flicker"
               style={{
@@ -339,30 +342,30 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
             </h1>
           </div>
 
-          <div className="relative bg-black/40 backdrop-blur-sm rounded-lg overflow-hidden border border-white/20 p-3">
-            {/* Journal Canvas with Integrated Image Handling */}
-            <div className="relative w-full bg-white rounded-lg overflow-hidden" style={{
-              paddingTop: '141.4%', /* This creates a 1:√2 aspect ratio (A4 proportion) */
-              height: 'auto',
-              touchAction: 'none'
-            }}>
-              <div className="absolute inset-0" style={{ touchAction: 'none', userSelect: 'none' }}>
-                <JournalCanvas
-                ref={canvasRef}
-                date={date}
-                location={location}
-                textSections={[text]}
-                images={images}
-                onNewEntry={reset}
-                textColors={colors}
-                layoutMode="freeflow"
-                editMode={true} // Enable edit mode for image manipulation
-                savedImagePositions={canvasImagePositions}
-                onImageDrag={handleImageDrag}
-                onImageResize={handleImageResize}
-                onImageDelete={handleImageDelete}
-              />
-              </div>
+          {/* Journal Canvas with Integrated Image Handling */}
+          <div className="relative w-full bg-white overflow-hidden" style={{
+            paddingTop: '141.4%', /* This creates a 1:√2 aspect ratio (A4 proportion) */
+            height: 'auto',
+            touchAction: 'none',
+            borderRadius: 0,
+            margin: 0
+          }}>
+            <div className="absolute inset-0" style={{ touchAction: 'none', userSelect: 'none' }}>
+              <JournalCanvas
+              ref={canvasRef}
+              date={date}
+              location={location}
+              textSections={[text]}
+              images={images}
+              onNewEntry={reset}
+              textColors={colors}
+              layoutMode="freeflow"
+              editMode={true} // Enable edit mode for image manipulation
+              savedImagePositions={canvasImagePositions}
+              onImageDrag={handleImageDrag}
+              onImageResize={handleImageResize}
+              onImageDelete={handleImageDelete}
+            />
             </div>
           </div>
         </section>
@@ -393,8 +396,13 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
                 <input
                   type="date"
                   className="w-full bg-black/50 border border-white/30 rounded-lg px-4 py-3 text-white font-mono placeholder-white/50 focus:outline-none focus:border-white/60 transition-all duration-200"
-                  value={new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0]}
-                  onChange={(e) => setDate(new Date(e.target.value))}
+                  value={date.toISOString().split('T')[0]}
+                  onChange={(e) => {
+                    // Parse the date string and set time to noon to avoid timezone issues
+                    const [year, month, day] = e.target.value.split('-').map(Number);
+                    const newDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+                    setDate(newDate);
+                  }}
                 />
               </div>
 

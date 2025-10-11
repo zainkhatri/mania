@@ -17,7 +17,7 @@ if [ -f ".env" ]; then
     fi
 fi
 
-echo "Please enter your OpenAI API key:"
+echo "Please enter your OpenAI API key (server-side only, secure):"
 read -s api_key
 
 if [ -z "$api_key" ]; then
@@ -25,8 +25,8 @@ if [ -z "$api_key" ]; then
     exit 1
 fi
 
-# Create .env file
-echo "REACT_APP_OPENAI_API_KEY=$api_key" > .env
+# Create .env file with server-side only variable
+echo "OPENAI_API_KEY=$api_key" > .env
 
 echo "✅ .env file created successfully!"
 echo "🔑 API key has been saved (first 10 characters: ${api_key:0:10}...)"

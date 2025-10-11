@@ -38,188 +38,84 @@
 }
 
 /* Base styles and font setup */
+html {
+  overflow: hidden; /* No scrolling at all */
+  height: 100vh;
+  width: 100%;
+}
+
 body {
   font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
   color: #ffffff;
   background-color: #000000;
-  min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* No scrolling at all */
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 /* Desktop: Enhanced refined scrolling behavior */
 @media (min-width: 769px) {
   body {
-    overflow: hidden !important;
-    height: 100vh !important;
-    width: 100vw !important;
     background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
+    height: 100vh;
+    overflow: hidden;
   }
 
   html {
-    overflow: hidden !important;
-    height: 100vh !important;
-    width: 100vw !important;
     background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
+    height: 100vh;
+    overflow: hidden;
   }
 
   #root {
-    overflow: hidden !important;
-    height: 100vh !important;
-    width: 100vw !important;
     background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
-  }
-  
-  /* Ensure journal form container stays within viewport */
-  .journal-form-container {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure grid layout stays within bounds */
-  .journal-form-container .grid {
-    max-height: 100vh !important;
-    overflow: hidden !important;
+    height: 100vh;
+    overflow: hidden;
   }
   
   /* Ensure form content is scrollable within bounds */
   .journal-form-container .flex-1.overflow-y-auto {
-    max-height: calc(100vh - 8rem) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
+    scrollbar-gutter: stable !important; /* Reserve space for scrollbar to prevent shake */
   }
-  
-  /* Ensure journal canvas stays within bounds */
-  #journal-container {
-    max-height: calc(100vh - 10rem) !important;
-    overflow: hidden !important;
+
+  /* Prevent any container from using viewport units that include scrollbar */
+  .journal-form-container [class*="max-w-"] {
+    box-sizing: border-box;
   }
-  
-  /* Ensure journal canvas image stays within bounds */
+
+  /* Prevent layout shifts during canvas updates */
+  canvas {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Reserve canvas space with aspect ratio to prevent shift on template load */
   #journal-canvas {
-    max-height: calc(100vh - 12rem) !important;
-    max-width: 100% !important;
-    object-fit: contain !important;
+    aspect-ratio: 1860 / 2620; /* Match actual canvas dimensions */
+    width: 100%;
+    max-width: 100%;
+    contain: layout size style paint; /* Prevent reflow on image operations */
+    content-visibility: auto; /* Optimize rendering */
+    will-change: contents; /* Hint for GPU acceleration */
   }
-  
-  /* Ensure rounded containers don't flow off the page */
-  .bg-black.rounded-2xl {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
+
+  /* Lock canvas container to prevent shift during operations */
+  #journal-container {
+    contain: layout style paint;
+    isolation: isolate;
   }
-  
-  /* Ensure journal preview container stays within bounds */
-  .journal-form-container .grid > div:first-child {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure form container stays within bounds */
-  .journal-form-container .grid > div:last-child {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure all rounded containers respect viewport boundaries */
-  .rounded-2xl {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure all rounded-lg containers also respect boundaries */
-  .rounded-lg {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure rounded-xl containers respect boundaries */
-  .rounded-xl {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure grid containers don't overflow */
-  .grid.grid-cols-1.md\\:grid-cols-2 {
-    max-width: calc(100vw - 2rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure individual grid items don't overflow */
-  .grid.grid-cols-1.md\\:grid-cols-2 > div {
-    max-width: calc(50vw - 3rem) !important;
-    max-height: calc(100vh - 8rem) !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the main journal form container respects boundaries */
-  .bg-black.w-full.min-h-screen.md\\:h-screen {
-    max-width: 100vw !important;
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure all children of the main container respect boundaries */
-  .bg-black.w-full.min-h-screen.md\\:h-screen > * {
-    max-width: 100vw !important;
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the journal form container itself respects height boundaries */
-  .journal-form-container {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the main content area doesn't overflow */
-  .journal-form-container .relative.z-10 {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the flex container doesn't overflow */
-  .journal-form-container .flex.flex-col {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Force all containers to respect viewport height */
-  .journal-form-container * {
-    max-height: 100vh !important;
-  }
-  
-  /* Ensure the main wrapper doesn't overflow */
-  .bg-black.w-full.min-h-screen.md\\:h-screen.md\\:overflow-hidden {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the journal form container wrapper doesn't overflow */
-  .journal-form-container.min-h-screen.md\\:h-full {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
-  /* Ensure the main content wrapper doesn't overflow */
-  .relative.z-10.min-h-screen.md\\:h-full.flex.flex-col {
-    max-height: 100vh !important;
-    overflow: hidden !important;
-  }
-  
+
   /* Ensure both grid items are perfectly aligned */
   .grid.grid-cols-1.md\\:grid-cols-2 > div {
     align-self: flex-start !important;
   }
-  
+
   /* Remove any top spacing that might cause misalignment */
   .grid.grid-cols-1.md\\:grid-cols-2 {
     align-items: flex-start !important;
@@ -228,23 +124,14 @@ body {
 
 
 
-html {
-  height: 100vh;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  background-color: #000000;
-  /* Handle overscroll areas */
-  overscroll-behavior: none;
-}
+/* Removed position: fixed from html - prevents scrollbar-gutter from working */
 
 
 
 #root {
   height: 100vh;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  position: relative;
   background-color: #000000;
+  overflow: hidden; /* No scrolling */
 }
 
 
@@ -323,7 +210,6 @@ button, a {
 .journal-form-container {
   min-height: 100vh !important;
   height: auto !important;
-  overflow: visible !important;
   display: flex !important;
   flex-direction: column !important;
 }
@@ -452,6 +338,24 @@ button, a {
   /* Better grid gap and proportions */
   .md\:grid-cols-2 {
     gap: 1rem !important;
+  }
+
+  /* Lock journal preview to optimal width (as seen at 1580px) */
+  @media (min-width: 769px) {
+    .journal-form-container .md\:grid-cols-2 > div:first-child {
+      max-width: 780px !important;
+      flex-shrink: 0 !important;
+    }
+
+    .journal-form-container .md\:grid-cols-2 > div:last-child {
+      flex: 1 !important;
+      min-width: 0 !important;
+    }
+
+    /* Center the grid when viewport is wider than needed */
+    .journal-form-container .md\:grid-cols-2 {
+      justify-content: center !important;
+    }
   }
 
   /* Enhanced paper-like texture for journal preview */
@@ -974,6 +878,14 @@ input[type="date"]::-webkit-clear-button {
     isolation: isolate;
   }
 
+  /* Remove all rounded corners and padding from journal preview section */
+  .mobile-journal section:first-child,
+  .mobile-journal section:first-child *,
+  .mobile-journal .bg-white {
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
   /* Mobile UI Enhancements - All Mobile Devices */
   @media (max-width: 768px) {
     /* Mania theme background for mobile */
@@ -1014,6 +926,7 @@ input[type="date"]::-webkit-clear-button {
       -webkit-overflow-scrolling: touch;
       position: relative;
       z-index: 2;
+      scrollbar-gutter: stable !important; /* CRITICAL: Reserve space for scrollbar to prevent shake */
     }
 
     /* Mania theme focus states for mobile inputs */
