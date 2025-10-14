@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 export interface TextColors {
   locationColor: string;
@@ -571,18 +572,32 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
     return (
       <div className="grid grid-cols-4 gap-2">
         {sortedColors.map((color, i) => (
-          <button
+          <motion.button
             key={`compact-${i}`}
-            className={`w-10 h-10 rounded-md border border-white/30 hover:border-white/60 transition-all duration-200 ${
+            className={`w-10 h-10 rounded-md border ${
               colors.locationColor === color
                 ? 'border-white/80 ring-1 ring-white/50'
-                : ''
+                : 'border-white/30'
             }`}
             style={{
               backgroundColor: color,
             }}
             onClick={() => selectColor(color)}
             title={color}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{
+              scale: 1.15,
+              borderColor: "rgba(255, 255, 255, 0.6)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)"
+            }}
+            whileTap={{ scale: 0.9 }}
+            transition={{
+              type: "spring",
+              stiffness: 400,
+              damping: 17,
+              delay: i * 0.03
+            }}
           />
         ))}
       </div>
@@ -590,28 +605,47 @@ export default function SimpleColorPicker({ colors, onChange, images = [], compa
   }
   
   return (
-    <div className="p-5 bg-black/40 backdrop-blur-md rounded-lg border border-white/20">
+    <div className="p-3 md:p-5 bg-black/40 backdrop-blur-md rounded-lg border border-white/20">
       {/* Image-derived colors */}
       {extractedColors.length > 0 && (
-        <div className="mb-6">
-          <div className="grid grid-cols-6 gap-4 p-1">
+        <motion.div
+          className="mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3 md:gap-4 p-1">
             {sortedColors.slice(0, 12).map((color, i) => (
-              <button
+              <motion.button
                 key={`image-${i}`}
-                className={`w-12 h-12 rounded-lg shadow-md hover:shadow-xl transition-all duration-200 border-2 ${
+                className={`w-full aspect-square rounded-lg shadow-md border-2 ${
                   colors.locationColor === color
-                    ? 'border-white ring-2 ring-white/40 ring-offset-2 ring-offset-black/40 scale-95'
-                    : 'border-white/50 hover:border-white hover:scale-95'
+                    ? 'border-white ring-2 ring-white/40 ring-offset-2 ring-offset-black/40'
+                    : 'border-white/50'
                 }`}
                 style={{
                   backgroundColor: color,
                 }}
                 onClick={() => selectColor(color)}
                 title={color}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: colors.locationColor === color ? 0.95 : 1 }}
+                whileHover={{
+                  scale: 1.1,
+                  boxShadow: "0 8px 20px rgba(0, 0, 0, 0.3)",
+                  borderColor: "rgba(255, 255, 255, 0.8)"
+                }}
+                whileTap={{ scale: 0.9 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 17,
+                  delay: i * 0.05
+                }}
               />
             ))}
           </div>
-        </div>
+        </motion.div>
       )}
       
       {isExtracting && (

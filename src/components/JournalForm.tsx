@@ -77,8 +77,21 @@ const datePickerStyles = `
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
     padding: 16px !important;
     backdrop-filter: blur(10px) !important;
+    animation: slideInCalendar 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    transform-origin: top center !important;
   }
-  
+
+  @keyframes slideInCalendar {
+    from {
+      opacity: 0;
+      transform: scale(0.9) translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
   .react-datepicker__header {
     background-color: transparent !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -127,7 +140,7 @@ const datePickerStyles = `
     padding: 8px 0 !important;
     border-radius: 8px !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     background: transparent !important;
     border: none !important;
     margin: 0 !important;
@@ -136,17 +149,52 @@ const datePickerStyles = `
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    animation: fadeInDay 0.4s ease-out backwards !important;
   }
-  
+
+  @keyframes fadeInDay {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .react-datepicker__week:nth-child(1) .react-datepicker__day { animation-delay: 0.05s !important; }
+  .react-datepicker__week:nth-child(2) .react-datepicker__day { animation-delay: 0.1s !important; }
+  .react-datepicker__week:nth-child(3) .react-datepicker__day { animation-delay: 0.15s !important; }
+  .react-datepicker__week:nth-child(4) .react-datepicker__day { animation-delay: 0.2s !important; }
+  .react-datepicker__week:nth-child(5) .react-datepicker__day { animation-delay: 0.25s !important; }
+  .react-datepicker__week:nth-child(6) .react-datepicker__day { animation-delay: 0.3s !important; }
+
   .react-datepicker__day:hover {
     background-color: rgba(255, 255, 255, 0.1) !important;
-    transform: scale(1.05) !important;
+    transform: scale(1.15) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
   }
-  
+
+  .react-datepicker__day:active {
+    transform: scale(0.95) !important;
+  }
+
   .react-datepicker__day--selected {
     background-color: #3b82f6 !important;
     color: #ffffff !important;
     font-weight: 600 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+    animation: pulseSelected 0.6s ease !important;
+  }
+
+  @keyframes pulseSelected {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
   }
   
   .react-datepicker__day--keyboard-selected {
@@ -181,14 +229,31 @@ const datePickerStyles = `
     align-items: center !important;
     justify-content: center !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     z-index: 10 !important;
+    animation: fadeInNav 0.5s ease-out !important;
   }
-  
+
+  @keyframes fadeInNav {
+    from {
+      opacity: 0;
+      transform: scale(0.5) rotate(-180deg);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
   .react-datepicker__navigation:hover {
     background-color: rgba(255, 255, 255, 0.2) !important;
     border-color: rgba(255, 255, 255, 0.3) !important;
-    transform: scale(1.05) !important;
+    transform: scale(1.15) !important;
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15) !important;
+  }
+
+  .react-datepicker__navigation:active {
+    transform: scale(0.95) !important;
   }
   
   .react-datepicker__navigation--previous {
@@ -435,6 +500,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [submitted, setSubmitted] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [loadingImageCount, setLoadingImageCount] = useState(0);
+  const [imageUploadSuccess, setImageUploadSuccess] = useState(false);
   const [needInspiration, setNeedInspiration] = useState(false);
   
   // Logo state for typewriter effect
@@ -1664,6 +1730,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
           // Hide loading state
           setIsLoadingImage(false);
+
+          // Show success animation
+          setImageUploadSuccess(true);
+          setTimeout(() => setImageUploadSuccess(false), 600);
         } catch (error) {
           console.error('Error processing images:', error);
           setIsLoadingImage(false);
@@ -1935,7 +2005,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   };
 
   const handleReset = () => {
-    setLocation('MANIA, LA JOLLA, CA');
+    setLocation('');
     setIsLocationDefault(true);
     setJournalText('');
     setImages([]);
@@ -2823,52 +2893,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         savedImagePositions={imagePositions}
                       />
                     </div>
-                    
-                    {/* Action buttons directly underneath journal preview - each half width, side by side */}
-                    <div className="mt-3 flex gap-2">
-                      {/* Download Journal Button */}
-                      <button
-                        onClick={() => {
-                          if (window.handleHighQualityPDFExport) {
-                            window.handleHighQualityPDFExport();
-                          }
-                        }}
-                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded text-white focus:outline-none transition-all duration-200"
-                        style={{
-                          backgroundColor: `${textColors.locationColor}90`,
-                          borderColor: textColors.locationColor,
-                          borderWidth: '1px'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = textColors.locationColor;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = `${textColors.locationColor}90`;
-                        }}
-                        title="Download PDF"
-                      >
-                        <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        <span className="text-sm font-medium">Download</span>
-                      </button>
-
-                      {/* Clear Journal Button */}
-                      <button
-                        onClick={() => {
-                          if (window.handleReset) {
-                            window.handleReset();
-                          }
-                        }}
-                        className="group flex items-center justify-center gap-2 flex-1 h-10 rounded bg-red-600 border border-red-500 text-white hover:bg-red-700 hover:border-red-600 focus:outline-none transition-all duration-200"
-                        title="Clear Journal"
-                      >
-                        <svg className="w-4 h-4 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                        <span className="text-sm font-medium">Clear</span>
-                      </button>
-                    </div>
                   </div>
                 </div>
 
@@ -2933,31 +2957,109 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     transition={{ duration: 0.5 }}
                   >
                     {/* Desktop layout */}
-                    <div className="space-y-4 md:space-y-5 lg:space-y-6 md:pb-8 md:max-w-full">
+                    <div className="flex h-full flex-col gap-4 md:gap-5 lg:gap-6 md:pb-8 md:max-w-full">
                       {/* Images and Colors side by side - Hidden on mobile */}
-                      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      <motion.div
+                        className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.2 }}
+                      >
                         {/* Images */}
-                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col">
+                        <motion.div
+                          className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col"
+                          whileHover={{ scale: 1.02 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        >
                           <label className="block text-lg font-medium text-white flex items-center gap-2 mb-2">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                             </svg>
-                            <span>Images ({images.length})</span>
+                            <span>Images (</span>
+                            <motion.span
+                              key={images.length}
+                              initial={{ scale: 1.5, color: "#3b82f6" }}
+                              animate={{ scale: 1, color: "#ffffff" }}
+                              transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                            >
+                              {images.length}
+                            </motion.span>
+                            <span>)</span>
                           </label>
-                          <div
-                            className="border-2 border-dashed rounded-xl py-4 px-2 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative group border-white/30 bg-black/40 backdrop-blur-sm hover:border-white/50 hover:bg-black/50 flex-1"
+                          <motion.div
+                            className="border-2 border-dashed rounded-xl py-4 px-2 flex flex-col items-center justify-center cursor-pointer relative group border-white/30 bg-black/40 backdrop-blur-sm flex-1"
                             onClick={() => fileInputRef.current?.click()}
+                            whileHover={{
+                              borderColor: 'rgba(255, 255, 255, 0.5)',
+                              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                              scale: 1.02
+                            }}
+                            whileTap={{ scale: 0.98 }}
+                            animate={
+                              imageUploadSuccess
+                                ? {
+                                    borderColor: ['rgba(34, 197, 94, 0.8)', 'rgba(255, 255, 255, 0.3)'],
+                                    backgroundColor: ['rgba(34, 197, 94, 0.2)', 'rgba(0, 0, 0, 0.4)']
+                                  }
+                                : {}
+                            }
+                            transition={{
+                              type: imageUploadSuccess ? "tween" : "spring",
+                              duration: imageUploadSuccess ? 0.6 : undefined,
+                              stiffness: 400,
+                              damping: 17
+                            }}
                           >
+                            <AnimatePresence>
+                              {imageUploadSuccess && (
+                                <motion.div
+                                  className="absolute inset-0 bg-green-500/20 backdrop-blur-sm rounded-xl flex items-center justify-center z-10"
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 1.2 }}
+                                  transition={{ duration: 0.3 }}
+                                >
+                                  <motion.svg
+                                    className="w-12 h-12 text-green-400"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    initial={{ scale: 0, rotate: -180 }}
+                                    animate={{ scale: 1, rotate: 0 }}
+                                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </motion.svg>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                             {isLoadingImage && (
-                              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10 gap-2">
-                                <div className="animate-spin rounded-full h-8 w-8 border-4 border-white border-t-transparent"></div>
+                              <motion.div
+                                className="absolute inset-0 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10 gap-2"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                              >
+                                <motion.div
+                                  className="rounded-full h-8 w-8 border-4 border-white border-t-transparent"
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                />
                                 <p className="text-white text-sm">Processing {loadingImageCount} image{loadingImageCount > 1 ? 's' : ''}...</p>
-                              </div>
+                              </motion.div>
                             )}
-                            <svg className="w-6 h-6 mb-1 transition-colors text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <motion.svg
+                              className="w-6 h-6 mb-1 text-gray-300 group-hover:text-white"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              xmlns="http://www.w3.org/2000/svg"
+                              whileHover={{ y: -3 }}
+                              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                            >
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                            <p className="text-sm text-center transition-colors text-gray-300 group-hover:text-white">
+                            </motion.svg>
+                            <p className="text-sm text-center text-gray-300 group-hover:text-white transition-colors">
                               Upload Images
                             </p>
                             <input
@@ -2968,11 +3070,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               multiple
                               style={{ display: 'none' }}
                             />
-                          </div>
-                        </div>
+                          </motion.div>
+                        </motion.div>
 
                         {/* Colors */}
-                        <div className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col">
+                        <motion.div
+                          className="bg-black/40 backdrop-blur-sm rounded-lg shadow-sm border border-white/20 p-3 flex flex-col"
+                          whileHover={{ scale: 1.02 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        >
                           <label className="block text-lg font-medium text-white flex items-center gap-2 mb-2">
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
@@ -2986,49 +3092,65 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               images={submitted ? submittedData.images : images}
                             />
                           </div>
-                        </div>
-                      </div>
+                        </motion.div>
+                      </motion.div>
 
-                      {/* Journal Entry Header */}
-                      <div className="flex justify-between items-center relative">
-                        <label htmlFor="journalText" className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap">
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                          </svg>
-                          <span>Journal Entry</span>
-                        </label>
-                      </div>
-
-                      {/* Journal Entry */}
-                      <div className="space-y-3">
-                        <div className="relative">
-                          <textarea
-                            ref={textareaRef}
-                            id="journalText"
-                            value={journalText}
-                            onChange={(e) => {
-                              setJournalText(e.target.value);
-                              // Hide the AI question when user starts typing
-                              if (showQuestionOverlay && e.target.value.length > journalText.length) {
-                                setShowQuestionOverlay(false);
-                                setDisplayedQuestion("");
-                                setIsQuestionTyping(false);
-                              }
-                            }}
-                            disabled={isQuestionTyping}
-                            placeholder="Write your journal entry here..."
-                            className="w-full rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[280px] transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
-                            style={{ fontSize: '18px' }}
-                            required
-                          />
+                      <motion.div
+                        className="flex flex-1 flex-col gap-4"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.3 }}
+                      >
+                        {/* Journal Entry Header */}
+                        <div className="flex items-center justify-between relative">
+                          <motion.label
+                            htmlFor="journalText"
+                            className="block text-sm md:text-lg font-medium text-white flex items-center gap-1 md:gap-2 whitespace-nowrap"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.4, delay: 0.4 }}
+                          >
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                            <span>Journal Entry</span>
+                          </motion.label>
                         </div>
 
-                        {/* AI Button and Question Box - Unified Container */}
-                        <div className="w-full mt-4">
-                          <div className="flex items-center w-full bg-black/40 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden shadow-lg transition-all duration-300">
-                            <button
-                              type="button"
-                              onClick={async () => {
+                        <div className="flex flex-1 flex-col gap-4">
+                          <motion.div
+                            className="relative flex-1"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4, delay: 0.5 }}
+                          >
+                            <textarea
+                              ref={textareaRef}
+                              id="journalText"
+                              value={journalText}
+                              onChange={(e) => {
+                                setJournalText(e.target.value);
+                                // Hide the AI question when user starts typing
+                                if (showQuestionOverlay && e.target.value.length > journalText.length) {
+                                  setShowQuestionOverlay(false);
+                                  setDisplayedQuestion("");
+                                  setIsQuestionTyping(false);
+                                }
+                              }}
+                              disabled={isQuestionTyping}
+                              placeholder="Write your journal entry here..."
+                              className="w-full h-full min-h-[320px] md:min-h-[360px] lg:min-h-[400px] rounded-lg border border-white/30 shadow-sm focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 transition-all duration-200 resize-none overflow-y-auto bg-black/40 text-white"
+                              style={{ fontSize: '18px' }}
+                              required
+                            />
+                          </motion.div>
+
+                          {/* AI Button and Question Box - Unified Container */}
+                          <div className="w-full">
+                            <div className="flex items-center w-full bg-black/40 backdrop-blur-sm rounded-lg border border-white/20 shadow-lg">
+                              <motion.button
+                                type="button"
+                                onClick={async () => {
                                   const wordCount = journalText.trim().split(/\s+/).filter(word => word.length > 0).length;
 
                                   setIsGeneratingInspiration(true);
@@ -3124,35 +3246,66 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                   }
                                 }}
                                 disabled={isGeneratingInspiration || isQuestionTyping}
-                                className={`flex items-center justify-center gap-2 px-4 py-3 transition-all duration-300 ease-in-out font-semibold flex-shrink-0 text-white ${
-                                  isGeneratingInspiration || isQuestionTyping
-                                    ? 'cursor-not-allowed opacity-60'
-                                    : ''
-                                }`}
+                                className="group relative flex items-center justify-center gap-2 px-4 py-3 rounded-lg border font-semibold flex-shrink-0 text-white"
                                 style={{
-                                  backgroundColor: isGeneratingInspiration || isQuestionTyping ? `${textColors.locationColor}60` : `${textColors.locationColor}90`,
-                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}30` : 'none'
+                                  background: isGeneratingInspiration || isQuestionTyping
+                                    ? `${textColors.locationColor}30`
+                                    : `linear-gradient(135deg, ${textColors.locationColor}33, ${textColors.locationColor}aa)`,
+                                  borderColor: `${textColors.locationColor}99`,
+                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}33` : 'none',
                                 }}
-                                onMouseEnter={(e) => {
-                                  if (!isGeneratingInspiration && !isQuestionTyping) {
-                                    e.currentTarget.style.backgroundColor = textColors.locationColor;
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (!isGeneratingInspiration && !isQuestionTyping) {
-                                    e.currentTarget.style.backgroundColor = `${textColors.locationColor}90`;
-                                  }
+                                whileHover={
+                                  !isGeneratingInspiration && !isQuestionTyping
+                                    ? {
+                                        scale: 1.02,
+                                        y: -2,
+                                        boxShadow: `0 15px 35px ${textColors.locationColor}33`,
+                                        background: `linear-gradient(135deg, ${textColors.locationColor}55, ${textColors.locationColor}cc)`,
+                                      }
+                                    : {}
+                                }
+                                whileTap={
+                                  !isGeneratingInspiration && !isQuestionTyping
+                                    ? { scale: 0.95 }
+                                    : {}
+                                }
+                                animate={
+                                  isGeneratingInspiration || isQuestionTyping
+                                    ? { opacity: 0.6 }
+                                    : {
+                                        opacity: 1,
+                                        boxShadow: `0 12px 30px ${textColors.locationColor}22`
+                                      }
+                                }
+                                transition={{
+                                  type: "spring",
+                                  stiffness: 300,
+                                  damping: 20
                                 }}
                                 title="Get AI-powered journal prompts"
                               >
                               {isGeneratingInspiration ? (
-                                <div
-                                  className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"
-                                ></div>
+                                <motion.div
+                                  className="rounded-full h-4 w-4 border-2 border-t-transparent border-white"
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                />
                               ) : (
-                                <span className="text-base">AI+</span>
+                                <>
+                                  <motion.svg
+                                    className="h-5 w-5"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    whileHover={{ rotate: 180, scale: 1.1 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121m0-12.728l2.121 2.121m8.486 8.486l2.121 2.121" />
+                                  </motion.svg>
+                                  <span className="text-base tracking-wide">AI Prompt</span>
+                                </>
                               )}
-                              </button>
+                              </motion.button>
 
                             {/* AI Question - Slides in from left */}
                             <AnimatePresence>
@@ -3194,7 +3347,80 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             </AnimatePresence>
                           </div>
                         </div>
-                      </div>
+                        </div>
+
+                        <div className="mt-auto flex justify-center gap-3 pt-5">
+                          <motion.button
+                            type="button"
+                            onClick={() => {
+                              if (window.handleHighQualityPDFExport) {
+                                window.handleHighQualityPDFExport();
+                              }
+                            }}
+                            className="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-white"
+                            style={{
+                              background: `linear-gradient(135deg, ${textColors.locationColor}33, ${textColors.locationColor}aa)`,
+                              borderColor: `${textColors.locationColor}aa`,
+                            }}
+                            whileHover={{
+                              scale: 1.05,
+                              background: `linear-gradient(135deg, ${textColors.locationColor}55, ${textColors.locationColor}dd)`,
+                              boxShadow: `0 15px 32px ${textColors.locationColor}30`
+                            }}
+                            whileTap={{ scale: 0.95 }}
+                            initial={{ boxShadow: `0 12px 28px ${textColors.locationColor}22` }}
+                            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                            aria-label="Download Journal"
+                            title="Download Journal"
+                          >
+                            <motion.svg
+                              className="h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              whileHover={{ y: 2 }}
+                              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </motion.svg>
+                          </motion.button>
+
+                          <motion.button
+                            type="button"
+                            onClick={() => {
+                              if (window.handleReset) {
+                                window.handleReset();
+                              }
+                            }}
+                            className="inline-flex items-center justify-center rounded-lg border px-3 py-2 text-white"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(248,113,113,0.75), rgba(185,28,28,0.95))',
+                              borderColor: 'rgba(248,113,113,0.9)',
+                            }}
+                            whileHover={{
+                              scale: 1.05,
+                              background: 'linear-gradient(135deg, rgba(248,113,113,0.9), rgba(185,28,28,1))',
+                              boxShadow: '0 15px 32px rgba(248,113,113,0.35)'
+                            }}
+                            whileTap={{ scale: 0.95 }}
+                            initial={{ boxShadow: '0 12px 28px rgba(248,113,113,0.25)' }}
+                            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                            aria-label="Clear Journal"
+                            title="Clear Journal"
+                          >
+                            <motion.svg
+                              className="h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              whileHover={{ rotate: -10, scale: 1.1 }}
+                              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </motion.svg>
+                          </motion.button>
+                        </div>
+                      </motion.div>
                     </div>
                   </motion.div>
                 </div>

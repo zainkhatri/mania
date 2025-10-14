@@ -4,6 +4,7 @@ import './App.css';
 import JournalForm from './components/JournalForm';
 import MobileJournal from './components/MobileJournal';
 import Home from './components/Home';
+import Particles from './components/Particles';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -197,9 +198,24 @@ const AppContent: React.FC = () => {
         className="min-h-dvh w-full flex flex-col bg-black overflow-x-clip"
         data-debug-component="appcontent-wrapper"
         style={{
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          position: 'relative'
         }}
       >
+        {/* Particles Background */}
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, pointerEvents: 'none' }}>
+          <Particles
+            particleColors={['#ffffff', '#ffffff']}
+            particleCount={1000}
+            particleSpread={10}
+            speed={2}
+            particleBaseSize={100}
+            moveParticlesOnHover={false}
+            alphaParticles={true}
+            disableRotation={false}
+          />
+        </div>
+
         <Routes>
           <Route path="/" element={<Home />} />
           <Route

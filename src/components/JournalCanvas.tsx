@@ -191,7 +191,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     locationColor: '#3498DB',
     locationShadowColor: '#AED6F1'
   },
-      layoutMode = 'freeflow', // Default to freeflow layout
+  layoutMode = 'freeflow', // Default to freeflow layout
   onAddSticker,
   template = {
     name: 'Default',
@@ -234,9 +234,64 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [stickers, setStickers] = useState<StickerImage[]>([]);
   const [showLocationShadow, setShowLocationShadow] = useState(false);
 
+  // Track image animations: Map of image index to animation start time
+  const [imageAnimations, setImageAnimations] = useState<Map<number, number>>(new Map());
+
   // Guard refs to prevent double-initialization from React StrictMode
   const didInitFonts = useRef(false);
   const didInitTemplate = useRef(false);
+
+  // Track previous image count to detect new images
+  const prevImageCountRef = useRef(images.length);
+
+  // Detect when new images are added and trigger animations
+  useEffect(() => {
+    const currentCount = images.length;
+    const prevCount = prevImageCountRef.current;
+
+    if (currentCount > prevCount) {
+      // New images were added - animate them
+      const newAnimations = new Map(imageAnimations);
+      for (let i = prevCount; i < currentCount; i++) {
+        newAnimations.set(i, Date.now());
+      }
+      setImageAnimations(newAnimations);
+
+      // Request animation frame to continuously update during animation
+      const animate = () => {
+        const now = Date.now();
+        let hasActiveAnimations = false;
+
+        newAnimations.forEach((startTime, index) => {
+          const elapsed = now - startTime;
+          if (elapsed < 600) { // 600ms animation duration
+            hasActiveAnimations = true;
+          }
+        });
+
+        if (hasActiveAnimations) {
+          animationFrameRef.current = requestAnimationFrame(animate);
+        }
+      };
+
+      animate();
+    } else if (currentCount < prevCount) {
+      // Images were removed - remove their animations
+      const newAnimations = new Map(imageAnimations);
+      for (let i = currentCount; i < prevCount; i++) {
+        newAnimations.delete(i);
+      }
+      setImageAnimations(newAnimations);
+    }
+
+    prevImageCountRef.current = currentCount;
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [images.length]);
 
   // Add persistence for stickers - save to localStorage whenever stickers change
   useEffect(() => {
@@ -622,7 +677,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     };
   }, [images, templateUrl, fontLoaded]);
 
-  // Helper to draw images preserving aspect ratio, border, rotation, flipping, and quality
+  // Helper to draw images preserving aspect ratio, border, rotation, flipping, quality, and animation
   const drawImagePreservingAspectRatio = (
     img: HTMLImageElement,
     x: number,
@@ -633,7 +688,8 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     rotation = 0,
     flipH = false,
     flipV = false,
-    enhancedQuality = false
+    enhancedQuality = false,
+    imageIndex?: number
   ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -664,11 +720,33 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       }
       
       ctx.save();
-      
-      // Apply transformations (translate, rotate, scale)
+
+      // Calculate animation progress if this image is animating
+      let animationProgress = 1; // Default to fully visible
+      let animationScale = 1;
+      let animationOpacity = 1;
+
+      if (imageIndex !== undefined && imageAnimations.has(imageIndex)) {
+        const startTime = imageAnimations.get(imageIndex)!;
+        const elapsed = Date.now() - startTime;
+        const duration = 600; // 600ms animation
+
+        if (elapsed < duration) {
+          animationProgress = elapsed / duration;
+          // Ease out cubic for smooth deceleration
+          const eased = 1 - Math.pow(1 - animationProgress, 3);
+          animationScale = 0.5 + (eased * 0.5); // Scale from 0.5 to 1
+          animationOpacity = eased; // Fade from 0 to 1
+        }
+      }
+
+      // Apply transformations (translate, rotate, scale, and animation)
       ctx.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
       if (rotation) ctx.rotate((rotation * Math.PI) / 180);
-      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      ctx.scale((flipH ? -1 : 1) * animationScale, (flipV ? -1 : 1) * animationScale);
+
+      // Apply animation opacity
+      ctx.globalAlpha = animationOpacity;
       
       if (addBorder) {
         // Draw a subtle dark outline instead of white border
@@ -1763,17 +1841,51 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           // Draw the image with rotation support
           ctx.save();
           
+          // Calculate animation progress if this image is animating
+          let animationScale = 1;
+          let animationOpacity = 1;
+
+          if (imageAnimations.has(index)) {
+            const startTime = imageAnimations.get(index)!;
+            const elapsed = Date.now() - startTime;
+            const duration = 600; // 600ms animation
+
+            if (elapsed < duration) {
+              const animationProgress = elapsed / duration;
+              // Ease out cubic for smooth deceleration
+              const eased = 1 - Math.pow(1 - animationProgress, 3);
+              animationScale = 0.5 + (eased * 0.5); // Scale from 0.5 to 1
+              animationOpacity = eased; // Fade from 0 to 1
+            }
+          }
+
+          // Save context for animation transformations
+          ctx.save();
+
+          // Apply animation opacity
+          ctx.globalAlpha *= animationOpacity;
+
+          // Calculate center point for animation scaling
+          const centerX = imagePos.x + imagePos.width / 2;
+          const centerY = imagePos.y + imagePos.height / 2;
+
+          // Apply animation scale from center
+          ctx.translate(centerX, centerY);
+          ctx.scale(animationScale, animationScale);
+          ctx.translate(-centerX, -centerY);
+
           // Apply rotation if specified
           if (imagePos.rotation && imagePos.rotation !== 0) {
             // Move to center of image for rotation
-            const centerX = imagePos.x + imagePos.width / 2;
-            const centerY = imagePos.y + imagePos.height / 2;
             ctx.translate(centerX, centerY);
             ctx.rotate((imagePos.rotation * Math.PI) / 180);
             ctx.translate(-centerX, -centerY);
           }
-          
+
           ctx.drawImage(img, imagePos.x, imagePos.y, imagePos.width, imagePos.height);
+
+          // Restore context after animation
+          ctx.restore();
           
           // Draw border and controls if in edit mode and image is selected OR being dragged
           if (props.editMode && (selectedImage === index || draggedSimpleImage === index)) {
