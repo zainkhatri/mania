@@ -234,64 +234,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const [stickers, setStickers] = useState<StickerImage[]>([]);
   const [showLocationShadow, setShowLocationShadow] = useState(false);
 
-  // Track image animations: Map of image index to animation start time
-  const [imageAnimations, setImageAnimations] = useState<Map<number, number>>(new Map());
-
   // Guard refs to prevent double-initialization from React StrictMode
   const didInitFonts = useRef(false);
   const didInitTemplate = useRef(false);
-
-  // Track previous image count to detect new images
-  const prevImageCountRef = useRef(images.length);
-
-  // Detect when new images are added and trigger animations
-  useEffect(() => {
-    const currentCount = images.length;
-    const prevCount = prevImageCountRef.current;
-
-    if (currentCount > prevCount) {
-      // New images were added - animate them
-      const newAnimations = new Map(imageAnimations);
-      for (let i = prevCount; i < currentCount; i++) {
-        newAnimations.set(i, Date.now());
-      }
-      setImageAnimations(newAnimations);
-
-      // Request animation frame to continuously update during animation
-      const animate = () => {
-        const now = Date.now();
-        let hasActiveAnimations = false;
-
-        newAnimations.forEach((startTime, index) => {
-          const elapsed = now - startTime;
-          if (elapsed < 600) { // 600ms animation duration
-            hasActiveAnimations = true;
-          }
-        });
-
-        if (hasActiveAnimations) {
-          animationFrameRef.current = requestAnimationFrame(animate);
-        }
-      };
-
-      animate();
-    } else if (currentCount < prevCount) {
-      // Images were removed - remove their animations
-      const newAnimations = new Map(imageAnimations);
-      for (let i = currentCount; i < prevCount; i++) {
-        newAnimations.delete(i);
-      }
-      setImageAnimations(newAnimations);
-    }
-
-    prevImageCountRef.current = currentCount;
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [images.length]);
 
   // Add persistence for stickers - save to localStorage whenever stickers change
   useEffect(() => {
@@ -307,7 +252,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           originalUrl: undefined
         }));
         localStorage.setItem(stickerKey, JSON.stringify(stickersToSave));
-        console.log("Saved stickers to localStorage:", stickerKey, stickersToSave.length);
       } catch (error) {
         console.error("Failed to save stickers to localStorage:", error);
       }
@@ -323,7 +267,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       const savedStickers = localStorage.getItem(stickerKey);
       if (savedStickers) {
         const parsedStickers = JSON.parse(savedStickers);
-        console.log("Loaded stickers from localStorage:", stickerKey, parsedStickers.length);
         
         // Restore stickers with their positions and properties, and reload their images
         const restoredStickers = parsedStickers.map((sticker: any) => ({
@@ -617,18 +560,27 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       try {
         // Load template first
         const template = new Image();
-        template.crossOrigin = 'anonymous';
+        // Don't set crossOrigin for local images - it causes CORS errors
+        // template.crossOrigin = 'anonymous';
 
         const templatePromise = new Promise<HTMLImageElement | null>((resolve) => {
-          template.onload = () => resolve(template);
-          template.onerror = () => {
+          template.onload = () => {
+            resolve(template);
+          };
+          template.onerror = (error) => {
+            console.error('❌ Template load error (first attempt):', error);
             // Try without cache buster
             template.src = templateUrl;
-            template.onload = () => resolve(template);
-            template.onerror = () => resolve(null);
+            template.onload = () => {
+              resolve(template);
+            };
+            template.onerror = (error2) => {
+              console.error('❌ Template load error (second attempt):', error2, 'URL:', templateUrl);
+              resolve(null);
+            };
           };
-          const cacheBuster = `?v=${new Date().getTime()}`;
-          template.src = templateUrl.includes('?') ? templateUrl : templateUrl + cacheBuster;
+          // Don't use cache buster for local files - just use the URL directly
+          template.src = templateUrl;
         });
 
         const loadedTemplate = await templatePromise;
@@ -726,19 +678,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       let animationScale = 1;
       let animationOpacity = 1;
 
-      if (imageIndex !== undefined && imageAnimations.has(imageIndex)) {
-        const startTime = imageAnimations.get(imageIndex)!;
-        const elapsed = Date.now() - startTime;
-        const duration = 600; // 600ms animation
-
-        if (elapsed < duration) {
-          animationProgress = elapsed / duration;
-          // Ease out cubic for smooth deceleration
-          const eased = 1 - Math.pow(1 - animationProgress, 3);
-          animationScale = 0.5 + (eased * 0.5); // Scale from 0.5 to 1
-          animationOpacity = eased; // Fade from 0 to 1
-        }
-      }
+      // Animation removed - images appear instantly
 
       // Apply transformations (translate, rotate, scale, and animation)
       ctx.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
@@ -937,27 +877,28 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       // Draw template
       if (templateImage) {
         // Save current context state
-                  ctx.save();
-        
+        ctx.save();
+
         // Ensure high quality rendering for template
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        
+
         // Draw template to fill the entire canvas exactly
         try {
           ctx.drawImage(templateImage, 0, 0, canvas.width, canvas.height);
-              } catch (err) {
-          console.error('Error drawing template:', err);
+        } catch (err) {
+          console.error('❌ Error drawing template:', err);
           // If drawing fails, try to draw at original size
           try {
             ctx.drawImage(templateImage, 0, 0, templateImage.width, templateImage.height);
-      } catch (err) {
-            console.error('Failed to draw template even at original size:', err);
+          } catch (err) {
+            console.error('❌ Failed to draw template even at original size:', err);
           }
         }
-        
+
         // Restore context state
-          ctx.restore();
+        ctx.restore();
+      } else {
       }
       
       // Draw content based on layout mode
@@ -975,36 +916,21 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Single rendering useEffect to prevent flash when adding/deleting images
   useEffect(() => {
-    console.log('🔥 CANVAS RENDER TRIGGERED', {
-      hasCanvas: !!canvasRef.current,
-      isLoading,
-      hasTemplate: !!templateImage,
-      textSections: textSections.length,
-      images: images.length,
-      isDragging: !!draggedSimpleImage,
-      timestamp: Date.now()
-    });
-
     if (!canvasRef.current) {
-      console.log('🔥 SKIPPED: No canvas ref');
       return;
     }
     if (isLoading) {
-      console.log('🔥 SKIPPED: Still loading');
       return;
     }
 
     // Allow rendering during drag for smooth visual feedback
     // RAF throttling in mousemove handles performance
 
-    console.log('🔥 WILL RENDER on next frame');
     // Use requestAnimationFrame for smooth, synchronized rendering
     const frameId = requestAnimationFrame(() => {
-      console.log('🔥 RENDERING CANVAS NOW');
       const startTime = performance.now();
       renderCanvas();
       const endTime = performance.now();
-      console.log(`🔥 CANVAS RENDER COMPLETE in ${(endTime - startTime).toFixed(2)}ms`);
     });
 
     return () => {
@@ -1089,7 +1015,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         // Create a mobile-optimized PNG snapshot
         const exportQuality = isMobile ? 0.9 : 1.0; // Lower quality on mobile for smaller files
 
-        console.log('📱 Export settings:', { exportQuality, isMobile });
         // Debug statement removed
 
         // Directly use the canvas's toDataURL - no need for html2canvas
@@ -1123,7 +1048,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               const mobileWidth = Math.min(journalCanvas.width, 1200);
               const mobileHeight = Math.min(journalCanvas.height, 1600);
 
-              console.log('📱 Mobile PDF dimensions:', { mobileWidth, mobileHeight, originalWidth: journalCanvas.width, originalHeight: journalCanvas.height });
 
               pdf = new jsPDF(
                 'portrait',
@@ -1162,13 +1086,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const year = now.getFullYear();
             const filename = `mania-${month}-${day}-${year}.pdf`;
 
-            console.log('📱 Saving PDF:', filename, 'isMobile:', isMobile);
 
             // Mobile-specific download handling
             if (isMobile && isIOS) {
               // Safari iOS: Use special handling for better compatibility
               try {
-                console.log('📱 Safari iOS detected, using special download method');
 
                 // Method 1: Try blob with download attribute
                 const pdfBlob = pdf.output('blob');
@@ -1181,7 +1103,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-                console.log('📱 Safari iOS blob download initiated');
 
                 // Safari download handled silently
 
@@ -1204,7 +1125,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                         </body>
                       </html>
                     `);
-                    console.log('📱 Safari iOS new window method initiated');
                   }
                 } catch (windowError) {
                   console.error('📱 Safari iOS all methods failed:', windowError);
@@ -1242,11 +1162,9 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
             // On mobile, offer PNG fallback if PDF fails
             if (isMobile) {
-              console.log('📱 PDF creation failed on mobile, offering PNG fallback');
               try {
                 if (isIOS) {
                   // Safari iOS: Use special PNG handling
-                  console.log('📱 Safari iOS PNG fallback initiated');
 
                   // Method 1: Try blob download
                   try {
@@ -1315,7 +1233,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                   }
                 }, 3000);
 
-                console.log('📱 PNG fallback export completed');
               } catch (fallbackError) {
                 console.error('📱 PNG fallback also failed:', fallbackError);
                 alert('Export failed. Please try again or use a different device.');
@@ -1840,39 +1757,11 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Draw the image with rotation support
           ctx.save();
-          
-          // Calculate animation progress if this image is animating
-          let animationScale = 1;
-          let animationOpacity = 1;
-
-          if (imageAnimations.has(index)) {
-            const startTime = imageAnimations.get(index)!;
-            const elapsed = Date.now() - startTime;
-            const duration = 600; // 600ms animation
-
-            if (elapsed < duration) {
-              const animationProgress = elapsed / duration;
-              // Ease out cubic for smooth deceleration
-              const eased = 1 - Math.pow(1 - animationProgress, 3);
-              animationScale = 0.5 + (eased * 0.5); // Scale from 0.5 to 1
-              animationOpacity = eased; // Fade from 0 to 1
-            }
-          }
-
-          // Save context for animation transformations
+          // Animation removed - images appear instantly
           ctx.save();
 
-          // Apply animation opacity
-          ctx.globalAlpha *= animationOpacity;
-
-          // Calculate center point for animation scaling
           const centerX = imagePos.x + imagePos.width / 2;
           const centerY = imagePos.y + imagePos.height / 2;
-
-          // Apply animation scale from center
-          ctx.translate(centerX, centerY);
-          ctx.scale(animationScale, animationScale);
-          ctx.translate(-centerX, -centerY);
 
           // Apply rotation if specified
           if (imagePos.rotation && imagePos.rotation !== 0) {
@@ -1884,7 +1773,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
           ctx.drawImage(img, imagePos.x, imagePos.y, imagePos.width, imagePos.height);
 
-          // Restore context after animation
           ctx.restore();
           
           // Draw border and controls if in edit mode and image is selected OR being dragged
@@ -1997,7 +1885,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    console.log("Canvas clicked at:", mouseX, mouseY);
 
     // First check for image interactions
     if (props.editMode && layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2017,7 +1904,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const deleteBtnRadius = 40; // Match the visual button size
             
             if (Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2) <= deleteBtnRadius) {
-              console.log("Deleting image:", i);
               if (props.onImageDelete) {
                 props.onImageDelete(i);
               }
@@ -2031,7 +1917,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const resizeBtnRadius = 40; // Match the visual button size
             
             if (Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2) <= resizeBtnRadius) {
-              console.log("Starting resize for image:", i);
               setResizingSimpleImage(i);
               setResizeStartData({
                 startX: mouseX,
@@ -2045,7 +1930,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             }
           } else {
             // Select this image
-            console.log("Selecting image:", i);
             setSelectedImage(i);
             setHoveredImage(i);
             return;
@@ -2055,7 +1939,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // If clicked outside all images, deselect current image
       if (selectedImage !== null) {
-        console.log("Deselecting image, saving position");
         setSelectedImage(null);
         setHoveredImage(null);
         // The position is already saved in the state, no need to call save here
@@ -2069,7 +1952,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Check if delete button was clicked (with larger hit area)
       if (Math.sqrt((mouseX - deleteBtn.x) ** 2 + (mouseY - deleteBtn.y) ** 2) <= btnRadius * 1.5) {
-        console.log("Deleting sticker:", activeSticker);
         // Delete this sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         setStickers(newStickers);
@@ -2111,7 +1993,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             const newStickers = stickers.map((s, idx) => idx === i ? { ...s, zIndex: maxZ + 1 } : s);
             setStickers(newStickers);
           }
-        console.log("Selected sticker:", i, "Total stickers:", stickers.length);
         break;
       }
     }
@@ -2132,7 +2013,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    console.log("Mouse down at:", mouseX, mouseY);
 
     // BULLETPROOF IMAGE INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2150,7 +2030,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const distanceToDelete = Math.sqrt((mouseX - deleteBtnX) ** 2 + (mouseY - deleteBtnY) ** 2);
         
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("🗑️ Delete button clicked, deleting image:", i);
           // Clear selection immediately before deleting
           setSelectedImage(null);
           setDraggedSimpleImage(null);
@@ -2167,7 +2046,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const distanceToResize = Math.sqrt((mouseX - resizeBtnX) ** 2 + (mouseY - resizeBtnY) ** 2);
         
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("🔧 Resize button clicked, starting resize for image:", i);
           // Ensure image is selected before resizing
           if (selectedImage !== i) {
             setSelectedImage(i);
@@ -2193,7 +2071,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // ALWAYS select the image when clicked - no exceptions
           if (selectedImage !== i) {
-            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
           
@@ -2205,7 +2082,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Enable dragging immediately for responsive feel
           setDraggedSimpleImage(i);
-          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
@@ -2213,7 +2089,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Only deselect if we didn't click on ANY image
       if (!clickedImage && selectedImage !== null) {
-        console.log("🔄 Clicking outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -2748,7 +2623,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
 
-    console.log("Touch start at:", x, y);
 
     // BULLETPROOF TOUCH INTERACTION SYSTEM
     if (layoutMode === 'freeflow' && simpleImagePositions.length > 0) {
@@ -2766,7 +2640,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const distanceToDelete = Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2);
         
         if (distanceToDelete <= deleteBtnRadius) {
-          console.log("🗑️ Delete button touched, deleting image:", i);
           // Clear selection immediately before deleting
           setSelectedImage(null);
           setDraggedSimpleImage(null);
@@ -2783,7 +2656,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const distanceToResize = Math.sqrt((x - resizeBtnX) ** 2 + (y - resizeBtnY) ** 2);
         
         if (distanceToResize <= resizeBtnRadius) {
-          console.log("🔧 Resize button touched, starting resize for image:", i);
           // Ensure image is selected before resizing
           if (selectedImage !== i) {
             setSelectedImage(i);
@@ -2809,7 +2681,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // ALWAYS select the image when touched - no exceptions
           if (selectedImage !== i) {
-            console.log("✅ Selecting image:", i);
             setSelectedImage(i);
           }
           
@@ -2821,7 +2692,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           
           // Enable dragging immediately for responsive feel
           setDraggedSimpleImage(i);
-          console.log("🚀 Dragging enabled immediately for image:", i);
           
           break;
         }
@@ -2829,7 +2699,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Only deselect if we didn't touch ANY image
       if (!touchedImage && selectedImage !== null) {
-        console.log("🔄 Touching outside images, deselecting current selection");
         setSelectedImage(null);
       }
     }
@@ -3216,7 +3085,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // 2. Sticker upload handler - moved to external UI
   const handleStickerFile = (file: File) => {
-    console.log("handleStickerFile called with:", file.name, file.size, file.type);
     
     // Create a revocable URL for the file IMMEDIATELY - no compression
     const url = URL.createObjectURL(file);
@@ -3226,12 +3094,10 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     img.crossOrigin = "anonymous";
     
     img.onload = () => {
-      console.log("Image loaded successfully for sticker:", file.name);
       
       // STEP 1: SAVE ORIGINAL AT FULL QUALITY - Never touch the original image
       const originalWidth = img.naturalWidth || img.width;
       const originalHeight = img.naturalHeight || img.height;
-      console.log("Original dimensions preserved:", originalWidth, "x", originalHeight);
       
       // STEP 2: CALCULATE DISPLAY SIZE - This is just for initial preview, not permanent
       const defaultStickerSize = 100; // Reduced from 200 to match new tiny dimensions
@@ -3248,7 +3114,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         displayWidth = defaultStickerSize * aspectRatio;
       }
       
-      console.log("Initial display dimensions:", displayWidth, "x", displayHeight);
       
       // Position stickers BELOW the location text area for easier grabbing
       // Use the new canvas dimensions (1860x2620)
@@ -3281,7 +3146,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       setStickers(prevStickers => {
         const newZIndex = prevStickers.length + 10;
         const stickerWithZIndex = { ...newSticker, zIndex: newZIndex };
-        console.log("Adding ORIGINAL QUALITY sticker to state:", stickerWithZIndex);
         return [...prevStickers, stickerWithZIndex];
       });
       
@@ -3305,7 +3169,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Expose the addSticker method via the forwarded ref
   useImperativeHandle(ref, () => ({
     addSticker: (file: File, width?: number, height?: number) => {
-      console.log("Adding sticker:", file.name);
       try {
         handleStickerFile(file);
         return true;
@@ -3325,7 +3188,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     },
     exportUltraHDPDF: exportUltraHDPDF,
     clearStickers: () => {
-      console.log("Clearing all stickers");
       // Revoke object URLs to prevent memory leaks
       stickers.forEach(sticker => {
         if (sticker.originalUrl) {
@@ -3497,7 +3359,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
       
       // Use a larger hit area for easier button clicking (1.5x radius)
       if (Math.sqrt((x - deleteBtnX) ** 2 + (y - deleteBtnY) ** 2) <= btnRadius * 1.5) {
-        console.log("Delete button clicked!");
         // Delete the active sticker
         const newStickers = stickers.filter((_, idx) => idx !== activeSticker);
         setStickers(newStickers);
@@ -3576,7 +3437,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Add a new function to handle multiple stickers
   const addMultipleStickers = (files: File[]) => {
-    console.log(`Adding ${files.length} stickers at once`);
     
     // Calculate canvas dimensions for positioning
     const canvasWidth = canvasRef.current?.width || 1240;
@@ -3773,15 +3633,12 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   // Clear all image interaction states when images are deleted to prevent teleporting
   useEffect(() => {
     if (selectedImage !== null && selectedImage >= images.length) {
-      console.log("🔄 Image deleted, clearing selection state");
       setSelectedImage(null);
     }
     if (draggedSimpleImage !== null && draggedSimpleImage >= images.length) {
-      console.log("🔄 Image deleted, clearing drag state");
       setDraggedSimpleImage(null);
     }
     if (resizingSimpleImage !== null && resizingSimpleImage >= images.length) {
-      console.log("🔄 Image deleted, clearing resize state");
       setResizingSimpleImage(null);
     }
   }, [images.length, selectedImage, draggedSimpleImage, resizingSimpleImage]);
@@ -3798,7 +3655,6 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           setSelectedImage(null);
           return;
         }
-        console.log("✅ Selection state validated:", selectedImage);
       }
       // Removed setRenderCount - React already re-renders when state changes
     }

@@ -57,20 +57,46 @@ export const generateJournalPrompts = async (
 
   return withRetry(async () => {
     try {
-      // Natural conversational prompt that makes the AI genuinely curious
+      // Get current date context
+      const today = new Date();
+      const dateContext = `Today is ${today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+
+      // Critical thinking prompt that makes the AI dig deep
       const prompt = `
-I just told you this:
+${dateContext}
+${cleanLocation ? `Location: ${cleanLocation}` : ''}
+
+Here's what they wrote:
 "${cleanJournalText}"
-${cleanLocation ? `\nI'm in: ${cleanLocation}` : ''}
 
-You're my friend and you just heard me vent. Ask me ONE natural question that shows you were listening and makes me think deeper about what I just told you.
+You are a Socratic philosopher who asks powerful questions that challenge assumptions and reveal hidden truths. Analyze what they wrote and craft ONE piercing question that:
 
-Use my exact words and be genuinely curious about my situation.
+1. Questions their underlying assumptions or beliefs
+2. Explores the deeper "why" behind their feelings/actions
+3. Challenges them to see their situation from a completely different perspective
+4. Makes them confront uncomfortable truths or contradictions
+5. Connects their words to broader patterns in their life
 
-Respond ONLY with the question - no explanation.`;
+Consider:
+- What are they NOT saying?
+- What patterns or contradictions exist in their words?
+- What might they be avoiding or rationalizing?
+- How does the location or date add context?
+- What deeper fear, desire, or belief might be driving this?
+
+Ask a question that makes them pause and think "Damn, I never thought about it that way."
+
+Be direct, philosophical, and bold. Don't be generic. Reference their exact words and situation.
+
+Respond with ONLY the question - no preamble, no explanation.`;
 
       // Call our secure server proxy instead of OpenAI directly
-      const response = await fetch('/api/chat', {
+      // Use localhost:3001 for local dev, /api/chat for production
+      const apiUrl = process.env.NODE_ENV === 'development'
+        ? 'http://localhost:3001/api/chat'
+        : '/api/chat';
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,15 +106,15 @@ Respond ONLY with the question - no explanation.`;
           messages: [
             {
               role: "system",
-              content: "You are a caring friend who just heard someone share something personal. Ask them ONE natural question that shows you were listening and makes them think deeper. Use their exact words and be genuinely curious about their situation."
+              content: "You are a brilliant Socratic philosopher and therapist who asks penetrating questions that expose hidden truths, challenge assumptions, and spark profound self-reflection. Your questions cut through surface-level thinking to reveal deeper patterns, contradictions, and insights. Be bold, direct, and psychologically astute. Make people think 'Holy shit, I never realized that.'"
             },
             { role: "user", content: prompt }
           ],
-          temperature: 0.8,
-          max_tokens: 50,
-          seed: seed,
-          presence_penalty: 0.6,
-          frequency_penalty: 0.3
+          temperature: 0.95, // High but not too chaotic
+          max_tokens: 80, // Allow for more complex questions
+          // Removed seed to make it non-deterministic
+          presence_penalty: 0.8, // Higher to avoid repetition
+          frequency_penalty: 0.5 // Higher to encourage new words
         }),
       });
 

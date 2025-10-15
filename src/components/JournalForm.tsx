@@ -3251,8 +3251,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                   background: isGeneratingInspiration || isQuestionTyping
                                     ? `${textColors.locationColor}30`
                                     : `linear-gradient(135deg, ${textColors.locationColor}33, ${textColors.locationColor}aa)`,
-                                  borderColor: `${textColors.locationColor}99`,
-                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}33` : 'none',
+                                  borderTop: `1px solid ${textColors.locationColor}99`,
+                                  borderBottom: `1px solid ${textColors.locationColor}99`,
+                                  borderLeft: `1px solid ${textColors.locationColor}99`,
+                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}33` : `1px solid ${textColors.locationColor}99`,
                                 }}
                                 whileHover={
                                   !isGeneratingInspiration && !isQuestionTyping
@@ -3260,7 +3262,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                         scale: 1.02,
                                         y: -2,
                                         boxShadow: `0 15px 35px ${textColors.locationColor}33`,
-                                        background: `linear-gradient(135deg, ${textColors.locationColor}55, ${textColors.locationColor}cc)`,
                                       }
                                     : {}
                                 }
@@ -3269,14 +3270,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                     ? { scale: 0.95 }
                                     : {}
                                 }
-                                animate={
-                                  isGeneratingInspiration || isQuestionTyping
-                                    ? { opacity: 0.6 }
-                                    : {
-                                        opacity: 1,
-                                        boxShadow: `0 12px 30px ${textColors.locationColor}22`
-                                      }
-                                }
+                                animate={{
+                                  opacity: 1,
+                                  boxShadow: `0 12px 30px ${textColors.locationColor}22`
+                                }}
                                 transition={{
                                   type: "spring",
                                   stiffness: 300,
@@ -3284,27 +3281,27 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                 }}
                                 title="Get AI-powered journal prompts"
                               >
-                              {isGeneratingInspiration ? (
-                                <motion.div
-                                  className="rounded-full h-4 w-4 border-2 border-t-transparent border-white"
-                                  animate={{ rotate: 360 }}
-                                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                />
-                              ) : (
                                 <>
-                                  <motion.svg
-                                    className="h-5 w-5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    whileHover={{ rotate: 180, scale: 1.1 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 10 }}
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121m0-12.728l2.121 2.121m8.486 8.486l2.121 2.121" />
-                                  </motion.svg>
+                                  {isGeneratingInspiration ? (
+                                    <motion.div
+                                      className="rounded-full h-4 w-4 border-2 border-t-transparent border-white"
+                                      animate={{ rotate: 360 }}
+                                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                    />
+                                  ) : (
+                                    <motion.svg
+                                      className="h-5 w-5"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      whileHover={{ rotate: 180, scale: 1.1 }}
+                                      transition={{ type: "spring", stiffness: 300, damping: 10 }}
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121m0-12.728l2.121 2.121m8.486 8.486l2.121 2.121" />
+                                    </motion.svg>
+                                  )}
                                   <span className="text-base tracking-wide">AI Prompt</span>
                                 </>
-                              )}
                               </motion.button>
 
                             {/* AI Question - Slides in from left */}
@@ -3328,7 +3325,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                     style={{
                                       color: textColors.locationColor,
                                       fontWeight: 500,
-                                      fontSize: '18px'
+                                        fontSize: '25px'
                                     }}
                                   >
                                     {displayedQuestion}
@@ -3780,7 +3777,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               readOnly
                               className="w-full rounded-lg border shadow-lg focus:border-white focus:ring-2 focus:ring-white/30 px-3 py-3 h-[120px] transition-all duration-200 resize-none overflow-y-auto backdrop-blur-sm"
                               style={{
-                                fontSize: '18px',
+                                fontSize: '22px',
                                 color: textColors.locationColor,
                                 backgroundColor: `${textColors.locationColor}10`,
                                 borderColor: textColors.locationColor
@@ -3792,7 +3789,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                 animate={{ opacity: [1, 0] }}
                                 transition={{ duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
                               >
-                                <span style={{ color: textColors.locationColor, fontSize: '18px' }}>|</span>
+                                <span style={{ color: textColors.locationColor, fontSize: '22px' }}>|</span>
                               </motion.div>
                             )}
                           </motion.div>
