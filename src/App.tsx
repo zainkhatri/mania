@@ -117,9 +117,25 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {!shouldHideNav && (
         <>
           {/* Navigation - Hidden on mobile */}
-          <nav className="relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md hidden md:block">
-            <div className="w-full px-4 lg:px-6">
-              <div className="flex justify-between items-center h-14">
+          <nav className="relative z-50 py-2 border-b border-white/20 hidden md:block overflow-hidden">
+            {/* Video background for navbar */}
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+              style={{
+                zIndex: 0,
+                opacity: 0.15
+              }}
+              onLoadedData={() => console.log('📹 Navbar video loaded')}
+            >
+              <source src="/background/static.webm" type="video/webm" />
+            </video>
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" style={{ zIndex: 1 }}></div>
+            <div className="w-full px-4 lg:px-6 relative" style={{ zIndex: 2 }}>
+              <div className="flex justify-between items-center h-12">
                 <div className="flex items-center">
                   <Link to="/" className="flex-shrink-0 flex items-center">
                     <div className="text-4xl md:text-5xl text-white font-light">
@@ -193,6 +209,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+
       <div
         className="min-h-dvh w-full flex flex-col bg-black overflow-x-clip"
         data-debug-component="appcontent-wrapper"

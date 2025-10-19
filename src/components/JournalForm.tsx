@@ -2791,8 +2791,23 @@ const JournalForm: React.FC<JournalFormProps> = ({
       )}
 
       {/* Mobile Navbar - Only visible on mobile */}
-      <div className="md:hidden relative z-50 py-3 border-b border-white/20 bg-black/95 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="md:hidden relative z-50 py-3 border-b border-white/20 overflow-hidden">
+        {/* Video background for mobile navbar */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+          style={{
+            zIndex: 0,
+            opacity: 0.15
+          }}
+        >
+          <source src="/background/static.webm" type="video/webm" />
+        </video>
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" style={{ zIndex: 1 }}></div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative" style={{ zIndex: 2 }}>
           <div className="flex justify-between items-center h-14">
             <div className="flex items-center">
               <div className="text-4xl md:text-5xl text-white font-light">
@@ -2854,8 +2869,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           <source src="/background/static.webm" type="video/webm" />
           <source src="/background/static.mp4" type="video/mp4" />
         </video>
-        {/* Professional overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/75 to-black/80 z-1"></div>
+        {/* Professional overlay - Removed to show video background */}
         {/* Main content */}
         <div className="relative z-10 h-full flex flex-col overflow-hidden">
           {/* Journal editor content - Bounded container for desktop */}

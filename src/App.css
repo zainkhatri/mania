@@ -59,21 +59,37 @@ body {
 /* Desktop: Enhanced refined scrolling behavior */
 @media (min-width: 769px) {
   body {
-    background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
+    background: radial-gradient(ellipse at center, rgba(8, 8, 16, 1) 0%, #000000 100%);
     height: 100vh;
     overflow: hidden;
   }
 
   html {
-    background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
+    background: radial-gradient(ellipse at center, rgba(8, 8, 16, 1) 0%, #000000 100%);
     height: 100vh;
     overflow: hidden;
   }
 
   #root {
-    background: radial-gradient(ellipse at center, #0f0f23 0%, #000000 100%);
+    background: radial-gradient(ellipse at center, rgba(8, 8, 16, 1) 0%, #000000 100%);
     height: 100vh;
     overflow: hidden;
+  }
+
+  /* Premium heading styles for desktop */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em !important;
+    font-weight: 600 !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Enhanced label styling */
+  label {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
   }
   
   /* Ensure form content is scrollable within bounds */
@@ -105,10 +121,25 @@ body {
     will-change: contents; /* Hint for GPU acceleration */
   }
 
-  /* Lock canvas container to prevent shift during operations */
+  /* Premium canvas container with enhanced depth */
   #journal-container {
     contain: layout style paint;
     isolation: isolate;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  #journal-container:hover {
+    box-shadow:
+      0 24px 80px rgba(0, 0, 0, 0.5),
+      0 12px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    transform: translateY(-2px) !important;
   }
 
   /* Ensure both grid items are perfectly aligned */
@@ -147,34 +178,39 @@ button, a {
   font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
-/* Vercel-inspired sleek scrollbar */
+/* Premium sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 4px;
-  border: none;
-  transition: background-color 0.2s ease;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: rgba(255, 255, 255, 0.18);
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: #777777;
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: content-box;
 }
 
 /* Firefox scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #333333 #000000;
+  scrollbar-color: rgba(255, 255, 255, 0.12) rgba(0, 0, 0, 0.3);
+  scroll-behavior: smooth;
 }
 
 /* Animation keyframes */
@@ -191,10 +227,71 @@ button, a {
   animation: float 3s ease-in-out infinite;
 }
 
-/* Selection styling */
+/* Subtle shimmer effect for premium feel */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Fade in animation for elements */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Desktop-only subtle entrance animations */
+@media (min-width: 769px) {
+  .journal-form-container > * {
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .journal-form-container > *:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+
+  .journal-form-container > *:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+}
+
+/* Premium selection styling */
 ::selection {
-  background-color: #AEBBED;
-  color: #1a1a1a;
+  background-color: rgba(174, 187, 237, 0.25);
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced placeholder styling for desktop */
+@media (min-width: 769px) {
+  ::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+    opacity: 1 !important;
+  }
+
+  ::-webkit-input-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+    opacity: 1 !important;
+  }
+
+  ::-moz-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+    opacity: 1 !important;
+  }
+
+  :-ms-input-placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+    opacity: 1 !important;
+  }
 }
 
 /* Logo styling */
@@ -216,62 +313,79 @@ button, a {
 
 /* Enhanced desktop styling for refined aesthetics */
 @media (min-width: 769px) {
-  /* Refined typography and spacing for desktop */
+  /* Refined typography and spacing for desktop - increased sizes */
   input,
   textarea,
   select,
   button {
-    font-size: 22px !important;
-    line-height: 1.6 !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-size: 17px !important;
+    line-height: 1.5 !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
-  /* Enhanced input field styling with handwritten aesthetics */
+  /* Enhanced input field styling with premium glassmorphism */
   input[type="text"],
   input[type="date"],
   textarea {
-    padding: 18px 24px !important;
-    min-height: 64px !important;
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 2px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
-    backdrop-filter: blur(20px) !important;
+    padding: 16px 20px !important;
+    min-height: 56px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      0 1px 3px rgba(0, 0, 0, 0.2),
-      0 8px 32px rgba(0, 0, 0, 0.1) !important;
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 2px 12px rgba(0, 0, 0, 0.15),
+      0 8px 32px rgba(0, 0, 0, 0.08) !important;
+    font-family: 'ZainCustomFont', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
 
-  /* Enhanced focus states */
+  /* Specific styling for textarea */
+  textarea {
+    min-height: 120px !important;
+    resize: vertical !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Enhanced focus states with glow */
   input[type="text"]:focus,
   input[type="date"]:focus,
   textarea:focus {
-    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    background: rgba(255, 255, 255, 0.06) !important;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.15),
-      0 0 0 1px rgba(255, 255, 255, 0.1),
-      0 8px 32px rgba(0, 0, 0, 0.15),
-      0 0 20px rgba(255, 255, 255, 0.03) !important;
-    transform: translateY(-1px) !important;
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 0 0 3px rgba(255, 255, 255, 0.06),
+      0 4px 20px rgba(0, 0, 0, 0.2),
+      0 0 40px rgba(255, 255, 255, 0.04) !important;
+    transform: translateY(-1px) scale(1.005) !important;
   }
 
-  /* Refined button styling */
+  /* Refined button styling with depth */
   button {
-    padding: 16px 24px !important;
+    padding: 14px 22px !important;
     border-radius: 12px !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    backdrop-filter: blur(20px) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    font-weight: 500 !important;
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+      0 2px 12px rgba(0, 0, 0, 0.15),
+      0 1px 4px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
   }
 
-  /* Button hover effects */
+  /* Button hover effects with lift */
   button:hover {
-    transform: translateY(-2px) !important;
+    transform: translateY(-2px) scale(1.01) !important;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+      0 6px 24px rgba(0, 0, 0, 0.25),
+      0 2px 8px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  }
+
+  /* Button active state */
+  button:active {
+    transform: translateY(0) scale(0.99) !important;
   }
 
   /* Enhanced color picker styling */
@@ -290,57 +404,45 @@ button, a {
       inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
   }
 
-  /* Professional radio noise/distorted desktop background */
+  /* Premium desktop background with subtle depth */
   .journal-form-container {
     background:
-      repeating-linear-gradient(
-        0deg,
-        rgba(255, 255, 255, 0.004),
-        rgba(255, 255, 255, 0.004) 1px,
-        transparent 1px,
-        transparent 2px
-      ),
-      repeating-linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0.003),
-        rgba(255, 255, 255, 0.003) 1px,
-        transparent 1px,
-        transparent 3px
-      ),
-      radial-gradient(ellipse at 25% 25%, rgba(255, 255, 255, 0.015) 0%, transparent 40%),
-      radial-gradient(ellipse at 75% 75%, rgba(255, 255, 255, 0.012) 0%, transparent 45%),
-      radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.008) 0%, transparent 60%),
-      linear-gradient(135deg, rgba(12, 12, 12, 0.98) 0%, rgba(0, 0, 0, 1) 100%) !important;
+      radial-gradient(ellipse at 20% 30%, rgba(255, 255, 255, 0.015) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 70%, rgba(255, 255, 255, 0.01) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.005) 0%, transparent 60%),
+      linear-gradient(135deg, rgba(8, 8, 12, 1) 0%, rgba(0, 0, 0, 1) 100%) !important;
   }
 
-  /* Refined form sections with better visual hierarchy */
+  /* Refined form sections with premium glassmorphism */
   .bg-black\/40,
   .bg-black\/30 {
-    background: rgba(255, 255, 255, 0.02) !important;
-    backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-  }
-
-  /* Enhanced journal preview container */
-  .bg-black.rounded-2xl {
-    background: rgba(255, 255, 255, 0.01) !important;
-    backdrop-filter: blur(30px) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow:
-      0 16px 64px rgba(0, 0, 0, 0.4),
-      inset 0 2px 0 rgba(255, 255, 255, 0.08),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+      0 8px 32px rgba(0, 0, 0, 0.25),
+      0 2px 12px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
   }
 
-  /* Better grid gap and proportions */
+  /* Enhanced journal preview container with depth */
+  .bg-black.rounded-2xl {
+    background: rgba(255, 255, 255, 0.015) !important;
+    backdrop-filter: blur(40px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow:
+      0 20px 80px rgba(0, 0, 0, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.25),
+      inset 0 2px 0 rgba(255, 255, 255, 0.1),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.15) !important;
+  }
+
+  /* Optimized grid spacing */
   .md\:grid-cols-2 {
-    gap: 1rem !important;
+    gap: 2rem !important;
   }
 
-  /* Lock journal preview to optimal width (as seen at 1580px) */
+  /* Optimized layout proportions and spacing */
   @media (min-width: 769px) {
     .journal-form-container .md\:grid-cols-2 > div:first-child {
       max-width: 780px !important;
@@ -355,6 +457,17 @@ button, a {
     /* Center the grid when viewport is wider than needed */
     .journal-form-container .md\:grid-cols-2 {
       justify-content: center !important;
+      padding: 0 2rem !important;
+    }
+
+    /* Optimized padding for main container */
+    .journal-form-container {
+      padding: 0rem 0 !important;
+    }
+
+    /* Enhanced spacing for form sections */
+    .journal-form-container > div {
+      padding: 2rem !important;
     }
   }
 
@@ -373,34 +486,40 @@ button, a {
     border-radius: inherit;
   }
 
-  /* Subtle navigation bar enhancement */
+  /* Premium navigation bar */
   nav {
-    background: rgba(0, 0, 0, 0.8) !important;
-    backdrop-filter: blur(20px) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.3) !important;
+    /* background removed to allow video background */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
   }
 
-  /* Enhanced logo hover state */
+  /* Enhanced logo with premium hover state */
+  .logo-m {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
   .logo-m:hover {
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3) !important;
-    transition: text-shadow 0.3s ease !important;
+    text-shadow:
+      0 0 30px rgba(255, 255, 255, 0.4),
+      0 0 60px rgba(255, 255, 255, 0.2) !important;
+    transform: scale(1.05) !important;
   }
 
-  /* Professional grade journal preview container */
+  /* Premium journal preview container */
   .journal-form-container .hidden.md\:block.bg-black.rounded-2xl {
     background:
-      radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 70% 80%, rgba(255, 255, 255, 0.025) 0%, transparent 50%),
-      linear-gradient(135deg, rgba(18, 18, 18, 0.95), rgba(0, 0, 0, 0.98)) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.025) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(255, 255, 255, 0.015) 0%, transparent 50%),
+      linear-gradient(135deg, rgba(12, 12, 16, 0.97), rgba(0, 0, 0, 0.99)) !important;
+    backdrop-filter: blur(48px) saturate(200%) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
     box-shadow:
-      0 25px 80px rgba(0, 0, 0, 0.6),
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 80px rgba(255, 255, 255, 0.02),
-      0 0 2px rgba(255, 255, 255, 0.15) !important;
+      0 32px 100px rgba(0, 0, 0, 0.5),
+      0 12px 48px rgba(0, 0, 0, 0.3),
+      inset 0 2px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 100px rgba(255, 255, 255, 0.015),
+      0 0 1px rgba(255, 255, 255, 0.2) !important;
     position: relative;
     overflow: hidden;
   }
@@ -422,110 +541,101 @@ button, a {
     opacity: 0.7;
   }
 
-  /* Professional grade form container */
+  /* Premium form container with refined depth */
   .journal-form-container .bg-black.md\:rounded-2xl {
     background:
-      repeating-linear-gradient(
-        0deg,
-        rgba(255, 255, 255, 0.008),
-        rgba(255, 255, 255, 0.008) 1px,
-        transparent 1px,
-        transparent 2px
-      ),
       radial-gradient(ellipse at 40% 30%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
-      linear-gradient(135deg, rgba(16, 16, 16, 0.92), rgba(0, 0, 0, 0.98)) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      linear-gradient(135deg, rgba(10, 10, 14, 0.95), rgba(0, 0, 0, 0.99)) !important;
+    backdrop-filter: blur(48px) saturate(200%) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow:
-      0 20px 60px rgba(0, 0, 0, 0.5),
-      0 6px 24px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      inset 0 0 60px rgba(255, 255, 255, 0.015),
-      0 0 1px rgba(255, 255, 255, 0.12) !important;
+      0 24px 80px rgba(0, 0, 0, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.25),
+      inset 0 2px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 80px rgba(255, 255, 255, 0.01),
+      0 0 1px rgba(255, 255, 255, 0.15) !important;
     overflow: hidden;
   }
 
-  /* Clean input styling with subtle distortion */
+  /* Refined input styling with premium feel */
   .journal-form-container input[type="text"],
   .journal-form-container input[type="date"],
   .journal-form-container textarea {
     background:
-      radial-gradient(circle at center, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
-      rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 8px !important;
-    backdrop-filter: blur(15px) !important;
+      radial-gradient(circle at center, rgba(255, 255, 255, 0.025) 0%, transparent 70%),
+      rgba(0, 0, 0, 0.35) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      0 2px 12px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
   .journal-form-container input[type="text"]:focus,
   .journal-form-container input[type="date"]:focus,
   .journal-form-container textarea:focus {
-    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-    transform: translateY(-1px) !important;
+      0 4px 20px rgba(0, 0, 0, 0.3),
+      0 0 0 3px rgba(255, 255, 255, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    transform: translateY(-1px) scale(1.005) !important;
     background:
-      radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
-      rgba(0, 0, 0, 0.4) !important;
+      radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, transparent 70%),
+      rgba(0, 0, 0, 0.45) !important;
   }
 
-  /* Preserve button colors but enhance with noise theme */
+  /* Premium button styling for non-colored buttons */
   .journal-form-container button:not([style*="background-color"]) {
     background:
-      repeating-linear-gradient(
-        45deg,
-        rgba(255, 255, 255, 0.005),
-        rgba(255, 255, 255, 0.005) 1px,
-        transparent 1px,
-        transparent 2px
-      ),
-      rgba(0, 0, 0, 0.4) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(20px) !important;
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.02) 0%, transparent 70%),
+      rgba(0, 0, 0, 0.45) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      0 2px 12px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
   .journal-form-container button:not([style*="background-color"]):hover {
-    transform: translateY(-2px) !important;
+    transform: translateY(-2px) scale(1.01) !important;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+      0 6px 24px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
     background:
-      repeating-linear-gradient(
-        45deg,
-        rgba(255, 255, 255, 0.008),
-        rgba(255, 255, 255, 0.008) 1px,
-        transparent 1px,
-        transparent 2px
-      ),
-      rgba(0, 0, 0, 0.5) !important;
-    border-color: rgba(255, 255, 255, 0.15) !important;
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
+      rgba(0, 0, 0, 0.55) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
   }
 
-  /* Don't affect color picker buttons - they keep their background-color */
+  .journal-form-container button:not([style*="background-color"]):active {
+    transform: translateY(0) scale(0.99) !important;
+  }
+
+  /* Enhanced color picker buttons with refined styling */
   .journal-form-container button[style*="background-color"] {
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.25) !important;
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-    transition: all 0.2s ease !important;
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 1px 4px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
   .journal-form-container button[style*="background-color"]:hover {
-    transform: scale(1.05) !important;
+    transform: scale(1.08) translateY(-1px) !important;
     box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
+      0 6px 16px rgba(0, 0, 0, 0.4),
+      0 2px 8px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+  }
+
+  .journal-form-container button[style*="background-color"]:active {
+    transform: scale(1.02) translateY(0) !important;
   }
 }
 
@@ -594,6 +704,33 @@ button, a {
   min-height: 120px;
 }
 
+/* Premium desktop dividers and spacing */
+@media (min-width: 769px) {
+  /* Enhanced section dividers */
+  hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255, 255, 255, 0.12) 20%,
+      rgba(255, 255, 255, 0.12) 80%,
+      transparent
+    ) !important;
+    margin: 2rem 0 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Enhanced spacing between form groups */
+  .space-y-4 > * + * {
+    margin-top: 1.5rem !important;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 2rem !important;
+  }
+}
+
 /* Global color grid styles */
 .color-swatch,
 .color-swatch *,
@@ -606,13 +743,18 @@ button, a {
   min-height: 32px !important;
   max-width: 100% !important;
   max-height: 32px !important;
-  border-radius: 4px !important;
+  border-radius: 8px !important;
   aspect-ratio: 1 !important;
   flex-shrink: 0 !important;
   flex-grow: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* Override any button styles that might affect color swatches */
@@ -626,6 +768,25 @@ button, a {
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
+}
+
+/* Premium color swatch interactions */
+.grid button[style*="background-color"]:active {
+  transform: scale(0.9) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Desktop color swatch hover */
+@media (min-width: 769px) {
+  .grid button[style*="background-color"]:hover {
+    transform: scale(1.1) translateY(-2px) !important;
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+  }
 }
 
 
@@ -644,6 +805,27 @@ label svg {
 /* Make toggle switch larger */
 .toggle-switch {
   transform: scale(1.2);
+}
+
+/* Premium icon styling for mobile and desktop */
+.mobile-journal svg,
+.journal-form-container svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (hover: hover) {
+  .mobile-journal button:hover svg,
+  .journal-form-container button:hover svg {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    transform: scale(1.1);
+  }
+}
+
+.mobile-journal button:active svg,
+.journal-form-container button:active svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  transform: scale(0.95);
 }
 
 /* DatePicker Dark Theme Overrides */
@@ -878,23 +1060,63 @@ input[type="date"]::-webkit-clear-button {
     isolation: isolate;
   }
 
-  /* Remove all rounded corners and padding from journal preview section */
-  .mobile-journal section:first-child,
-  .mobile-journal section:first-child *,
+  /* Premium journal preview section for mobile */
+  .mobile-journal section:first-child {
+    border-radius: 24px !important;
+    margin: 0.75rem !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    backdrop-filter: blur(32px) saturate(200%) !important;
+    box-shadow:
+      0 12px 48px rgba(0, 0, 0, 0.4),
+      0 4px 20px rgba(0, 0, 0, 0.25),
+      inset 0 2px 0 rgba(255, 255, 255, 0.08) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.1) !important;
+    overflow: hidden !important;
+  }
+
+  /* Enhanced canvas container for mobile with crisp rendering */
   .mobile-journal .bg-white {
-    border-radius: 0 !important;
-    margin: 0 !important;
+    border-radius: 16px !important;
+    margin: 0.5rem !important;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(0, 0, 0, 0.05) !important;
+  }
+
+  /* Crisp canvas rendering */
+  .mobile-journal canvas {
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: crisp-edges !important;
+    -webkit-backface-visibility: hidden !important;
+    -moz-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+    transform: translateZ(0) !important;
   }
 
   /* Mobile UI Enhancements - All Mobile Devices */
   @media (max-width: 768px) {
-    /* Mania theme background for mobile */
+    /* Premium gradient background for mobile */
     .mobile-journal {
-      background: #000000;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(10, 10, 18, 1) 0%,
+        rgba(0, 0, 0, 1) 100%
+      );
       position: relative;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
 
-    /* Add subtle TV static effect to mobile */
+    /* Crisp text rendering for all elements */
+    .mobile-journal *,
+    .mobile-journal * {
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      text-rendering: optimizeLegibility !important;
+    }
+
+    /* Subtle ambient glow effect with texture */
     .mobile-journal::before {
       content: "";
       position: fixed;
@@ -902,43 +1124,116 @@ input[type="date"]::-webkit-clear-button {
       left: 0;
       width: 100%;
       height: 100%;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(255, 255, 255, 0.02),
-        rgba(255, 255, 255, 0.02) 1px,
-        transparent 1px,
-        transparent 2px
-      );
+      background:
+        radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        radial-gradient(circle at 50% 20%, rgba(100, 100, 255, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255, 100, 255, 0.02) 0%, transparent 50%);
+      background-size: 40px 40px, 100% 100%, 100% 100%;
       pointer-events: none;
       z-index: 1;
+      animation: ambientPulse 8s ease-in-out infinite;
     }
 
-    /* Enhanced section separators */
+    @keyframes ambientPulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.6; }
+    }
+
+    /* Premium section styling with glassmorphism and animations */
     .mobile-journal section {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.02) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
       position: relative;
       z-index: 2;
+      margin: 0.5rem !important;
+      padding: 1.5rem !important;
+      border-radius: 20px !important;
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+      animation: slideInMobile 0.4s cubic-bezier(0.4, 0, 0.2, 1) backwards;
     }
 
-    /* Smooth scrolling for mobile */
+    /* Override first section (logo/canvas section) */
+    .mobile-journal section:first-child {
+      padding: 0 !important;
+    }
+
+    /* Staggered animation for sections */
+    .mobile-journal section:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    .mobile-journal section:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .mobile-journal section:nth-child(3) {
+      animation-delay: 0.15s;
+    }
+
+    .mobile-journal section:nth-child(4) {
+      animation-delay: 0.2s;
+    }
+
+    @keyframes slideInMobile {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Smooth scrolling for mobile with momentum */
     .mobile-journal .overflow-y-auto {
       scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
       position: relative;
       z-index: 2;
-      scrollbar-gutter: stable !important; /* CRITICAL: Reserve space for scrollbar to prevent shake */
+      scrollbar-gutter: stable !important;
+      overscroll-behavior: contain;
     }
 
-    /* Mania theme focus states for mobile inputs */
+    /* Premium mobile scrollbar (WebKit) */
+    .mobile-journal .overflow-y-auto::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .mobile-journal .overflow-y-auto::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+
+    .mobile-journal .overflow-y-auto::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      backdrop-filter: blur(10px);
+    }
+
+    .mobile-journal .overflow-y-auto::-webkit-scrollbar-thumb:active {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Premium focus states for mobile inputs */
     .mobile-journal input:focus,
     .mobile-journal textarea:focus {
-      border-color: rgba(255, 255, 255, 0.6);
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.3) !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.08),
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 40px rgba(100, 100, 255, 0.1) !important;
+      transform: scale(1.01) !important;
     }
 
-    /* Button press animations */
+    /* Enhanced button press animations */
     .mobile-journal button:active {
-      transform: scale(0.95);
+      transform: scale(0.96) !important;
+      transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
 
     /* Monospace font styling */
@@ -948,14 +1243,36 @@ input[type="date"]::-webkit-clear-button {
     }
   }
 
+  /* Premium typography for mobile with crisp rendering */
+  .mobile-journal h1,
+  .mobile-journal h2,
+  .mobile-journal h3 {
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    color: #ffffff !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: optimizeLegibility !important;
+  }
+
+  .mobile-journal label {
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    letter-spacing: -0.01em !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+  }
+
   /* Small Mobile Devices (up to 480px) */
   @media (max-width: 480px) {
     .mobile-journal section {
-      padding: 1rem !important;
+      padding: 1.25rem !important;
+      margin: 0.375rem !important;
     }
 
     .mobile-journal h2 {
-      font-size: 1.25rem !important;
+      font-size: 1.35rem !important;
     }
 
     .mobile-journal .grid.grid-cols-2 {
@@ -965,23 +1282,23 @@ input[type="date"]::-webkit-clear-button {
 
     .mobile-journal input,
     .mobile-journal textarea {
-      padding: 0.75rem 1rem !important;
-      font-size: 1rem !important;
+      padding: 12px 16px !important;
+      font-size: 16px !important;
     }
 
     .mobile-journal button {
-      padding: 1rem !important;
-      font-size: 1rem !important;
+      padding: 12px 16px !important;
+      font-size: 15px !important;
     }
 
     .mobile-journal .w-12.h-12 {
-      width: 2.5rem !important;
-      height: 2.5rem !important;
+      width: 2.75rem !important;
+      height: 2.75rem !important;
     }
 
     .mobile-journal .grid.grid-cols-4 {
       grid-template-columns: repeat(4, 1fr);
-      gap: 0.5rem;
+      gap: 0.625rem;
     }
   }
 
@@ -1100,11 +1417,43 @@ input[type="date"]::-webkit-clear-button {
     z-index: 10;
   }
 
-  /* Mobile touch targets */
+  /* Premium mobile buttons - Override inline styles */
+  .mobile-journal button:not([style*="background-color"]) {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    touch-action: manipulation !important;
+    background:
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
+      rgba(255, 255, 255, 0.05) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  /* Ensure all buttons get minimum touch target */
   .mobile-journal button {
-    min-height: 44px;
-    min-width: 44px;
-    touch-action: manipulation;
+    min-height: 48px !important;
+    min-width: 48px !important;
+  }
+
+  /* Mobile button hover (for devices that support it) */
+  @media (hover: hover) {
+    .mobile-journal button:hover {
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.05) 0%, transparent 70%),
+        rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+      box-shadow:
+        0 6px 24px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+      transform: translateY(-1px) !important;
+    }
   }
 
   /* Safe area handling */
@@ -1169,20 +1518,22 @@ input[type="date"]::-webkit-clear-button {
     isolation: isolate;
   }
 
-  /* AGGRESSIVE INPUT OVERRIDES */
+  /* PREMIUM MOBILE INPUT STYLING - Override inline classes */
+  .mobile-journal input[type="text"],
+  .mobile-journal input[type="date"],
+  .mobile-journal textarea,
   .mobile-journal input,
   .mobile-journal textarea {
-    all: unset !important;
-    display: block !important;
-    width: 100% !important;
-    background: rgba(255, 255, 255, 0.1) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: 12px !important;
-    padding: 12px 16px !important;
+    background:
+      radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%),
+      rgba(255, 255, 255, 0.04) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 16px !important;
+    padding: 14px 18px !important;
     color: white !important;
     font-size: 16px !important;
     font-family: inherit !important;
-    line-height: 1.5 !important;
+    line-height: 1.6 !important;
     box-sizing: border-box !important;
     margin: 0 !important;
     pointer-events: auto !important;
@@ -1194,6 +1545,13 @@ input[type="date"]::-webkit-clear-button {
     outline: none !important;
     -webkit-appearance: none !important;
     appearance: none !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: block !important;
+    width: 100% !important;
   }
 
   /* Ensure inputs are visible and interactive */
@@ -1207,9 +1565,45 @@ input[type="date"]::-webkit-clear-button {
   .mobile-journal input[type="text"],
   .mobile-journal input[type="date"],
   .mobile-journal textarea {
-    background-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
     color: white !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+  }
+
+  /* Enhanced textarea for mobile */
+  .mobile-journal textarea {
+    min-height: 140px !important;
+    resize: vertical !important;
+    line-height: 1.6 !important;
+    font-size: 16px !important;
+  }
+
+  /* Premium placeholder for mobile */
+  .mobile-journal input::placeholder,
+  .mobile-journal textarea::placeholder {
+    color: rgba(255, 255, 255, 0.35) !important;
+    opacity: 1 !important;
+  }
+
+  /* Loading states with shimmer */
+  @keyframes mobileShimmer {
+    0% {
+      background-position: -200% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .mobile-journal .loading {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: mobileShimmer 1.5s ease-in-out infinite;
   }
 }
 
