@@ -160,14 +160,14 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   }, [location, text, images]);
 
   // Calculate proper image dimensions while preserving aspect ratio
-  const calculateImageDimensions = useCallback(async (image: string | Blob, maxDimension: number = 400): Promise<{ width: number; height: number; originalWidth: number; originalHeight: number }> => {
+  const calculateImageDimensions = useCallback(async (image: string | Blob, maxDimension: number = 600): Promise<{ width: number; height: number; originalWidth: number; originalHeight: number }> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const originalWidth = img.naturalWidth;
         const originalHeight = img.naturalHeight;
         const aspectRatio = originalWidth / originalHeight;
-        
+
         let width, height;
         if (aspectRatio > 1) {
           // Landscape image
@@ -178,7 +178,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
           height = maxDimension;
           width = maxDimension * aspectRatio;
         }
-        
+
         resolve({
           width: Math.round(width),
           height: Math.round(height),
@@ -187,7 +187,7 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         });
       };
       img.onerror = () => {
-        resolve({ width: 300, height: 200, originalWidth: 300, originalHeight: 200 });
+        resolve({ width: 600, height: 400, originalWidth: 600, originalHeight: 400 });
       };
       img.src = typeof image === 'string' ? image : URL.createObjectURL(image);
     });
@@ -196,41 +196,47 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   // Image handling
   const handleAddImages = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    
-    // Debug statement removed
-    
+
     const newImages: (string | Blob)[] = Array.from(files);
     const newPositions: ImagePosition[] = [];
-    
+
+    // Canvas dimensions (from JournalCanvas.tsx)
+    const canvasWidth = 1860;
+    const canvasHeight = 2620;
+
     // Process each image to get proper dimensions
     for (let i = 0; i < newImages.length; i++) {
       const image = newImages[i];
-      const dimensions = await calculateImageDimensions(image);
-      
-      // Position images with slight offsets to prevent overlap
-      const offsetX = i * 50;
-      const offsetY = i * 50;
-      
+      // Use larger max dimension to match canvas scale
+      const dimensions = await calculateImageDimensions(image, 600);
+
+      // Calculate center position
+      const centerX = canvasWidth / 2;
+      const centerY = canvasHeight / 2;
+
+      // Position images with offsets from center to prevent overlap
+      const currentImageCount = images.length + i;
+      const offsetX = (currentImageCount % 3 - 1) * 300; // Spread horizontally
+      const offsetY = Math.floor(currentImageCount / 3) * 200; // Stack vertically
+
       const newPosition = {
-        x: 100 + offsetX,
-        y: 200 + offsetY,
+        x: centerX - dimensions.width / 2 + offsetX,
+        y: centerY - dimensions.height / 2 + offsetY,
         width: dimensions.width,
         height: dimensions.height,
         rotation: 0,
         originalWidth: dimensions.originalWidth,
         originalHeight: dimensions.originalHeight
       };
-      
-      // Debug statement removed
+
       newPositions.push(newPosition);
     }
-    
-    // Debug statement removed
+
     setImages(prev => [...prev, ...newImages]);
     setImagePositions(prev => [...prev, ...newPositions]);
 
     // TempColorPicker will handle color extraction automatically
-  }, [images.length, calculateImageDimensions]);
+  }, [images.length, imagePositions.length, calculateImageDimensions]);
 
   // Canvas callbacks for image manipulation
   const handleImageDrag = useCallback((index: number, x: number, y: number) => {
@@ -288,8 +294,10 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Convert imagePositions to the format expected by JournalCanvas
   const canvasImagePositions = useMemo(() => {
-    // Debug statement removed
-    
+    // Canvas dimensions (from JournalCanvas.tsx)
+    const canvasWidth = 1860;
+    const canvasHeight = 2620;
+
     // Ensure we have positions for all images
     const result = images.map((_, index) => {
       const position = imagePositions[index];
@@ -302,18 +310,22 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
           rotation: position.rotation || 0
         };
       } else {
-        // Fallback position if none exists
+        // Fallback position if none exists - center with offset
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+        const offsetX = (index % 3 - 1) * 300;
+        const offsetY = Math.floor(index / 3) * 200;
+
         return {
-          x: 100 + (index * 50),
-          y: 200 + (index * 50),
-          width: 400,
-          height: 300,
+          x: centerX - 300 + offsetX,
+          y: centerY - 200 + offsetY,
+          width: 600,
+          height: 400,
           rotation: 0
         };
       }
     });
-    
-    // Debug statement removed
+
     return result;
   }, [images, imagePositions]);
 
