@@ -207,11 +207,9 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
   const handleAddImages = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    console.log('🖼️ MobileJournal: handleAddImages started', { filesCount: files.length });
-
     // Detect mobile device
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    console.log('🖼️ MobileJournal: Device detection', { isMobile });
+    console.log('📱 STEP 1: Adding images', { count: files.length, isMobile });
 
     const newImages: (string | Blob)[] = [];
     const newPositions: ImagePosition[] = [];
@@ -223,23 +221,12 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     // Process each image to get proper dimensions
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      console.log(`🖼️ MobileJournal: Processing file ${i}`, {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
 
       // On mobile, convert to data URL for better reliability
       const imageData = isMobile ? await blobToDataURL(file) : file;
-      console.log(`🖼️ MobileJournal: Image data prepared for file ${i}`, {
-        isMobile,
-        dataType: typeof imageData,
-        isDataURL: typeof imageData === 'string' && imageData.startsWith('data:')
-      });
 
       // Use larger max dimension to match canvas scale
       const dimensions = await calculateImageDimensions(imageData, 600);
-      console.log(`🖼️ MobileJournal: Dimensions calculated for image ${i}`, dimensions);
 
       // Calculate center position
       const centerX = canvasWidth / 2;
@@ -247,8 +234,8 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
       // Position images with offsets from center to prevent overlap
       const currentImageCount = images.length + i;
-      const offsetX = (currentImageCount % 3 - 1) * 300; // Spread horizontally
-      const offsetY = Math.floor(currentImageCount / 3) * 200; // Stack vertically
+      const offsetX = (currentImageCount % 3 - 1) * 300;
+      const offsetY = Math.floor(currentImageCount / 3) * 200;
 
       const newPosition = {
         x: centerX - dimensions.width / 2 + offsetX,
@@ -260,37 +247,18 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         originalHeight: dimensions.originalHeight
       };
 
-      console.log(`🖼️ MobileJournal: Position calculated for image ${i}`, newPosition);
-
       newImages.push(imageData);
       newPositions.push(newPosition);
     }
 
-    console.log('🖼️ MobileJournal: All images processed, updating state', {
-      newImagesCount: newImages.length,
-      newPositionsCount: newPositions.length
-    });
-
     setImages(prev => {
       const updated = [...prev, ...newImages];
-      console.log('🖼️ MobileJournal: Images state updated', {
-        previousLength: prev.length,
-        newLength: updated.length
-      });
-      // Show alert on mobile to confirm image was added
-      if (isMobile) {
-        setTimeout(() => {
-          alert(`✅ Image added! Total images: ${updated.length}\nCheck Eruda console for details.`);
-        }, 100);
-      }
+      console.log('📱 STEP 2: Updated images state', { total: updated.length });
       return updated;
     });
     setImagePositions(prev => {
       const updated = [...prev, ...newPositions];
-      console.log('🖼️ MobileJournal: Positions state updated', {
-        previousLength: prev.length,
-        newLength: updated.length
-      });
+      console.log('📱 STEP 3: Updated positions state', { total: updated.length });
       return updated;
     });
 
@@ -392,19 +360,13 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Debug effect to track state changes
   useEffect(() => {
-    console.log('🖼️🖼️🖼️ MobileJournal STATE CHANGED:', {
-      images: images.length,
-      imagePositions: imagePositions.length,
-      canvasImagePositions: canvasImagePositions.length,
-      imagesData: images.map((img, i) => ({
-        index: i,
-        type: typeof img,
-        isBlob: img instanceof Blob,
-        size: img instanceof Blob ? img.size : 'N/A'
-      })),
-      positions: imagePositions,
-      canvasPositions: canvasImagePositions
-    });
+    if (images.length > 0) {
+      console.log('📱 STEP 4: MobileJournal state', {
+        images: images.length,
+        positions: imagePositions.length,
+        canvasPositions: canvasImagePositions.length
+      });
+    }
   }, [images, imagePositions, canvasImagePositions]);
 
   return (
