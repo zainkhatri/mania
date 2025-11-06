@@ -193,11 +193,27 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     });
   }, []);
 
+  // Helper to convert Blob to Data URL (more reliable on mobile)
+  const blobToDataURL = useCallback((blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }, []);
+
   // Image handling
   const handleAddImages = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    const newImages: (string | Blob)[] = Array.from(files);
+    console.log('🖼️ MobileJournal: handleAddImages started', { filesCount: files.length });
+
+    // Detect mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    console.log('🖼️ MobileJournal: Device detection', { isMobile });
+
+    const newImages: (string | Blob)[] = [];
     const newPositions: ImagePosition[] = [];
 
     // Canvas dimensions (from JournalCanvas.tsx)
@@ -205,10 +221,25 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
     const canvasHeight = 2620;
 
     // Process each image to get proper dimensions
-    for (let i = 0; i < newImages.length; i++) {
-      const image = newImages[i];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`🖼️ MobileJournal: Processing file ${i}`, {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+
+      // On mobile, convert to data URL for better reliability
+      const imageData = isMobile ? await blobToDataURL(file) : file;
+      console.log(`🖼️ MobileJournal: Image data prepared for file ${i}`, {
+        isMobile,
+        dataType: typeof imageData,
+        isDataURL: typeof imageData === 'string' && imageData.startsWith('data:')
+      });
+
       // Use larger max dimension to match canvas scale
-      const dimensions = await calculateImageDimensions(image, 600);
+      const dimensions = await calculateImageDimensions(imageData, 600);
+      console.log(`🖼️ MobileJournal: Dimensions calculated for image ${i}`, dimensions);
 
       // Calculate center position
       const centerX = canvasWidth / 2;
@@ -229,14 +260,22 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
         originalHeight: dimensions.originalHeight
       };
 
+      console.log(`🖼️ MobileJournal: Position calculated for image ${i}`, newPosition);
+
+      newImages.push(imageData);
       newPositions.push(newPosition);
     }
+
+    console.log('🖼️ MobileJournal: All images processed, updating state', {
+      newImagesCount: newImages.length,
+      newPositionsCount: newPositions.length
+    });
 
     setImages(prev => [...prev, ...newImages]);
     setImagePositions(prev => [...prev, ...newPositions]);
 
     // TempColorPicker will handle color extraction automatically
-  }, [images.length, imagePositions.length, calculateImageDimensions]);
+  }, [images.length, imagePositions.length, calculateImageDimensions, blobToDataURL]);
 
   // Canvas callbacks for image manipulation
   const handleImageDrag = useCallback((index: number, x: number, y: number) => {
@@ -333,7 +372,19 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
 
   // Debug effect to track state changes
   useEffect(() => {
-    // Debug statement removed
+    console.log('🖼️🖼️🖼️ MobileJournal STATE CHANGED:', {
+      images: images.length,
+      imagePositions: imagePositions.length,
+      canvasImagePositions: canvasImagePositions.length,
+      imagesData: images.map((img, i) => ({
+        index: i,
+        type: typeof img,
+        isBlob: img instanceof Blob,
+        size: img instanceof Blob ? img.size : 'N/A'
+      })),
+      positions: imagePositions,
+      canvasPositions: canvasImagePositions
+    });
   }, [images, imagePositions, canvasImagePositions]);
 
   return (

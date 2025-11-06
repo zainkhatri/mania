@@ -642,13 +642,37 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
           return new Promise<HTMLImageElement | null>((resolve) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = () => resolve(null);
+            img.onload = () => {
+              console.log(`✅ JournalCanvas: Image ${index} loaded successfully`, {
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                type: typeof src,
+                isBlob: src instanceof Blob,
+                size: src instanceof Blob ? src.size : 'N/A'
+              });
+              resolve(img);
+            };
+            img.onerror = (err) => {
+              console.error(`❌ JournalCanvas: Image ${index} failed to load`, {
+                error: err,
+                type: typeof src,
+                isBlob: src instanceof Blob,
+                size: src instanceof Blob ? src.size : 'N/A'
+              });
+              resolve(null);
+            };
 
             if (typeof src === 'string') {
               img.src = src;
+              console.log(`📷 JournalCanvas: Loading image ${index} from URL string`);
             } else {
-              img.src = URL.createObjectURL(src);
+              const blobUrl = URL.createObjectURL(src);
+              img.src = blobUrl;
+              console.log(`📷 JournalCanvas: Loading image ${index} from Blob`, {
+                blobUrl,
+                blobSize: src.size,
+                blobType: src.type
+              });
             }
             img.decoding = 'auto';
           });
@@ -899,19 +923,36 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     
     // Get device pixel ratio
     const dpr = window.devicePixelRatio || 1;
-    
+
+    // Detect mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     // Use optimized high-resolution settings - reduced from 3100x4370 to 1860x2620
     let canvasWidth, canvasHeight;
     canvasWidth = 1860;  // Reduced from 3100 for better performance
     canvasHeight = 2620; // Reduced from 4370 for better performance
-          
+
+    console.log('🎨 renderCanvas: Starting render', {
+      isMobile,
+      dpr,
+      canvasWidth,
+      canvasHeight,
+      totalPixels: canvasWidth * canvasHeight,
+      imagesLength: images.length,
+      imageObjectsLength: imageObjects.length,
+      simpleImagePositionsLength: simpleImagePositions.length
+    });
+
           // Create an optimized rendering context with identical settings for all devices
     const ctx = canvas.getContext('2d', {
       alpha: true,
       willReadFrequently: true, // Enable for better performance with frequent readback operations
       desynchronized: false, // Changed to false for better text quality
     });
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('❌ renderCanvas: Failed to get 2d context');
+      return;
+    }
     
     try {
       // Set canvas dimensions
@@ -1832,10 +1873,17 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
     }
     
     // Draw images for freeflow layout
+    console.log('🎨 renderSimpleTextFlow: Drawing images', {
+      imagePositionsLength: imagePositions.length,
+      imageObjectsLength: imageObjects.length,
+      positions: imagePositions.slice(0, 3).map((pos, i) => ({ index: i, x: pos.x, y: pos.y, w: pos.width, h: pos.height }))
+    });
+
     if (imagePositions.length > 0 && imageObjects.length > 0) {
       imagePositions.forEach((imagePos, index) => {
         // Use the pre-loaded image objects from imageObjects array
         if (imageObjects[index]) {
+          console.log(`🎨 Drawing image ${index} at`, { x: imagePos.x, y: imagePos.y, w: imagePos.width, h: imagePos.height });
           const img = imageObjects[index];
           
           // Draw the image with rotation support
@@ -3002,8 +3050,15 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
   const initializedImagesRef = useRef<Set<string | Blob>>(new Set());
 
   useEffect(() => {
+    console.log('🔥🔥🔥 JournalCanvas: Image positions effect triggered', {
+      layoutMode,
+      imagesLength: images.length,
+      hasSavedPositions: !!props.savedImagePositions,
+      savedPositionsLength: props.savedImagePositions?.length || 0
+    });
+
     if (layoutMode === 'freeflow' && images.length > 0) {
-      // Debug statement removed
+      console.log('🔥 JournalCanvas: Processing freeflow images');
 
       // Use functional update to check if update is needed AND update in one go
       setSimpleImagePositions(prevPositions => {
@@ -3011,12 +3066,18 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
         const needsUpdate = images.length !== prevPositions.length ||
                            images.some((img, i) => prevPositions[i]?.image !== img);
 
+        console.log('🔥 JournalCanvas: Checking if update needed', {
+          prevPositionsLength: prevPositions.length,
+          imagesLength: images.length,
+          needsUpdate
+        });
+
         if (!needsUpdate) {
-          // Debug statement removed
+          console.log('🔥 JournalCanvas: No update needed, returning prevPositions');
           return prevPositions; // Return same reference to prevent re-render
         }
 
-        // Debug statement removed
+        console.log('🔥 JournalCanvas: Creating new image positions');
         
         const newImagePositions: Array<{
           x: number;
@@ -3079,23 +3140,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
                 image
               });
             } else {
-              // Debug statement removed
-            
-            // Use default dimensions for initial positioning (will be updated when image loads)
-            const imageWidth = 400; // Reduced from 800
-            const imageHeight = 300; // Reduced from 600
-            
+              console.log(`🔥 JournalCanvas: Processing NEW image ${index}`);
+
             // This is a new image, calculate default position
             let x = 0, y = 0;
-            
-            // Check if we have saved positions for this image
+            let imageWidth = 400;
+            let imageHeight = 300;
             let savedRotation = 0;
+
+            // Check if we have saved positions for this image
             if (props.savedImagePositions && props.savedImagePositions[index]) {
-              // Use saved position
+              // Use saved position AND dimensions
               x = props.savedImagePositions[index].x;
               y = props.savedImagePositions[index].y;
+              imageWidth = props.savedImagePositions[index].width;
+              imageHeight = props.savedImagePositions[index].height;
               savedRotation = props.savedImagePositions[index].rotation || 0;
-              // Debug statement removed
+              console.log(`🔥 JournalCanvas: Using SAVED position for image ${index}:`, { x, y, width: imageWidth, height: imageHeight });
             } else {
               // Spread images out using grid pattern to prevent overlap
               // Use the new canvas dimensions (1860x2620)
@@ -3123,7 +3184,7 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
               x = Math.max(50, Math.min(x, canvasWidth - imageWidth - 50));
               y = Math.max(50, Math.min(y, canvasHeight - imageHeight - 50));
 
-              // Debug statement removed
+              console.log(`🔥 JournalCanvas: Using FALLBACK position for image ${index}:`, { x, y, width: imageWidth, height: imageHeight });
             }
             
             newImagePositions.push({
@@ -3136,13 +3197,23 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
             });
           }
         });
-        
-        // Debug statement removed
+
+        console.log('🔥 JournalCanvas: Final newImagePositions', {
+          count: newImagePositions.length,
+          positions: newImagePositions.map((pos, i) => ({
+            index: i,
+            x: pos.x,
+            y: pos.y,
+            width: pos.width,
+            height: pos.height
+          }))
+        });
         return newImagePositions;
       });
 
       // Note: Removed renderJournal() call - React automatically re-renders when simpleImagePositions changes
     } else if (layoutMode !== 'freeflow') {
+      console.log('🔥 JournalCanvas: Clearing positions (not freeflow mode)');
       // Clear positions when not in freeflow mode - use functional update
       setSimpleImagePositions(prev => prev.length > 0 ? [] : prev);
     }
