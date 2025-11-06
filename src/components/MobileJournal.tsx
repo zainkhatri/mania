@@ -271,8 +271,28 @@ const MobileJournal: React.FC<MobileJournalProps> = ({
       newPositionsCount: newPositions.length
     });
 
-    setImages(prev => [...prev, ...newImages]);
-    setImagePositions(prev => [...prev, ...newPositions]);
+    setImages(prev => {
+      const updated = [...prev, ...newImages];
+      console.log('🖼️ MobileJournal: Images state updated', {
+        previousLength: prev.length,
+        newLength: updated.length
+      });
+      // Show alert on mobile to confirm image was added
+      if (isMobile) {
+        setTimeout(() => {
+          alert(`✅ Image added! Total images: ${updated.length}\nCheck Eruda console for details.`);
+        }, 100);
+      }
+      return updated;
+    });
+    setImagePositions(prev => {
+      const updated = [...prev, ...newPositions];
+      console.log('🖼️ MobileJournal: Positions state updated', {
+        previousLength: prev.length,
+        newLength: updated.length
+      });
+      return updated;
+    });
 
     // TempColorPicker will handle color extraction automatically
   }, [images.length, imagePositions.length, calculateImageDimensions, blobToDataURL]);

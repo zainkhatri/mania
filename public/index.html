@@ -60,6 +60,15 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <!-- Mobile Console Debugging Tool -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+      // Only load Eruda on mobile devices for debugging
+      if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        eruda.init();
+        console.log('🔧 Eruda mobile debugger initialized');
+      }
+    </script>
     <div id="root"></div>
     <!--
       This HTML file is a template.
