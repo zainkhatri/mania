@@ -26,6 +26,8 @@ interface MobileImageEditorProps {
   canvasHeight: number;
 }
 
+const DEBUG = false; // Set to true to enable focused debugging
+
 const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
   images,
   imagePositions,
@@ -66,7 +68,7 @@ const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
     const x = touch.clientX - rect.left;
     const y = touch.clientY - rect.top;
 
-    console.log('Touch start:', { imageKey, x, y });
+    if (DEBUG) console.log('🔵 Touch start:', { imageKey, x, y, touchCount: e.touches.length });
 
     // Always select the image when touched
     setSelectedImage(imageKey);
@@ -109,7 +111,9 @@ const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
       const deltaX = x - touchStart.x;
       const deltaY = y - touchStart.y;
 
-      console.log('Touch move:', { deltaX, deltaY, x, y });
+      if (DEBUG && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
+        console.log('🟢 Touch move (drag):', { deltaX, deltaY, isDragging });
+      }
 
       // Set dragging state for visual feedback
       if (!isDragging && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
@@ -121,17 +125,17 @@ const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
       if (currentPos) {
         const newX = Math.max(0, Math.min(canvasWidth - currentPos.width, currentPos.x + deltaX));
         const newY = Math.max(0, Math.min(canvasHeight - currentPos.height, currentPos.y + deltaY));
-        
+
         // Update position in real-time
         newPositions[selectedImage] = {
           ...currentPos,
           x: newX,
           y: newY
         };
-        
+
         // Call update immediately for real-time movement
         onImageUpdate(newPositions);
-        
+
         // Update touch start for next move
         setTouchStart({ x, y });
       }
@@ -140,24 +144,28 @@ const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
       const currentDistance = getTouchDistance(e.touches);
       if (lastTouchDistance > 0) {
         const scale = currentDistance / lastTouchDistance;
-        
+
+        if (DEBUG && Math.abs(scale - 1) > 0.05) {
+          console.log('🔴 Touch move (resize):', { currentDistance, lastTouchDistance, scale, isResizing });
+        }
+
         // Set resizing state for visual feedback
         if (!isResizing && Math.abs(scale - 1) > 0.05) {
           setIsResizing(true);
         }
-        
+
         const newPositions = { ...imagePositions };
         const currentPos = newPositions[selectedImage];
         if (currentPos) {
           const newWidth = Math.max(50, Math.min(canvasWidth, currentPos.width * scale));
           const newHeight = Math.max(50, Math.min(canvasHeight, currentPos.height * scale));
-          
+
           newPositions[selectedImage] = {
             ...currentPos,
             width: newWidth,
             height: newHeight
           };
-          
+
           // Update size in real-time
           onImageUpdate(newPositions);
         }
@@ -168,11 +176,12 @@ const MobileImageEditor: React.FC<MobileImageEditorProps> = ({
 
   // Handle touch end
   const handleTouchEnd = useCallback(() => {
+    if (DEBUG) console.log('⚪ Touch end:', { isDragging, isResizing });
     // Don't deselect the image - keep it selected
     setIsDragging(false);
     setIsResizing(false);
     setLastTouchDistance(0);
-  }, []);
+  }, [isDragging, isResizing]);
 
   // Handle background tap to deselect
   const handleBackgroundTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
