@@ -1,0 +1,355 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Load custom fonts */
+@font-face {
+  font-family: 'ZainCustomFont';
+  src: url('./font/zain.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'TitleFont';
+  src: url('./font/titles.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville&display=swap');
+
+/* Base styles */
+body {
+  font-family: 'ZainCustomFont', sans-serif !important;
+  min-height: 100vh;
+  background-color: #000000;
+  color: #ffffff;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar but keep scrolling functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
+html {
+  min-height: 100vh;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Typography */
+p, span, div, button, a, input, textarea, label, li {
+  font-family: 'ZainCustomFont', sans-serif !important;
+}
+
+/* Logo font */
+.logo-m {
+  font-family: "Libre Baskerville", Georgia, serif !important;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Logo animation container to prevent shifting */
+.logo-animation-container {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+/* Logo animation transitions */
+.logo-animation-container span {
+  position: absolute;
+  transition: opacity 0.1s ease-in-out;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+/* Override any transform for the logo letters */
+.logo-animation-container .letter-normal,
+.logo-animation-container .logo-m {
+  transform: none !important;
+}
+
+/* Normal letter style (ZainCustomFont for main text) */
+.letter-normal {
+  color: white;
+  font-family: 'ZainCustomFont', sans-serif !important;
+  font-weight: 400;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+  position: relative;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+/* Highlighted letter style (Libre Baskerville for highlighted letters) */
+.letter-highlight {
+  color: white;
+  font-family: 'Libre Baskerville', serif !important;
+  font-weight: 400;
+  display: inline-block;
+  position: relative;
+  text-transform: lowercase;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+@keyframes letterHighlight {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+/* Smooth opacity transition for title elements */
+.opacity-transition {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  display: inline-block;
+  will-change: opacity, transform;
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(5px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-5px); }
+}
+
+/* Any headers that aren't the special mania title */
+h1:not(.mania-title), h2, h3, h4, h5, h6 {
+  font-family: 'ZainCustomFont', sans-serif !important;
+}
+
+/* TV Static video styling */
+video.static-bg {
+  filter: contrast(1.1) brightness(0.9);
+}
+
+/* TV scanline effect */
+.home-overlay::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* TV static noise effect */
+.home-overlay::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(ellipse at center, transparent 0%, transparent 10%, rgba(0, 0, 0, 0.05) 10%, transparent 80%),
+    radial-gradient(ellipse at 20% 30%, rgba(0, 0, 0, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse at 40% 70%, rgba(255, 255, 255, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 10%, rgba(0, 0, 0, 0.05) 0%, transparent 40%);
+  background-size: 300px 300px, 250px 250px, 200px 200px, 150px 150px;
+  opacity: 0.5;
+  animation: staticNoise 0.2s steps(3) infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes staticNoise {
+  0% { transform: translate(-10px, 0px); }
+  25% { transform: translate(0px, 5px); }
+  50% { transform: translate(10px, 0px); }
+  75% { transform: translate(0px, -5px); }
+  100% { transform: translate(-10px, 0px); }
+}
+
+/* Title glitch effect */
+@keyframes textFlicker {
+  0% { 
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 1);
+  }
+  10% {
+    opacity: 0.8;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+  }
+  11% {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.5);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.6);
+  }
+  70% {
+    opacity: 0.7;
+    text-shadow: 0 0 0px rgba(255, 255, 255, 0);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 1);
+  }
+}
+
+.text-flicker {
+  animation: textFlicker 4s infinite both;
+}
+
+/* Home page styles */
+.home-overlay {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(1px);
+}
+
+/* Special "mania" title with mixed fonts */
+.mania-title {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  mix-blend-mode: difference;
+  letter-spacing: -0.03em;
+  color: white;
+}
+
+.title-container {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+/* Removed save notification styling */
+
+/* Add any other custom styles from the original project */
+
+/* Enhanced desktop handwritten aesthetics */
+@media (min-width: 769px) {
+  /* Refined paper texture animation */
+  @keyframes paperTexture {
+    0%, 100% {
+      background-position: 0% 0%, 100% 100%;
+    }
+    50% {
+      background-position: 100% 100%, 0% 0%;
+    }
+  }
+
+  /* Ink blot animation for focus states */
+  @keyframes inkBlot {
+    0% {
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 20px 5px rgba(255, 255, 255, 0.05);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  /* Handwritten underline effect */
+  .handwritten-underline {
+    position: relative;
+  }
+
+  .handwritten-underline::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 20%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0.3) 80%,
+      transparent 100%);
+    border-radius: 1px;
+    transform: skewX(-12deg);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .handwritten-underline:hover::after {
+    opacity: 1;
+  }
+
+  /* Subtle quill pen cursor for text areas */
+  .journal-text-area {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>'), text !important;
+  }
+}
+
+/* Mobile image editor animations */
+@keyframes imageSelect {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.image-select-animation {
+  animation: imageSelect 0.6s ease-out;
+}
+
+/* Smooth transitions for image manipulation */
+.mobile-image-editor img {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-image-editor .selected-image {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced touch feedback */
+.mobile-image-editor button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-image-editor button:active {
+  transform: scale(0.95);
+}

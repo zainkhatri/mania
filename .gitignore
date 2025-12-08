@@ -3,20 +3,64 @@
 /.pnp
 .pnp.js
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # testing
 /coverage
 
 # production
 /build
 
+# expo
+.expo/
+.expo-shared/
+dist/
+
+# native
+/ios
+/android
+
 # misc
 .DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+*.p12
+*.mobileprovision
+*.orig.*
+web-build/
 
+# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# vercel
 .vercel
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~.nib
+
+# Xcode
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+project.xcworkspace
+
+# CocoaPods
+/ios/Pods/

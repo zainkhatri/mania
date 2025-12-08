@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Layout Shift Debugger</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #000; color: #0f0; }
+    .log { margin: 10px 0; padding: 10px; background: #111; border-left: 3px solid #0f0; }
+    .error { border-color: #f00; color: #f00; }
+    .warning { border-color: #ff0; color: #ff0; }
+  </style>
+</head>
+<body>
+  <h1>Layout Shift Debugger - Run in Console</h1>
+  <p>Copy and paste these into your app's console:</p>
+
+  <div class="log">
+    <h3>1. Catch Layout Shifts</h3>
+    <pre>
+new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) {
+    if (e.hadRecentInput) continue;
+    console.log("🟧 Layout shift", e.value, "at", performance.now().toFixed(1));
+    for (const s of e.sources) {
+      console.log("  source:", s.node, "had", s.previousRect, "->", s.currentRect);
+    }
+  }
+}).observe({ type: "layout-shift", buffered: true });
+    </pre>
+  </div>
+
+  <div class="log">
+    <h3>2. Find Overflow Elements</h3>
+    <pre>
+(function findOverflow() {
+  const docW = document.documentElement.clientWidth;
+  let max = 0, bad = [];
+  document.querySelectorAll("body *").forEach(el => {
+    const w = el.getBoundingClientRect().right;
+    if (w > docW + 1) { bad.push(el); if (w > max) max = w; }
+  });
+  console.log("Overflow docW=", docW, "max right=", max);
+  console.log("Culprits:", bad);
+  bad.forEach(el => el.style.outline = "2px solid red");
+})();
+    </pre>
+  </div>
+
+  <div class="log">
+    <h3>3. Force Scrollbar Gutter</h3>
+    <pre>
+document.documentElement.style.overflowY = "scroll";
+document.documentElement.style.scrollbarGutter = "stable both-edges";
+    </pre>
+  </div>
+
+  <div class="log">
+    <h3>4. Monitor Style Changes</h3>
+    <pre>
+new MutationObserver(muts => {
+  muts.forEach(m => {
+    if (m.type === "attributes" && (m.attributeName === "style" || m.attributeName === "class")) {
+      console.log("Body/html attr change:", m.target, m.attributeName, m.target.getAttribute(m.attributeName));
+    }
+  });
+}).observe(document.documentElement, { attributes: true });
+new MutationObserver(muts => {
+  muts.forEach(m => {
+    if (m.type === "attributes" && (m.attributeName === "style" || m.attributeName === "class")) {
+      console.log("Body attr change:", m.target, m.attributeName, m.target.getAttribute(m.attributeName));
+    }
+  });
+}).observe(document.body, { attributes: true });
+    </pre>
+  </div>
+
+  <div class="log">
+    <h3>5. Check Width Changes</h3>
+    <pre>
+console.log("pre-hydrate widths", {
+  d: document.documentElement.clientWidth,
+  w: window.innerWidth
+});
+requestAnimationFrame(() => {
+  console.log("post-hydrate widths", {
+    d: document.documentElement.clientWidth,
+    w: window.innerWidth
+  });
+});
+    </pre>
+  </div>
+</body>
+</html>
