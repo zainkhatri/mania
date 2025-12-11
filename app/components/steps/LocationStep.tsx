@@ -52,14 +52,16 @@ export default function LocationStep({
   const [selectedColor, setSelectedColor] = useState(locationColor || DEFAULT_COLORS[0]);
   const [extractedColors, setExtractedColors] = useState<string[]>(DEFAULT_COLORS);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [showColors, setShowColors] = useState(false); // Track when to show color picker
 
   // Animation values
   const titleOpacity = useSharedValue(0);
-  const titleTranslate = useSharedValue(30);
+  const titleTranslate = useSharedValue(50);  // Start from right
   const inputOpacity = useSharedValue(0);
   const inputScale = useSharedValue(0.95);
+  const inputTranslate = useSharedValue(0);  // Slide animation for input
   const colorsOpacity = useSharedValue(0);
-  const colorsTranslate = useSharedValue(20);
+  const colorsTranslate = useSharedValue(width);  // Start from right off-screen
   const buttonsOpacity = useSharedValue(0);
   const buttonsTranslate = useSharedValue(20);
 
@@ -112,27 +114,38 @@ export default function LocationStep({
   useEffect(() => {
     // Staggered entrance animations
     titleOpacity.value = withTiming(1, { duration: 600 });
-    titleTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
+    titleTranslate.value = withTiming(0, { duration: 500 });
 
     inputOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
     inputScale.value = withDelay(150, withSpring(1, { damping: 15, stiffness: 100 }));
 
-    colorsOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
-    colorsTranslate.value = withDelay(300, withSpring(0, { damping: 20, stiffness: 90 }));
-
     buttonsOpacity.value = withDelay(450, withTiming(1, { duration: 600 }));
     buttonsTranslate.value = withDelay(450, withSpring(0, { damping: 20, stiffness: 90 }));
-
-    // Auto-focus
-    setTimeout(() => {
-      locationInputRef.current?.focus();
-      haptics.light();
-    }, 500);
   }, []);
+
+  // Fade animation when user submits location (clicks done)
+  useEffect(() => {
+    if (showColors) {
+      // Dismiss keyboard first
+      locationInputRef.current?.blur();
+
+      // Fade out location input
+      inputOpacity.value = withTiming(0, { duration: 300 });
+
+      // Fade in colors
+      colorsOpacity.value = withTiming(1, { duration: 300 });
+    } else {
+      // Fade in location input
+      inputOpacity.value = withTiming(1, { duration: 300 });
+
+      // Fade out colors
+      colorsOpacity.value = withTiming(0, { duration: 300 });
+    }
+  }, [showColors]);
 
   const titleStyle = useAnimatedStyle(() => ({
     opacity: titleOpacity.value,
-    transform: [{ translateY: titleTranslate.value }],
+    transform: [{ translateX: titleTranslate.value }],
   }));
 
   const inputStyle = useAnimatedStyle(() => ({
@@ -142,7 +155,6 @@ export default function LocationStep({
 
   const colorsStyle = useAnimatedStyle(() => ({
     opacity: colorsOpacity.value,
-    transform: [{ translateY: colorsTranslate.value }],
   }));
 
   const buttonsStyle = useAnimatedStyle(() => ({
@@ -156,9 +168,30 @@ export default function LocationStep({
     onChangeLocationColor(color);
   };
 
+  const handleLocationSubmit = () => {
+    if (location.trim().length > 0) {
+      haptics.light();
+      setShowColors(true);
+    }
+  };
+
+  // Hide colors when user clears the location completely
+  useEffect(() => {
+    if (location.trim().length === 0 && showColors) {
+      setShowColors(false);
+    }
+  }, [location]);
+
   const handleNext = () => {
-    haptics.medium();
-    onNext();
+    // If user typed location but hasn't shown colors yet, show colors first
+    if (location.trim().length > 0 && !showColors) {
+      haptics.light();
+      setShowColors(true);
+    } else {
+      // Otherwise proceed to next step
+      haptics.medium();
+      onNext();
+    }
   };
 
   const handleBack = () => {
@@ -170,10 +203,13 @@ export default function LocationStep({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={true}
+        bounces={false}
       >
         <View style={styles.content}>
         {/* Title */}
@@ -182,58 +218,75 @@ export default function LocationStep({
           <Text style={styles.subtitle}>Add a location to your memory</Text>
         </Animated.View>
 
-        {/* Location Input */}
-        <Animated.View style={[styles.inputSection, inputStyle]}>
-          <TextInput
-            ref={locationInputRef}
-            style={[styles.locationInput, { color: selectedColor }]}
-            placeholder="MANIA, LA JOLLA, CA"
-            placeholderTextColor={`${selectedColor}50`}
-            value={location}
-            onChangeText={onChangeLocation}
-            onFocus={() => haptics.light()}
-            autoCapitalize="characters"
-            returnKeyType="done"
-            onSubmitEditing={handleNext}
-          />
-        </Animated.View>
-
-        {/* Color Picker */}
-        <Animated.View style={[styles.colorSection, colorsStyle]}>
-          <Text style={styles.colorLabel}>
-            {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
-          </Text>
-          {isExtracting ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#fff" />
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.colorScroll}
-            >
-              {extractedColors.map((color, index) => (
-                <Pressable
-                  key={`${color}-${index}`}
-                  style={({ pressed }) => [
-                    styles.colorOption,
-                    { backgroundColor: color },
-                    selectedColor === color && styles.colorOptionSelected,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={() => handleColorSelect(color)}
-                >
-                  {selectedColor === color && (
-                    <View style={styles.colorCheck}>
-                      <Text style={styles.checkmark}>✓</Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
+        {/* Input/Color Toggle Container - both occupy same space */}
+        <View style={styles.toggleContainer}>
+          {/* Location Input */}
+          {!showColors && (
+            <Animated.View style={[styles.inputSection, inputStyle]}>
+              <View style={styles.locationInputWrapper}>
+                {location.length === 0 && (
+                  <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
+                )}
+                <TextInput
+                  ref={locationInputRef}
+                  style={[styles.locationInput, { color: '#fff' }]}
+                  placeholder=""
+                  placeholderTextColor="transparent"
+                  value={location}
+                  onChangeText={onChangeLocation}
+                  onFocus={() => haptics.light()}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLocationSubmit}
+                  autoFocus={false}
+                  blurOnSubmit={true}
+                />
+              </View>
+            </Animated.View>
           )}
-        </Animated.View>
+
+          {/* Color Picker - only show when user submits location */}
+          {showColors && (
+            <Animated.View style={[styles.colorSection, colorsStyle]}>
+              <Text style={styles.colorLabel}>
+                {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
+              </Text>
+              {isExtracting ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              ) : (
+                <View style={styles.colorPickerContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.colorScroll}
+                    style={styles.colorScrollView}
+                  >
+                    {extractedColors.map((color, index) => (
+                      <Pressable
+                        key={`${color}-${index}`}
+                        style={({ pressed }) => [
+                          styles.colorOption,
+                          { backgroundColor: color },
+                          selectedColor === color && styles.colorOptionSelected,
+                          pressed && { opacity: 0.8 },
+                        ]}
+                        onPress={() => handleColorSelect(color)}
+                      >
+                        {selectedColor === color && (
+                          <View style={styles.colorCheck}>
+                            <Text style={styles.checkmark}>✓</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </Animated.View>
+          )}
+        </View>
 
         {/* Navigation Buttons */}
         <Animated.View style={[styles.buttonSection, buttonsStyle]}>
@@ -277,17 +330,26 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 100,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    minHeight: height,
+    paddingTop: 60,
+    minHeight: height - 200,
   },
   titleContainer: {
-    marginBottom: 50,
+    marginBottom: 40,
     alignItems: 'center',
+  },
+  toggleContainer: {
+    width: '100%',
+    minHeight: 120,
+    marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 32,
@@ -305,35 +367,63 @@ const styles = StyleSheet.create({
   },
   inputSection: {
     width: '100%',
-    marginBottom: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationInputWrapper: {
+    width: '100%',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    fontSize: 28,
+    fontFamily: 'TitleFont',
+    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.4)',
+    letterSpacing: -0.5,
+    position: 'absolute',
+    width: '100%',
   },
   locationInput: {
     width: '100%',
     fontSize: 28,
-    fontFamily: 'ZainCustomFont',
+    fontFamily: 'TitleFont',
     textAlign: 'center',
     paddingVertical: 20,
     paddingHorizontal: 20,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    letterSpacing: -0.5,
+    zIndex: 1,
   },
   colorSection: {
     width: '100%',
-    marginBottom: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   colorLabel: {
     fontSize: 14,
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.6)',
-    marginBottom: 20,
+    marginBottom: 12,
     textAlign: 'center',
     letterSpacing: 1,
   },
+  colorPickerContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  colorScrollView: {
+    width: '100%',
+  },
   colorScroll: {
-    paddingHorizontal: 8,
-    gap: 12,
+    paddingHorizontal: 24,
+    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
   },
   loadingContainer: {
     height: 60,
@@ -341,10 +431,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   colorOption: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginHorizontal: 6,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

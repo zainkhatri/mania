@@ -32,6 +32,7 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const textInputRef = useRef<TextInput>(null);
   const [prompt, setPrompt] = useState("How are you feeling today?");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showFinish, setShowFinish] = useState(false);
 
   // Animation values
   const promptOpacity = useSharedValue(0);
@@ -39,6 +40,9 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const textOpacity = useSharedValue(0);
   const buttonsOpacity = useSharedValue(0);
   const buttonsTranslate = useSharedValue(20);
+  const finishOpacity = useSharedValue(0);
+  const finishScale = useSharedValue(0.8);
+  const finishTranslate = useSharedValue(20);
 
   useEffect(() => {
     // Staggered entrance animations
@@ -69,6 +73,29 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
     opacity: buttonsOpacity.value,
     transform: [{ translateY: buttonsTranslate.value }],
   }));
+
+  const finishStyle = useAnimatedStyle(() => ({
+    opacity: finishOpacity.value,
+    transform: [
+      { scale: finishScale.value },
+      { translateY: finishTranslate.value },
+    ],
+  }));
+
+  // Animate finish button when text is entered
+  useEffect(() => {
+    if (text.trim().length > 0 && !showFinish) {
+      setShowFinish(true);
+      finishOpacity.value = withTiming(1, { duration: 400 });
+      finishScale.value = withSpring(1, { damping: 15, stiffness: 120 });
+      finishTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
+    } else if (text.trim().length === 0 && showFinish) {
+      finishOpacity.value = withTiming(0, { duration: 200 });
+      finishScale.value = withTiming(0.8, { duration: 200 });
+      finishTranslate.value = withTiming(20, { duration: 200 });
+      setTimeout(() => setShowFinish(false), 200);
+    }
+  }, [text]);
 
   const handleGeneratePrompt = async () => {
     if (!text.trim()) {
@@ -165,16 +192,18 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
               <Text style={styles.backText}>Back</Text>
             </Pressable>
 
-            {text.trim().length > 0 && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.continueButton,
-                  pressed && styles.continueButtonPressed,
-                ]}
-                onPress={handleNext}
-              >
-                <Text style={styles.continueText}>Finish</Text>
-              </Pressable>
+            {showFinish && (
+              <Animated.View style={[styles.finishButtonWrapper, finishStyle]}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.continueButton,
+                    pressed && styles.continueButtonPressed,
+                  ]}
+                  onPress={handleNext}
+                >
+                  <Text style={styles.continueText}>Finish</Text>
+                </Pressable>
+              </Animated.View>
             )}
           </View>
         </Animated.View>
@@ -246,6 +275,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  finishButtonWrapper: {
+    flex: 2,
+  },
   backButton: {
     flex: 1,
     paddingVertical: 18,
@@ -266,7 +298,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   continueButton: {
-    flex: 2,
     paddingVertical: 18,
     borderRadius: 100,
     alignItems: 'center',

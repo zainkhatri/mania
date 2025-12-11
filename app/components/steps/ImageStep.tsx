@@ -20,9 +20,21 @@ import { haptics } from '../../utils/haptics';
 import LiveJournalCanvas from '../LiveJournalCanvas';
 
 const { width, height } = Dimensions.get('window');
-// Display canvas dimensions (for screen)
-const DISPLAY_CANVAS_WIDTH = width - 48;
-const DISPLAY_CANVAS_HEIGHT = DISPLAY_CANVAS_WIDTH * (2620 / 1860);
+
+// Calculate display dimensions to fit full page on screen
+const ASPECT_RATIO = 2620 / 1860;
+// Account for: progress bar (60) + instruction (30) + buttons/helper (70) = 160
+const AVAILABLE_HEIGHT = height - 160;
+const AVAILABLE_WIDTH = width - 32;
+
+// Size based on height constraint to ensure full page is visible
+const DISPLAY_CANVAS_HEIGHT = AVAILABLE_HEIGHT;
+const DISPLAY_CANVAS_WIDTH = DISPLAY_CANVAS_HEIGHT / ASPECT_RATIO;
+
+// If width is still too large, constrain by width instead
+const MAX_WIDTH = AVAILABLE_WIDTH;
+const FINAL_CANVAS_WIDTH = Math.min(DISPLAY_CANVAS_WIDTH, MAX_WIDTH);
+const FINAL_CANVAS_HEIGHT = FINAL_CANVAS_WIDTH * ASPECT_RATIO;
 
 // Web canvas dimensions (for storage)
 const WEB_CANVAS_WIDTH = 1860;
@@ -267,7 +279,9 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.content, animatedStyle]}>
-        <Text style={styles.instruction}>Add & arrange your photos</Text>
+        <Text style={styles.instruction}>
+          Add <Text style={styles.specialChar}>&</Text> arrange your photos
+        </Text>
 
         {/* Live Journal Preview with Canvas Overlay */}
         <View style={styles.canvas}>
@@ -388,24 +402,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    width: width - 48,
+    width: '100%',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
   instruction: {
-    fontSize: 28,
+    fontSize: 22,
     fontFamily: 'TitleFont',
     color: '#fff',
-    marginBottom: 40,
+    marginTop: 80,
+    marginBottom: 16,
     textAlign: 'center',
     letterSpacing: -0.5,
   },
+  specialChar: {
+    fontFamily: 'ZainCustomFont',
+  },
   canvas: {
-    width: DISPLAY_CANVAS_WIDTH,
-    height: DISPLAY_CANVAS_HEIGHT,
-    borderRadius: 8,
-    marginBottom: 20,
+    width: FINAL_CANVAS_WIDTH,
+    height: FINAL_CANVAS_HEIGHT,
+    borderRadius: 12,
+    marginBottom: 16,
     position: 'relative',
     overflow: 'hidden',
+    alignSelf: 'center',
   },
   journalPreview: {
     position: 'absolute',
@@ -414,6 +435,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
+    overflow: 'visible',
   },
   imageOverlay: {
     position: 'absolute',
@@ -422,6 +444,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1,
+    overflow: 'hidden',
   },
   emptyStateContainer: {
     flex: 1,
@@ -491,22 +514,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   helperText: {
-    fontSize: 14,
+    fontSize: 11,
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
   },
   addMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
     borderRadius: 100,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 20,
+    marginBottom: 8,
   },
   addMoreButtonPressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -520,10 +543,10 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: '#fff',
-    paddingVertical: 18,
+    paddingVertical: 10,
     paddingHorizontal: 48,
     borderRadius: 100,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   continueButtonPressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',

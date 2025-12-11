@@ -70,7 +70,10 @@ export default function CustomCalendar({ selectedDate, onSelectDate, onClose }: 
     haptics.medium();
     const newDate = new Date(currentYear, currentMonth, day);
     onSelectDate(newDate);
-    handleClose();
+    // Add delay before closing so user sees the selection
+    setTimeout(() => {
+      handleClose();
+    }, 300);
   };
 
   const goToPreviousMonth = () => {
@@ -194,17 +197,13 @@ export default function CustomCalendar({ selectedDate, onSelectDate, onClose }: 
         </View>
 
         {/* Calendar grid */}
-        <Animated.View style={monthAnimatedStyle}>
-          <ScrollView
-            style={styles.calendarScroll}
-            contentContainerStyle={styles.calendarGrid}
-            showsVerticalScrollIndicator={false}
-          >
-            {renderCalendar()}
-          </ScrollView>
+        <Animated.View style={[styles.calendarGrid, monthAnimatedStyle]}>
+          {renderCalendar()}
         </Animated.View>
+      </Animated.View>
 
-        {/* Close button */}
+      {/* Close button - moved outside calendar container */}
+      <Animated.View style={[styles.doneButtonContainer, animatedStyle]}>
         <Pressable
           style={({ pressed }) => [
             styles.closeButton,
@@ -290,20 +289,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.5)',
     fontWeight: '600',
   },
-  calendarScroll: {
-    height: 350,
-  },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    minHeight: 350,
+    height: 240,
   },
   dayCell: {
     width: `${100 / 7}%`,
-    aspectRatio: 1,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
   },
   dayPressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -332,12 +327,15 @@ const styles = StyleSheet.create({
   futureDayText: {
     color: 'rgba(255, 255, 255, 0.3)',
   },
+  doneButtonContainer: {
+    width: width - 48,
+    marginTop: 16,
+  },
   closeButton: {
     backgroundColor: '#fff',
     paddingVertical: 16,
     borderRadius: 100,
     alignItems: 'center',
-    marginTop: 20,
   },
   closeButtonPressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
