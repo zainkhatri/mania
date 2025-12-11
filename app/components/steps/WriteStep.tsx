@@ -4,7 +4,7 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +13,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  withDelay,
 } from 'react-native-reanimated';
 import { haptics } from '../../utils/haptics';
 import { generateJournalPrompts } from '../../services/gptService';
@@ -31,22 +33,41 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const [prompt, setPrompt] = useState("How are you feeling today?");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
+  // Animation values
+  const promptOpacity = useSharedValue(0);
+  const promptTranslate = useSharedValue(20);
+  const textOpacity = useSharedValue(0);
+  const buttonsOpacity = useSharedValue(0);
+  const buttonsTranslate = useSharedValue(20);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 400 });
-    scale.value = withTiming(1, { duration: 400 });
+    // Staggered entrance animations
+    promptOpacity.value = withTiming(1, { duration: 600 });
+    promptTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
+
+    textOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
+
+    buttonsOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
+    buttonsTranslate.value = withDelay(300, withSpring(0, { damping: 20, stiffness: 90 }));
 
     setTimeout(() => {
       textInputRef.current?.focus();
       haptics.light();
-    }, 400);
+    }, 500);
   }, []);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+  const promptStyle = useAnimatedStyle(() => ({
+    opacity: promptOpacity.value,
+    transform: [{ translateY: promptTranslate.value }],
+  }));
+
+  const textStyle = useAnimatedStyle(() => ({
+    opacity: textOpacity.value,
+  }));
+
+  const buttonsStyle = useAnimatedStyle(() => ({
+    opacity: buttonsOpacity.value,
+    transform: [{ translateY: buttonsTranslate.value }],
   }));
 
   const handleGeneratePrompt = async () => {
@@ -79,61 +100,85 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
     }
   };
 
+  const handleBack = () => {
+    haptics.light();
+    onBack();
+  };
+
+  const wordCount = text.split(' ').filter((w) => w.length > 0).length;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <Animated.View style={[styles.content, animatedStyle]}>
+      <View style={styles.content}>
         {/* AI Prompt */}
-        <View style={styles.promptContainer}>
+        <Animated.View style={[styles.promptSection, promptStyle]}>
           <Text style={styles.promptText}>{prompt}</Text>
           {text.length > 20 && (
-            <TouchableOpacity
-              style={styles.generateButton}
+            <Pressable
+              style={({ pressed }) => [
+                styles.generateButton,
+                pressed && styles.generateButtonPressed,
+              ]}
               onPress={handleGeneratePrompt}
               disabled={isGenerating}
             >
               <Text style={styles.generateText}>
                 {isGenerating ? 'Thinking...' : '✨ New Prompt'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
-        </View>
+        </Animated.View>
 
         {/* Writing Area */}
-        <TextInput
-          ref={textInputRef}
-          style={styles.textArea}
-          placeholder="Start writing your thoughts..."
-          placeholderTextColor="rgba(255, 255, 255, 0.3)"
-          value={text}
-          onChangeText={(newText) => {
-            onChangeText(newText);
-            if (newText.length % 10 === 0) haptics.selection();
-          }}
-          multiline
-          textAlignVertical="top"
-          autoFocus
-        />
+        <Animated.View style={[styles.textSection, textStyle]}>
+          <TextInput
+            ref={textInputRef}
+            style={styles.textArea}
+            placeholder="Start writing your thoughts..."
+            placeholderTextColor="rgba(255, 255, 255, 0.25)"
+            value={text}
+            onChangeText={(newText) => {
+              onChangeText(newText);
+              if (newText.length % 10 === 0) haptics.selection();
+            }}
+            multiline
+            textAlignVertical="top"
+            autoFocus
+          />
+        </Animated.View>
 
-        {/* Word Count */}
-        <Text style={styles.wordCount}>
-          {text.split(' ').filter((w) => w.length > 0).length} words
-        </Text>
+        {/* Footer with Word Count and Buttons */}
+        <Animated.View style={[styles.footer, buttonsStyle]}>
+          <Text style={styles.wordCount}>{wordCount} words</Text>
 
-        {/* Continue Button */}
-        {text.trim().length > 0 && (
-          <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
-            <Text style={styles.continueText}>Finish →</Text>
-          </TouchableOpacity>
-        )}
+          <View style={styles.buttonSection}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && styles.backButtonPressed,
+              ]}
+              onPress={handleBack}
+            >
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
 
-        {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-      </Animated.View>
+            {text.trim().length > 0 && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.continueButton,
+                  pressed && styles.continueButtonPressed,
+                ]}
+                onPress={handleNext}
+              >
+                <Text style={styles.continueText}>Finish</Text>
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -142,70 +187,99 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 120,
+    paddingTop: 100,
     paddingBottom: 40,
   },
-  promptContainer: {
-    marginBottom: 24,
+  promptSection: {
+    marginBottom: 32,
   },
   promptText: {
-    fontSize: 20,
-    fontFamily: 'ZainCustomFont',
+    fontSize: 22,
+    fontFamily: 'TitleFont',
     color: 'rgba(255, 255, 255, 0.7)',
-    fontStyle: 'italic',
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: -0.3,
   },
   generateButton: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  generateButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    transform: [{ scale: 0.97 }],
   },
   generateText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'ZainCustomFont',
     color: '#fff',
+  },
+  textSection: {
+    flex: 1,
+    marginBottom: 24,
   },
   textArea: {
     flex: 1,
-    fontSize: 24,
-    fontFamily: 'ZainCustomFont',
-    color: '#fff',
-    lineHeight: 36,
-  },
-  wordCount: {
-    fontSize: 14,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.4)',
-    marginBottom: 20,
-  },
-  continueButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 48,
-    paddingVertical: 20,
-    borderRadius: 30,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  continueText: {
     fontSize: 20,
     fontFamily: 'ZainCustomFont',
-    color: '#000',
-    fontWeight: '600',
+    color: '#fff',
+    lineHeight: 32,
+  },
+  footer: {
+    gap: 20,
+  },
+  wordCount: {
+    fontSize: 13,
+    fontFamily: 'ZainCustomFont',
+    color: 'rgba(255, 255, 255, 0.4)',
+    textAlign: 'center',
+  },
+  buttonSection: {
+    flexDirection: 'row',
+    gap: 12,
   },
   backButton: {
-    paddingVertical: 12,
-    alignSelf: 'center',
+    flex: 1,
+    paddingVertical: 18,
+    borderRadius: 100,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  backButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    transform: [{ scale: 0.98 }],
   },
   backText: {
-    fontSize: 16,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 17,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  continueButton: {
+    flex: 2,
+    paddingVertical: 18,
+    borderRadius: 100,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  continueButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    transform: [{ scale: 0.98 }],
+  },
+  continueText: {
+    fontSize: 17,
+    fontFamily: 'TitleFont',
+    color: '#000',
+    letterSpacing: -0.5,
   },
 });

@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   Dimensions,
   Image,
   Alert,
@@ -14,6 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { haptics } from '../../utils/haptics';
 import LiveJournalCanvas from '../LiveJournalCanvas';
 
@@ -34,7 +36,6 @@ interface ImageStepProps {
   onChangeImages: (images: { uri: string; x: number; y: number; scale: number }[]) => void;
   onNext: () => void;
   onBack: () => void;
-  title?: string;
   location?: string;
   date?: Date;
   text?: string;
@@ -205,7 +206,7 @@ const formatDate = (date: Date): string => {
   return dateStr.toUpperCase();
 };
 
-export default function ImageStep({ images, onChangeImages, onNext, onBack, title = '', location = '', date = new Date(), text = '' }: ImageStepProps) {
+export default function ImageStep({ images, onChangeImages, onNext, onBack, location = '', date = new Date(), text = '' }: ImageStepProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -233,7 +234,7 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, titl
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
+      allowsMultipleSelection: true,
       quality: 0.8,
     });
 
@@ -270,14 +271,12 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, titl
 
         {/* Live Journal Preview with Canvas Overlay */}
         <View style={styles.canvas}>
-          {/* Render the actual journal preview in the background */}
           <View style={styles.journalPreview}>
             <LiveJournalCanvas
               date={formatDate(date)}
               location={location}
               text={text}
               locationColor="#3498DB"
-              title={title}
             />
           </View>
 
@@ -285,17 +284,24 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, titl
           <View
             style={styles.imageOverlay}
             onTouchStart={(e) => {
-              // Deselect image when tapping background (EXACT same as OG)
               if (e.target === e.currentTarget) {
                 setSelectedIndex(null);
               }
             }}
           >
             {images.length === 0 ? (
-              <TouchableOpacity style={styles.emptyCanvas} onPress={handlePickImages}>
-                <Text style={styles.emptyText}>Tap to add photos</Text>
-                <Text style={styles.emptySubtext}>📷</Text>
-              </TouchableOpacity>
+              <View style={styles.emptyStateContainer}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.addPhotosButton,
+                    pressed && styles.addPhotosButtonPressed,
+                  ]}
+                  onPress={handlePickImages}
+                >
+                  <Ionicons name="camera-outline" size={32} color="#fff" />
+                  <Text style={styles.addPhotosText}>Tap to add photos</Text>
+                </Pressable>
+              </View>
             ) : (
               <>
                 {images.map((img, index) => (
@@ -328,29 +334,47 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, titl
 
         {/* Add More Button */}
         {images.length > 0 && (
-          <TouchableOpacity style={styles.addMoreButton} onPress={handlePickImages}>
-            <Text style={styles.addMoreText}>+ Add More Photos</Text>
-          </TouchableOpacity>
+          <Pressable
+            style={({ pressed }) => [
+              styles.addMoreButton,
+              pressed && styles.addMoreButtonPressed,
+            ]}
+            onPress={handlePickImages}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.addMoreText}>Add More Photos</Text>
+          </Pressable>
         )}
 
         {/* Continue Button */}
-        <TouchableOpacity
-          style={[styles.continueButton, images.length === 0 && styles.disabledButton]}
+        <Pressable
+          style={({ pressed }) => [
+            styles.continueButton,
+            pressed && styles.continueButtonPressed,
+          ]}
           onPress={() => {
             haptics.medium();
             onNext();
           }}
-          disabled={images.length === 0}
         >
           <Text style={styles.continueText}>
-            {images.length === 0 ? 'Skip for now' : 'Continue →'}
+            {images.length === 0 ? 'Skip for now' : 'Continue'}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <Pressable
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed,
+          ]}
+          onPress={() => {
+            haptics.light();
+            onBack();
+          }}
+        >
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -369,11 +393,11 @@ const styles = StyleSheet.create({
   },
   instruction: {
     fontSize: 28,
-    fontFamily: 'ZainCustomFont',
+    fontFamily: 'TitleFont',
     color: '#fff',
     marginBottom: 40,
     textAlign: 'center',
-    fontWeight: '300',
+    letterSpacing: -0.5,
   },
   canvas: {
     width: DISPLAY_CANVAS_WIDTH,
@@ -399,20 +423,32 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1,
   },
-  emptyCanvas: {
+  emptyStateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
-  emptyText: {
-    fontSize: 20,
-    fontFamily: 'ZainCustomFont',
-    color: '#999',
-    marginBottom: 12,
+  addPhotosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    paddingHorizontal: 32,
+    paddingVertical: 20,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 12,
   },
-  emptySubtext: {
-    fontSize: 48,
+  addPhotosButtonPressed: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    transform: [{ scale: 0.98 }],
+  },
+  addPhotosText: {
+    fontSize: 18,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -0.5,
   },
   draggableImage: {
     position: 'absolute',
@@ -462,39 +498,54 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   addMoreButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingVertical: 14,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     marginBottom: 20,
   },
+  addMoreButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    transform: [{ scale: 0.97 }],
+  },
   addMoreText: {
-    fontSize: 16,
-    fontFamily: 'ZainCustomFont',
+    fontSize: 15,
+    fontFamily: 'TitleFont',
     color: '#fff',
+    letterSpacing: -0.5,
   },
   continueButton: {
     backgroundColor: '#fff',
+    paddingVertical: 18,
     paddingHorizontal: 48,
-    paddingVertical: 20,
-    borderRadius: 30,
-    marginBottom: 20,
+    borderRadius: 100,
+    marginBottom: 16,
+  },
+  continueButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    transform: [{ scale: 0.98 }],
   },
   continueText: {
-    fontSize: 20,
-    fontFamily: 'ZainCustomFont',
+    fontSize: 17,
+    fontFamily: 'TitleFont',
     color: '#000',
-    fontWeight: '600',
-  },
-  disabledButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    letterSpacing: -0.5,
   },
   backButton: {
     paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  backButtonPressed: {
+    opacity: 0.6,
   },
   backText: {
     fontSize: 16,
-    fontFamily: 'ZainCustomFont',
+    fontFamily: 'TitleFont',
     color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: -0.5,
   },
 });

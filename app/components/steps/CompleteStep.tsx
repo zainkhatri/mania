@@ -23,8 +23,8 @@ import LiveJournalCanvas from '../LiveJournalCanvas';
 const { width, height } = Dimensions.get('window');
 
 interface CompleteStepProps {
-  title: string;
   location: string;
+  locationColor: string;
   date: Date;
   images: { uri: string; x: number; y: number; scale: number }[];
   text: string;
@@ -57,8 +57,8 @@ const formatDate = (date: Date): string => {
 };
 
 export default function CompleteStep({
-  title,
   location,
+  locationColor,
   date,
   images,
   text,
@@ -93,7 +93,6 @@ export default function CompleteStep({
       await saveJournal({
         date: date.toISOString(),
         location: location.trim(),
-        title: title.trim(),
         text: text,
         images: images.map(img => ({
           uri: img.uri,
@@ -102,8 +101,8 @@ export default function CompleteStep({
           scale: img.scale,
         })),
         colors: {
-          locationColor: '#3498DB',
-          locationShadowColor: '#AED6F1', // EXACT match to OG
+          locationColor: locationColor,
+          locationShadowColor: locationColor + '40', // Add transparency for shadow
         },
       });
 
@@ -141,17 +140,13 @@ export default function CompleteStep({
             date={formatDate(date)}
             location={location}
             text={text}
-            locationColor="#3498DB"
+            locationColor={locationColor}
             images={images}
-            title={title}
           />
         </View>
 
         {/* Summary */}
         <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>Title</Text>
-          <Text style={styles.summaryValue}>{title}</Text>
-
           {location && (
             <>
               <Text style={styles.summaryLabel}>Location</Text>
@@ -201,12 +196,12 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   instruction: {
-    fontSize: 28,
-    fontFamily: 'ZainCustomFont',
+    fontSize: 32,
+    fontFamily: 'TitleFont',
     color: '#fff',
     marginBottom: 40,
     textAlign: 'center',
-    fontWeight: '300',
+    letterSpacing: -0.5,
   },
   previewContainer: {
     marginBottom: 40,
@@ -233,15 +228,15 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: '#fff',
-    paddingVertical: 24,
-    borderRadius: 30,
+    paddingVertical: 20,
+    borderRadius: 100,
     alignItems: 'center',
   },
   saveText: {
-    fontSize: 22,
+    fontSize: 18,
     fontFamily: 'ZainCustomFont',
     color: '#000',
-    fontWeight: '700',
+    fontWeight: '500',
   },
   disabledButton: {
     opacity: 0.5,

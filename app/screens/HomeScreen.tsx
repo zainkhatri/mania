@@ -138,6 +138,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 20,
+    fontFamily: 'TitleFont',
     color: '#fff',
     textAlign: 'center',
     marginBottom: 48,
@@ -164,7 +165,8 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: 'TitleFont',
     color: '#fff',
+    letterSpacing: -0.5,
   },
 });

@@ -21,20 +21,15 @@ const { width, height } = Dimensions.get('window');
 interface TitleStepProps {
   title: string;
   onChangeTitle: (title: string) => void;
-  location: string;
-  onChangeLocation: (location: string) => void;
   onNext: () => void;
 }
 
 export default function TitleStep({
   title,
   onChangeTitle,
-  location,
-  onChangeLocation,
   onNext,
 }: TitleStepProps) {
   const titleInputRef = useRef<TextInput>(null);
-  const locationInputRef = useRef<TextInput>(null);
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
@@ -79,20 +74,6 @@ export default function TitleStep({
           onChangeText={onChangeTitle}
           onFocus={() => haptics.light()}
           autoCapitalize="words"
-          returnKeyType="next"
-          onSubmitEditing={() => locationInputRef.current?.focus()}
-        />
-
-        {/* Location Input (EXACT match to OG) */}
-        <TextInput
-          ref={locationInputRef}
-          style={styles.locationInput}
-          placeholder="e.g., MANIA, LA JOLLA, CA"
-          placeholderTextColor="rgba(52, 152, 219, 0.5)"
-          value={location}
-          onChangeText={onChangeLocation}
-          onFocus={() => haptics.light()}
-          autoCapitalize="characters"
           returnKeyType="done"
           onSubmitEditing={handleNext}
         />
@@ -106,9 +87,9 @@ export default function TitleStep({
 
         {/* Helper Text */}
         <Text style={styles.helperText}>
-          {location.length === 0 && title.length === 0
+          {title.length === 0
             ? 'Optional - tap Continue to skip'
-            : 'Location will appear in color on your journal'}
+            : 'Give your journal a title'}
         </Text>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -128,11 +109,11 @@ const styles = StyleSheet.create({
   },
   instruction: {
     fontSize: 28,
-    fontFamily: 'ZainCustomFont',
+    fontFamily: 'TitleFont',
     color: '#fff',
     marginBottom: 40,
     textAlign: 'center',
-    fontWeight: '300',
+    letterSpacing: -0.5,
   },
   titleInput: {
     width: '100%',
@@ -145,14 +126,6 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.3)',
     marginBottom: 24,
   },
-  locationInput: {
-    width: '100%',
-    fontSize: 24,
-    fontFamily: 'ZainCustomFont',
-    color: '#3498DB',
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
   continueButton: {
     backgroundColor: '#fff',
     paddingHorizontal: 48,
@@ -161,9 +134,9 @@ const styles = StyleSheet.create({
   },
   continueText: {
     fontSize: 20,
-    fontFamily: 'ZainCustomFont',
+    fontFamily: 'TitleFont',
     color: '#000',
-    fontWeight: '600',
+    letterSpacing: -0.5,
   },
   helperText: {
     position: 'absolute',

@@ -385,12 +385,6 @@ export default function LiveJournalCanvas({
             />
           )}
 
-          {/* DEBUG: Visual guide lines - BRIGHT and THICK */}
-          <Rect x={LEFT_MARGIN} y={0} width={8} height={WEB_CANVAS_HEIGHT} color="#FF0000" />
-          <Rect x={WEB_CANVAS_WIDTH - RIGHT_MARGIN} y={0} width={8} height={WEB_CANVAS_HEIGHT} color="#FF0000" />
-          <Rect x={LEFT_MARGIN} y={150} width={WEB_CANVAS_WIDTH - LEFT_MARGIN - RIGHT_MARGIN} height={8} color="#0000FF" />
-          <Rect x={LEFT_MARGIN} y={420} width={WEB_CANVAS_WIDTH - LEFT_MARGIN - RIGHT_MARGIN} height={8} color="#00FF00" />
-
           <SkiaText x={LEFT_MARGIN} y={150} text={date} font={dateFont} color="#000000" />
 
           {location && location.trim() && (

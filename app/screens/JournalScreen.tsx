@@ -18,27 +18,27 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { haptics } from '../utils/haptics';
 
 // Import steps
-import TitleStep from '../components/steps/TitleStep';
 import DateStep from '../components/steps/DateStep';
 import ImageStep from '../components/steps/ImageStep';
+import LocationStep from '../components/steps/LocationStep';
 import WriteStep from '../components/steps/WriteStep';
 import CompleteStep from '../components/steps/CompleteStep';
 
 const { width, height } = Dimensions.get('window');
 
 const STEPS = {
-  TITLE: 0,
-  DATE: 1,
-  IMAGES: 2,
+  DATE: 0,
+  IMAGES: 1,
+  LOCATION: 2,
   WRITE: 3,
   COMPLETE: 4,
 };
 
 export default function JournalScreen() {
-  const [currentStep, setCurrentStep] = useState(STEPS.TITLE);
-  const [title, setTitle] = useState('');
+  const [currentStep, setCurrentStep] = useState(STEPS.DATE);
   const [date, setDate] = useState(new Date());
-  const [location, setLocation] = useState('MANIA, LA JOLLA, CA');
+  const [location, setLocation] = useState('');
+  const [locationColor, setLocationColor] = useState('#3498DB');
   const [images, setImages] = useState<{ uri: string; x: number; y: number; scale: number }[]>([]);
   const [text, setText] = useState('');
 
@@ -56,7 +56,7 @@ export default function JournalScreen() {
   };
 
   const goToPreviousStep = () => {
-    if (currentStep > STEPS.TITLE) {
+    if (currentStep > STEPS.DATE) {
       haptics.light();
 
       // Smooth fade transition
@@ -73,16 +73,6 @@ export default function JournalScreen() {
 
   const renderStep = () => {
     switch (currentStep) {
-      case STEPS.TITLE:
-        return (
-          <TitleStep
-            title={title}
-            onChangeTitle={setTitle}
-            location={location}
-            onChangeLocation={setLocation}
-            onNext={goToNextStep}
-          />
-        );
       case STEPS.DATE:
         return (
           <DateStep
@@ -99,10 +89,21 @@ export default function JournalScreen() {
             onChangeImages={setImages}
             onNext={goToNextStep}
             onBack={goToPreviousStep}
-            title={title}
             location={location}
             date={date}
             text={text}
+          />
+        );
+      case STEPS.LOCATION:
+        return (
+          <LocationStep
+            location={location}
+            onChangeLocation={setLocation}
+            locationColor={locationColor}
+            onChangeLocationColor={setLocationColor}
+            onNext={goToNextStep}
+            onBack={goToPreviousStep}
+            images={images}
           />
         );
       case STEPS.WRITE:
@@ -117,8 +118,8 @@ export default function JournalScreen() {
       case STEPS.COMPLETE:
         return (
           <CompleteStep
-            title={title}
             location={location}
+            locationColor={locationColor}
             date={date}
             images={images}
             text={text}
