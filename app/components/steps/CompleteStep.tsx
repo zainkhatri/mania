@@ -69,13 +69,13 @@ export default function CompleteStep({
   journalId,
 }: CompleteStepProps) {
   const navigation = useNavigation();
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
   const [isSaving, setIsSaving] = React.useState(false);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 400 });
-    scale.value = withTiming(1, { duration: 400 });
+    // Auto-save immediately
+    handleSave();
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -86,12 +86,6 @@ export default function CompleteStep({
   const handleSave = async () => {
     haptics.heavy();
     setIsSaving(true);
-
-    // Celebration animation
-    scale.value = withSequence(
-      withTiming(1.05, { duration: 150 }),
-      withSpring(1)
-    );
 
     try {
       const journalData = {
@@ -118,21 +112,14 @@ export default function CompleteStep({
 
       haptics.success();
 
-      // Show success
-      Alert.alert(
-        isEditing ? '✓ Journal Updated' : '✓ Journal Saved',
-        isEditing
-          ? 'Your changes have been saved successfully!'
-          : 'Your entry has been saved successfully!',
-        [
-          {
-            text: 'Done',
-            onPress: () => {
-              navigation.navigate('Gallery' as never);
-            },
-          },
-        ]
-      );
+      // Smooth fade out and scale down animation
+      opacity.value = withTiming(0, { duration: 400 });
+      scale.value = withTiming(0.95, { duration: 400 });
+
+      // Navigate to gallery after animation
+      setTimeout(() => {
+        navigation.navigate('Gallery' as never);
+      }, 450);
     } catch (error) {
       haptics.error();
       Alert.alert(
@@ -141,66 +128,18 @@ export default function CompleteStep({
           ? 'Could not update journal. Please try again.'
           : 'Could not save journal. Please try again.'
       );
-    } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Animated.View style={animatedStyle}>
-        <Text style={styles.instruction}>Your journal is ready!</Text>
-
-        {/* Preview */}
-        <View style={styles.previewContainer}>
-          <LiveJournalCanvas
-            date={formatDate(date)}
-            location={location}
-            text={text}
-            locationColor={locationColor}
-            images={images}
-          />
-        </View>
-
-        {/* Summary */}
-        <View style={styles.summary}>
-          {location && (
-            <>
-              <Text style={styles.summaryLabel}>Location</Text>
-              <Text style={styles.summaryValue}>{location}</Text>
-            </>
-          )}
-
-          <Text style={styles.summaryLabel}>Date</Text>
-          <Text style={styles.summaryValue}>{formatDate(date)}</Text>
-
-          <Text style={styles.summaryLabel}>Words</Text>
-          <Text style={styles.summaryValue}>
-            {text.split(' ').filter(w => w.length > 0).length}
-          </Text>
-
-          {images.length > 0 && (
-            <>
-              <Text style={styles.summaryLabel}>Photos</Text>
-              <Text style={styles.summaryValue}>{images.length}</Text>
-            </>
-          )}
-        </View>
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.disabledButton]}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          <Text style={styles.saveText}>
-            {isSaving
-              ? isEditing ? 'Updating...' : 'Saving...'
-              : isEditing ? '✓ Update Journal' : '✓ Save Journal'}
-          </Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <Animated.View style={[styles.savingContainer, animatedStyle]}>
+        <Text style={styles.savingText}>
+          {isEditing ? 'Updating your journal...' : 'Saving your journal...'}
+        </Text>
       </Animated.View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -208,56 +147,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 120,
-    paddingBottom: 60,
-  },
-  instruction: {
-    fontSize: 32,
-    fontFamily: 'TitleFont',
-    color: '#fff',
-    marginBottom: 40,
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  previewContainer: {
-    marginBottom: 40,
-  },
-  summary: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 40,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.5)',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 18,
-    fontFamily: 'ZainCustomFont',
-    color: '#fff',
-  },
-  saveButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 20,
-    borderRadius: 100,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  saveText: {
-    fontSize: 18,
-    fontFamily: 'ZainCustomFont',
-    color: '#000',
-    fontWeight: '500',
+  savingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  disabledButton: {
-    opacity: 0.5,
+  savingText: {
+    fontSize: 20,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -0.5,
+    opacity: 0.8,
   },
 });

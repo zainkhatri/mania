@@ -142,7 +142,7 @@ export default function JournalDetailScreen() {
 
   const handleBack = () => {
     haptics.light();
-    navigation.goBack();
+    navigation.navigate('Home' as never);
   };
 
   if (loading) {
@@ -196,41 +196,48 @@ export default function JournalDetailScreen() {
             canvasHeight={CANVAS_HEIGHT}
           />
         </View>
+
+        {/* Action Buttons - Now inside ScrollView */}
+        <View style={styles.actionsContainer}>
+          {/* Primary Edit Button */}
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEdit}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={22} color="#000" />
+            <Text style={styles.editButtonText}>Edit Journal</Text>
+          </TouchableOpacity>
+
+          {/* Secondary Actions */}
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleShare}
+              disabled={sharing}
+              activeOpacity={0.85}
+            >
+              {sharing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="share-outline" size={20} color="#fff" />
+                  <Text style={styles.secondaryButtonText}>Share</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.deleteButton]}
+              onPress={handleDelete}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ff3b30" />
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
-
-      {/* Action Buttons */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.shareButton]}
-          onPress={handleShare}
-          disabled={sharing}
-        >
-          {sharing ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <>
-              <Ionicons name="share-outline" size={20} color="#000" />
-              <Text style={styles.actionButtonText}>Share</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={handleEdit}
-        >
-          <Ionicons name="create-outline" size={20} color="#000" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={handleDelete}
-        >
-          <Ionicons name="trash-outline" size={20} color="#ff3b30" />
-          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -297,7 +304,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 60,
   },
   canvasWrapper: {
     alignSelf: 'center',
@@ -305,40 +312,54 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   actionsContainer: {
-    flexDirection: 'row',
-    padding: 16,
+    marginTop: 24,
     gap: 12,
-    backgroundColor: '#000',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  shareButton: {
-    backgroundColor: '#fff',
   },
   editButton: {
     backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
   },
-  deleteButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    borderWidth: 1,
-    borderColor: '#ff3b30',
-  },
-  actionButtonText: {
-    fontSize: 15,
+  editButtonText: {
+    fontSize: 17,
     fontFamily: 'TitleFont',
     color: '#000',
     letterSpacing: -0.5,
   },
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: 'rgba(255, 59, 48, 0.3)',
+  },
   deleteButtonText: {
+    fontSize: 15,
+    fontFamily: 'TitleFont',
     color: '#ff3b30',
+    letterSpacing: -0.5,
   },
 });

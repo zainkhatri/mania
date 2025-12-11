@@ -3,31 +3,23 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { Video, ResizeMode } from 'expo-av';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [highlightIndex, setHighlightIndex] = useState(0);
-  const [showGlitch, setShowGlitch] = useState(false);
 
-  // Exact same animation from web version
+  // Random letter highlight animation
   useEffect(() => {
     const styleInterval = setInterval(() => {
       const randomIndex = Math.floor(Math.random() * 5);
       setHighlightIndex(randomIndex);
     }, 200);
 
-    const glitchInterval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        setShowGlitch(true);
-        setTimeout(() => setShowGlitch(false), 150);
-      }
-    }, 1200);
-
     return () => {
       clearInterval(styleInterval);
-      clearInterval(glitchInterval);
     };
   }, []);
 
@@ -48,10 +40,7 @@ export default function HomeScreen() {
         {word.split('').map((letter, index) => (
           <Text
             key={`letter-${index}-${highlightIndex}`}
-            style={[
-              index === highlightIndex ? styles.letterHighlight : styles.letterNormal,
-              showGlitch && styles.glitchEffect
-            ]}
+            style={index === highlightIndex ? styles.letterHighlight : styles.letterNormal}
           >
             {letter}
           </Text>
@@ -62,12 +51,22 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* TV scanline effect overlay */}
+      {/* Static video background */}
+      <Video
+        source={require('../../assets/videos/static.webm')}
+        style={styles.videoBackground}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        isMuted
+      />
+
+      {/* Dark overlay for readability */}
       <View style={styles.overlay} />
 
       {/* Content */}
       <View style={styles.content}>
-        <View style={[styles.textFlicker, showGlitch && styles.glitchEffect]}>
+        <View style={styles.textFlicker}>
           {renderTitle()}
         </View>
 
@@ -87,7 +86,7 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.galleryButton}
           onPress={handleViewGallery}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
         >
           <Text style={styles.galleryButtonText}>View Gallery</Text>
         </TouchableOpacity>
@@ -100,6 +99,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  videoBackground: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -143,11 +147,6 @@ const styles = StyleSheet.create({
   textFlicker: {
     // Text flicker animation
   },
-  glitchEffect: {
-    // Glitch effect when showGlitch is true
-    textShadowColor: 'rgba(0, 255, 159, 0.8)',
-    textShadowRadius: 20,
-  },
   subtitle: {
     fontSize: 20,
     fontFamily: 'TitleFont',
@@ -182,17 +181,15 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   galleryButton: {
-    marginTop: 16,
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
   galleryButtonText: {
-    fontSize: 18,
-    fontFamily: 'TitleFont',
-    color: 'rgba(255, 255, 255, 0.8)',
-    letterSpacing: -0.5,
+    fontSize: 16,
+    fontFamily: 'ZainCustomFont',
+    color: 'rgba(255, 255, 255, 0.7)',
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(255, 255, 255, 0.4)',
   },
 });

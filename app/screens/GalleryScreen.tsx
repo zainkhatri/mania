@@ -115,7 +115,7 @@ export default function GalleryScreen() {
 
   const handleBack = () => {
     haptics.light();
-    navigation.goBack();
+    navigation.navigate('Home' as never);
   };
 
   const renderRow = ({ item }: { item: Journal[] }) => (

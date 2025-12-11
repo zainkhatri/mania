@@ -225,7 +225,10 @@ export default function LocationStep({
             <Animated.View style={[styles.inputSection, inputStyle]}>
               <View style={styles.locationInputWrapper}>
                 {location.length === 0 && (
-                  <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
+                  <>
+                    <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
+                    <Text style={styles.tapToEditText}>Tap to edit</Text>
+                  </>
                 )}
                 <TextInput
                   ref={locationInputRef}
@@ -384,6 +387,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     position: 'absolute',
     width: '100%',
+    top: 20,
+  },
+  tapToEditText: {
+    fontSize: 13,
+    fontFamily: 'ZainCustomFont',
+    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.3)',
+    position: 'absolute',
+    width: '100%',
+    top: 58,
+    letterSpacing: 0.5,
   },
   locationInput: {
     width: '100%',
