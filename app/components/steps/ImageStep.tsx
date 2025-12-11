@@ -253,11 +253,11 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
     if (!result.canceled && result.assets) {
       haptics.success();
 
-      // Initialize images at center of display canvas
+      // Initialize images at center of canvas
       const newImages = result.assets.map((asset, idx) => ({
         uri: asset.uri,
-        x: (DISPLAY_CANVAS_WIDTH / 2 - 75) + (idx * 20),  // Center with slight offset
-        y: (DISPLAY_CANVAS_HEIGHT / 2 - 75) + (idx * 20), // Center with slight offset
+        x: (FINAL_CANVAS_WIDTH / 2 - 75) + (idx * 20),  // Center with slight offset
+        y: (FINAL_CANVAS_HEIGHT / 2 - 75) + (idx * 20), // Center with slight offset
         scale: 1,
       }));
 
@@ -291,6 +291,8 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
               location={location}
               text={text}
               locationColor="#3498DB"
+              canvasWidth={FINAL_CANVAS_WIDTH}
+              canvasHeight={FINAL_CANVAS_HEIGHT}
             />
           </View>
 
@@ -328,8 +330,8 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
                     scale={img.scale}
                     onUpdate={updateImage}
                     onRemove={() => removeImage(index)}
-                    canvasWidth={DISPLAY_CANVAS_WIDTH}
-                    canvasHeight={DISPLAY_CANVAS_HEIGHT}
+                    canvasWidth={FINAL_CANVAS_WIDTH}
+                    canvasHeight={FINAL_CANVAS_HEIGHT}
                     isSelected={selectedIndex === index}
                     onSelect={() => setSelectedIndex(index)}
                   />

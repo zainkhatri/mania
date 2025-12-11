@@ -8,6 +8,7 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -41,8 +42,7 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const buttonsOpacity = useSharedValue(0);
   const buttonsTranslate = useSharedValue(20);
   const finishOpacity = useSharedValue(0);
-  const finishScale = useSharedValue(0.8);
-  const finishTranslate = useSharedValue(20);
+  const finishTranslate = useSharedValue(40);
 
   useEffect(() => {
     // Staggered entrance animations
@@ -77,8 +77,7 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const finishStyle = useAnimatedStyle(() => ({
     opacity: finishOpacity.value,
     transform: [
-      { scale: finishScale.value },
-      { translateY: finishTranslate.value },
+      { translateX: finishTranslate.value },
     ],
   }));
 
@@ -86,13 +85,11 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   useEffect(() => {
     if (text.trim().length > 0 && !showFinish) {
       setShowFinish(true);
-      finishOpacity.value = withTiming(1, { duration: 400 });
-      finishScale.value = withSpring(1, { damping: 15, stiffness: 120 });
+      finishOpacity.value = withTiming(1, { duration: 300 });
       finishTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
     } else if (text.trim().length === 0 && showFinish) {
       finishOpacity.value = withTiming(0, { duration: 200 });
-      finishScale.value = withTiming(0.8, { duration: 200 });
-      finishTranslate.value = withTiming(20, { duration: 200 });
+      finishTranslate.value = withTiming(40, { duration: 200 });
       setTimeout(() => setShowFinish(false), 200);
     }
   }, [text]);
@@ -138,6 +135,7 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={60}
     >
       <View style={styles.content}>
         {/* AI Prompt */}
@@ -161,20 +159,26 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
 
         {/* Writing Area */}
         <Animated.View style={[styles.textSection, textStyle]}>
-          <TextInput
-            ref={textInputRef}
-            style={styles.textArea}
-            placeholder="Start writing your thoughts..."
-            placeholderTextColor="rgba(255, 255, 255, 0.25)"
-            value={text}
-            onChangeText={(newText) => {
-              onChangeText(newText);
-              if (newText.length % 10 === 0) haptics.selection();
-            }}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
+          <ScrollView
+            style={styles.textAreaScroll}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TextInput
+              ref={textInputRef}
+              style={styles.textArea}
+              placeholder="Start writing your thoughts..."
+              placeholderTextColor="rgba(255, 255, 255, 0.25)"
+              value={text}
+              onChangeText={(newText) => {
+                onChangeText(newText);
+                if (newText.length % 10 === 0) haptics.selection();
+              }}
+              multiline
+              scrollEnabled={false}
+              autoFocus
+            />
+          </ScrollView>
         </Animated.View>
 
         {/* Footer with Word Count and Buttons */}
@@ -221,7 +225,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 100,
-    paddingBottom: 40,
+    paddingBottom: 20,
   },
   promptSection: {
     marginBottom: 32,
@@ -253,17 +257,21 @@ const styles = StyleSheet.create({
   },
   textSection: {
     flex: 1,
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  textAreaScroll: {
+    flex: 1,
   },
   textArea: {
-    flex: 1,
     fontSize: 20,
     fontFamily: 'ZainCustomFont',
     color: '#fff',
     lineHeight: 32,
+    minHeight: 200,
   },
   footer: {
     gap: 20,
+    paddingBottom: 20,
   },
   wordCount: {
     fontSize: 13,

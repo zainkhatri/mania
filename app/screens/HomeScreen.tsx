@@ -35,6 +35,10 @@ export default function HomeScreen() {
     navigation.navigate('Journal');
   };
 
+  const handleViewGallery = () => {
+    navigation.navigate('Gallery');
+  };
+
   // Exact rendering from web app - letter-highlight vs letter-normal
   const renderTitle = () => {
     const word = "mania";
@@ -78,6 +82,14 @@ export default function HomeScreen() {
         >
           <Text style={styles.arrow}>↓</Text>
           <Text style={styles.startButtonText}>Start Journaling</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.galleryButton}
+          onPress={handleViewGallery}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.galleryButtonText}>View Gallery</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -167,6 +179,20 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'TitleFont',
     color: '#fff',
+    letterSpacing: -0.5,
+  },
+  galleryButton: {
+    marginTop: 16,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  galleryButtonText: {
+    fontSize: 18,
+    fontFamily: 'TitleFont',
+    color: 'rgba(255, 255, 255, 0.8)',
     letterSpacing: -0.5,
   },
 });

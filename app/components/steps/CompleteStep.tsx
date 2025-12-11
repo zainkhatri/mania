@@ -17,7 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { haptics } from '../../utils/haptics';
-import { saveJournal } from '../../services/journalService';
+import { saveJournal, updateJournal } from '../../services/journalService';
 import LiveJournalCanvas from '../LiveJournalCanvas';
 
 const { width, height } = Dimensions.get('window');
@@ -29,6 +29,8 @@ interface CompleteStepProps {
   images: { uri: string; x: number; y: number; scale: number }[];
   text: string;
   onSave: () => void;
+  isEditing?: boolean;
+  journalId?: string;
 }
 
 const formatDate = (date: Date): string => {
@@ -63,6 +65,8 @@ export default function CompleteStep({
   images,
   text,
   onSave,
+  isEditing = false,
+  journalId,
 }: CompleteStepProps) {
   const navigation = useNavigation();
   const scale = useSharedValue(0);
@@ -90,7 +94,7 @@ export default function CompleteStep({
     );
 
     try {
-      await saveJournal({
+      const journalData = {
         date: date.toISOString(),
         location: location.trim(),
         text: text,
@@ -102,28 +106,41 @@ export default function CompleteStep({
         })),
         colors: {
           locationColor: locationColor,
-          locationShadowColor: locationColor + '40', // Add transparency for shadow
+          locationShadowColor: locationColor + '40',
         },
-      });
+      };
+
+      if (isEditing && journalId) {
+        await updateJournal(journalId, journalData);
+      } else {
+        await saveJournal(journalData);
+      }
 
       haptics.success();
 
       // Show success
       Alert.alert(
-        '✓ Journal Saved',
-        'Your entry has been saved successfully!',
+        isEditing ? '✓ Journal Updated' : '✓ Journal Saved',
+        isEditing
+          ? 'Your changes have been saved successfully!'
+          : 'Your entry has been saved successfully!',
         [
           {
             text: 'Done',
             onPress: () => {
-              navigation.goBack();
+              navigation.navigate('Gallery' as never);
             },
           },
         ]
       );
     } catch (error) {
       haptics.error();
-      Alert.alert('Error', 'Could not save journal. Please try again.');
+      Alert.alert(
+        'Error',
+        isEditing
+          ? 'Could not update journal. Please try again.'
+          : 'Could not save journal. Please try again.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -177,7 +194,9 @@ export default function CompleteStep({
           disabled={isSaving}
         >
           <Text style={styles.saveText}>
-            {isSaving ? 'Saving...' : '✓ Save Journal'}
+            {isSaving
+              ? isEditing ? 'Updating...' : 'Saving...'
+              : isEditing ? '✓ Update Journal' : '✓ Save Journal'}
           </Text>
         </TouchableOpacity>
       </Animated.View>

@@ -83,3 +83,39 @@ export const journalExistsForDate = async (dateISOString: string): Promise<boole
     return false;
   }
 };
+
+export const getJournalById = async (journalId: string): Promise<Journal | null> => {
+  try {
+    const journals = await getUserJournals();
+    return journals.find(j => j.id === journalId) || null;
+  } catch (error) {
+    console.error('Error getting journal by ID:', error);
+    return null;
+  }
+};
+
+export const updateJournal = async (
+  journalId: string,
+  updatedData: Omit<Journal, 'id' | 'createdAt'>
+): Promise<void> => {
+  try {
+    const journals = await getUserJournals();
+    const index = journals.findIndex(j => j.id === journalId);
+
+    if (index === -1) {
+      throw new Error('Journal not found');
+    }
+
+    journals[index] = {
+      ...journals[index],
+      ...updatedData,
+      id: journalId, // Preserve original ID
+      createdAt: journals[index].createdAt, // Preserve creation date
+    };
+
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(journals));
+  } catch (error) {
+    console.error('Error updating journal:', error);
+    throw error;
+  }
+};

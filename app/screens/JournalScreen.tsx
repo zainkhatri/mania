@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -15,7 +16,9 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRoute } from '@react-navigation/native';
 import { haptics } from '../utils/haptics';
+import { getJournalById } from '../services/journalService';
 
 // Import steps
 import DateStep from '../components/steps/DateStep';
@@ -35,15 +38,45 @@ const STEPS = {
 };
 
 export default function JournalScreen() {
+  const route = useRoute();
+  const journalId = (route.params as { journalId?: string })?.journalId;
+  const isEditing = !!journalId;
+
   const [currentStep, setCurrentStep] = useState(STEPS.DATE);
   const [date, setDate] = useState(new Date());
   const [location, setLocation] = useState('');
   const [locationColor, setLocationColor] = useState('#3498DB');
   const [images, setImages] = useState<{ uri: string; x: number; y: number; scale: number }[]>([]);
   const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Animation values
   const opacity = useSharedValue(1);
+
+  // Load existing journal for edit mode
+  useEffect(() => {
+    if (journalId) {
+      loadExistingJournal();
+    }
+  }, [journalId]);
+
+  const loadExistingJournal = async () => {
+    try {
+      setLoading(true);
+      const journal = await getJournalById(journalId!);
+      if (journal) {
+        setDate(new Date(journal.date));
+        setLocation(journal.location || '');
+        setLocationColor(journal.colors.locationColor);
+        setImages(journal.images);
+        setText(journal.text);
+      }
+    } catch (error) {
+      console.error('Error loading journal:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const goToNextStep = () => {
     haptics.medium();
@@ -123,8 +156,10 @@ export default function JournalScreen() {
             date={date}
             images={images}
             text={text}
+            isEditing={isEditing}
+            journalId={journalId}
             onSave={() => {
-              // Save logic
+              // Save logic handled in CompleteStep
               haptics.success();
             }}
           />
@@ -133,6 +168,16 @@ export default function JournalScreen() {
         return null;
     }
   };
+
+  // Show loading while loading journal for edit
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Loading journal...</Text>
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -162,6 +207,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'ZainCustomFont',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 16,
   },
   progressContainer: {
     position: 'absolute',

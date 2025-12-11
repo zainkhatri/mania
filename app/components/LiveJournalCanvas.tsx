@@ -25,6 +25,8 @@ interface LiveJournalCanvasProps {
   locationColor: string;
   images?: Array<{uri: string; x: number; y: number; scale: number}>;
   title?: string;
+  canvasWidth?: number;
+  canvasHeight?: number;
 }
 
 // Helper to create darker version of color
@@ -165,10 +167,12 @@ export default function LiveJournalCanvas({
   text,
   locationColor,
   images = [],
-  title = ''
+  title = '',
+  canvasWidth,
+  canvasHeight
 }: LiveJournalCanvasProps) {
-  const displayWidth = width - 48;
-  const displayHeight = displayWidth * (WEB_CANVAS_HEIGHT / WEB_CANVAS_WIDTH);
+  const displayWidth = canvasWidth ?? (width - 48);
+  const displayHeight = canvasHeight ?? (displayWidth * (WEB_CANVAS_HEIGHT / WEB_CANVAS_WIDTH));
   const scale = displayWidth / WEB_CANVAS_WIDTH;
 
   // Load fonts at multiple sizes for measurement
