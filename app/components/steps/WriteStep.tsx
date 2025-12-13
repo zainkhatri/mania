@@ -17,6 +17,7 @@ import Animated, {
   withSpring,
   withDelay,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 import { generateJournalPrompts } from '../../services/gptService';
 
@@ -30,6 +31,7 @@ interface WriteStepProps {
 }
 
 export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteStepProps) {
+  const insets = useSafeAreaInsets();
   const textInputRef = useRef<TextInput>(null);
   const [prompt, setPrompt] = useState("How are you feeling today?");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -137,7 +139,7 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
       style={styles.container}
       keyboardVerticalOffset={60}
     >
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingTop: insets.top + 80 }]}>
         {/* AI Prompt */}
         <Animated.View style={[styles.promptSection, promptStyle]}>
           <Text style={styles.promptText}>{prompt}</Text>
@@ -224,7 +226,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 100,
     paddingBottom: 20,
   },
   promptSection: {

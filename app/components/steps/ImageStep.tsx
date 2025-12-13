@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -67,7 +67,7 @@ interface DraggableImageProps {
   onSelect: () => void;
 }
 
-function DraggableImage({
+const DraggableImage = React.memo(function DraggableImage({
   uri,
   index,
   x,
@@ -84,6 +84,12 @@ function DraggableImage({
   const [isPinching, setIsPinching] = useState(false);
   const [touchStart, setTouchStart] = useState({ x: 0, y: 0 });
   const [lastPinchDistance, setLastPinchDistance] = useState(0);
+
+  // Local state for position and scale - initialized from props but then independent
+  const [localX, setLocalX] = useState(x);
+  const [localY, setLocalY] = useState(y);
+  const [localScale, setLocalScale] = useState(scale);
+
   const imageSize = 150;
 
   // Calculate distance between two touches for pinch gesture
@@ -105,14 +111,32 @@ function DraggableImage({
     setTouchStart({ x: touch.pageX, y: touch.pageY });
 
     if (e.nativeEvent.touches.length === 2) {
-      setLastPinchDistance(getTouchDistance(e.nativeEvent.touches));
       setIsPinching(true);
+      setLastPinchDistance(getTouchDistance(e.nativeEvent.touches));
+    } else {
+      setIsPinching(false);
     }
   };
 
   const handleTouchMove = (e: any) => {
     e.stopPropagation();
     const touches = e.nativeEvent.touches;
+
+    // Handle transition between gestures
+    if (touches.length === 2 && !isPinching) {
+      // Switched from drag to pinch
+      setIsPinching(true);
+      setIsDragging(false);
+      setLastPinchDistance(getTouchDistance(touches));
+      return;
+    } else if (touches.length === 1 && isPinching) {
+      // Switched from pinch to drag
+      setIsPinching(false);
+      setLastPinchDistance(0);
+      const touch = touches[0];
+      setTouchStart({ x: touch.pageX, y: touch.pageY });
+      return;
+    }
 
     if (touches.length === 1 && !isPinching) {
       // Single touch - drag
@@ -124,30 +148,58 @@ function DraggableImage({
         setIsDragging(true);
       }
 
-      // Calculate new position with bounds checking (in DISPLAY coordinates)
-      const newDisplayX = Math.max(0, Math.min(canvasWidth - imageSize * scale, x + deltaX));
-      const newDisplayY = Math.max(0, Math.min(canvasHeight - imageSize * scale, y + deltaY));
+      // Calculate new position with bounds checking
+      const currentSize = imageSize * localScale;
+      const newX = Math.max(0, Math.min(canvasWidth - currentSize, localX + deltaX));
+      const newY = Math.max(0, Math.min(canvasHeight - currentSize, localY + deltaY));
 
-      // Update in real-time (EXACT same as OG)
-      onUpdate(index, newDisplayX, newDisplayY, scale);
+      // Update local state only (for smooth rendering)
+      setLocalX(newX);
+      setLocalY(newY);
 
       // Update touch start for smooth dragging
       setTouchStart({ x: touch.pageX, y: touch.pageY });
-    } else if (touches.length === 2) {
+    } else if (touches.length === 2 && isPinching) {
       // Two touches - pinch to resize
       const currentDistance = getTouchDistance(touches);
       if (lastPinchDistance > 0) {
         const scaleChange = currentDistance / lastPinchDistance;
-        const newScale = Math.max(0.5, Math.min(3, scale * scaleChange));
+        let newScale = Math.max(0.5, Math.min(3, localScale * scaleChange));
 
-        // Update in real-time
-        onUpdate(index, x, y, newScale);
+        // Calculate new size
+        const newSize = imageSize * newScale;
+
+        // Adjust position if image would go out of bounds after scaling
+        let adjustedX = localX;
+        let adjustedY = localY;
+
+        // Check and adjust right/bottom bounds
+        if (localX + newSize > canvasWidth) {
+          adjustedX = canvasWidth - newSize;
+        }
+        if (localY + newSize > canvasHeight) {
+          adjustedY = canvasHeight - newSize;
+        }
+
+        // Ensure we don't go negative
+        adjustedX = Math.max(0, adjustedX);
+        adjustedY = Math.max(0, adjustedY);
+
+        // Update local state
+        setLocalScale(newScale);
+        setLocalX(adjustedX);
+        setLocalY(adjustedY);
       }
       setLastPinchDistance(currentDistance);
     }
   };
 
   const handleTouchEnd = () => {
+    // Only update parent state when gesture ends (reduces lag)
+    if (isDragging || isPinching) {
+      onUpdate(index, localX, localY, localScale);
+    }
+
     setIsDragging(false);
     setIsPinching(false);
     setLastPinchDistance(0);
@@ -158,10 +210,10 @@ function DraggableImage({
       style={[
         styles.draggableImage,
         {
-          left: x,
-          top: y,
-          width: imageSize * scale,
-          height: imageSize * scale,
+          left: localX,
+          top: localY,
+          width: imageSize * localScale,
+          height: imageSize * localScale,
           zIndex: isSelected ? 100 : 1,
           transform: [{ scale: isDragging || isPinching ? 1.05 : 1 }],
         },
@@ -191,7 +243,7 @@ function DraggableImage({
       )}
     </View>
   );
-}
+});
 
 const formatDate = (date: Date): string => {
   const getOrdinalSuffix = (day: number): string => {
@@ -233,6 +285,18 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
     opacity: opacity.value,
   }));
 
+  // Memoize the journal canvas to prevent re-renders during image manipulation
+  const journalCanvas = React.useMemo(() => (
+    <LiveJournalCanvas
+      date={formatDate(date)}
+      location={location}
+      text={text}
+      locationColor="#3498DB"
+      canvasWidth={FINAL_CANVAS_WIDTH}
+      canvasHeight={FINAL_CANVAS_HEIGHT}
+    />
+  ), [date, location, text]);
+
   const handlePickImages = async () => {
     haptics.light();
 
@@ -265,16 +329,17 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
     }
   };
 
-  const updateImage = (index: number, x: number, y: number, scale: number) => {
+  const updateImage = useCallback((index: number, x: number, y: number, scale: number) => {
     const updated = [...images];
     updated[index] = { ...updated[index], x, y, scale };
     onChangeImages(updated);
-  };
+  }, [images, onChangeImages]);
 
-  const removeImage = (index: number) => {
+  const removeImage = useCallback((index: number) => {
     const updated = images.filter((_, i) => i !== index);
     onChangeImages(updated);
-  };
+    setSelectedIndex(null);
+  }, [images, onChangeImages]);
 
   return (
     <View style={styles.container}>
@@ -286,14 +351,7 @@ export default function ImageStep({ images, onChangeImages, onNext, onBack, loca
         {/* Live Journal Preview with Canvas Overlay */}
         <View style={styles.canvas}>
           <View style={styles.journalPreview}>
-            <LiveJournalCanvas
-              date={formatDate(date)}
-              location={location}
-              text={text}
-              locationColor="#3498DB"
-              canvasWidth={FINAL_CANVAS_WIDTH}
-              canvasHeight={FINAL_CANVAS_HEIGHT}
-            />
+            {journalCanvas}
           </View>
 
           {/* Overlay for image arrangement */}

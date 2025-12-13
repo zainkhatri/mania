@@ -13,6 +13,7 @@ import Animated, {
   withSpring,
   withDelay,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 import CustomCalendar from '../CustomCalendar';
 
@@ -43,9 +44,8 @@ const getShortDate = (date: Date): { month: string; day: string; year: string } 
 };
 
 export default function DateStep({ date, onChangeDate, onNext, onBack }: DateStepProps) {
+  const insets = useSafeAreaInsets();
   const [showPicker, setShowPicker] = useState(false);
-  const titleOpacity = useSharedValue(0);
-  const titleTranslate = useSharedValue(30);
   const dateOpacity = useSharedValue(0);
   const dateScale = useSharedValue(0.9);
   const optionsOpacity = useSharedValue(0);
@@ -56,25 +56,17 @@ export default function DateStep({ date, onChangeDate, onNext, onBack }: DateSte
 
   useEffect(() => {
     // Staggered entrance animation
-    titleOpacity.value = withTiming(1, { duration: 600 });
-    titleTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
+    dateOpacity.value = withTiming(1, { duration: 600 });
+    dateScale.value = withSpring(1, { damping: 15, stiffness: 100 });
 
-    dateOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
-    dateScale.value = withDelay(150, withSpring(1, { damping: 15, stiffness: 100 }));
+    optionsOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
+    optionsTranslate.value = withDelay(150, withSpring(0, { damping: 20, stiffness: 90 }));
 
-    optionsOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
-    optionsTranslate.value = withDelay(300, withSpring(0, { damping: 20, stiffness: 90 }));
+    buttonOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
+    buttonScale.value = withDelay(300, withSpring(1, { damping: 15, stiffness: 100 }));
 
-    buttonOpacity.value = withDelay(450, withTiming(1, { duration: 600 }));
-    buttonScale.value = withDelay(450, withSpring(1, { damping: 15, stiffness: 100 }));
-
-    backOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
+    backOpacity.value = withDelay(450, withTiming(1, { duration: 600 }));
   }, []);
-
-  const titleStyle = useAnimatedStyle(() => ({
-    opacity: titleOpacity.value,
-    transform: [{ translateY: titleTranslate.value }],
-  }));
 
   const dateStyle = useAnimatedStyle(() => ({
     opacity: dateOpacity.value,
@@ -130,11 +122,6 @@ export default function DateStep({ date, onChangeDate, onNext, onBack }: DateSte
 
   return (
     <View style={styles.container}>
-      {/* Title */}
-      <Animated.View style={[styles.titleContainer, titleStyle]}>
-        <Text style={styles.title}>When did this happen?</Text>
-      </Animated.View>
-
       {/* Date Display - Large and Centered */}
       <Animated.View style={[styles.dateSection, dateStyle]}>
         <Pressable
@@ -226,16 +213,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-  },
-  titleContainer: {
-    marginBottom: 60,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'TitleFont',
-    color: '#fff',
-    textAlign: 'center',
-    letterSpacing: -0.5,
   },
   dateSection: {
     alignItems: 'center',

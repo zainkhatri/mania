@@ -72,7 +72,7 @@ const calculateOptimalFontSize = (
   return optimalSize;
 };
 
-// Calculate text wrapping around images
+// Calculate text wrapping around images - returns ALL available segments
 const calculateTextWrapping = (
   currentY: number,
   fontSize: number,
@@ -81,13 +81,11 @@ const calculateTextWrapping = (
   leftMargin: number,
   rightMargin: number,
   canvasWidth: number
-): { availableWidth: number; startX: number } => {
-  let availableWidth = textWidth;
-  let startX = leftMargin;
-
+): Array<{ startX: number; width: number }> => {
   const lineHeight = fontSize * 1.2;
   const textTop = currentY - lineHeight * 0.8;
   const textBottom = currentY + lineHeight * 0.2;
+  const MIN_SEGMENT_WIDTH = 100; // Minimum width for usable segment
 
   const overlappingImages = imagePositions.filter(imagePos => {
     const imageTop = imagePos.y;
@@ -103,62 +101,54 @@ const calculateTextWrapping = (
     return horizontalOverlap;
   });
 
-  if (overlappingImages.length > 0) {
-    overlappingImages.sort((a, b) => a.x - b.x);
-    const textSegments = [];
-    const firstImage = overlappingImages[0];
-    const spaceBeforeFirst = firstImage.x - leftMargin;
+  // No images overlapping - use full width
+  if (overlappingImages.length === 0) {
+    return [{ startX: leftMargin, width: textWidth }];
+  }
 
-    if (spaceBeforeFirst > 100) {
-      textSegments.push({
-        start: leftMargin,
-        end: firstImage.x - 20,
-        width: firstImage.x - leftMargin - 20
+  // Build all available segments
+  overlappingImages.sort((a, b) => a.x - b.x);
+  const segments = [];
+  const PADDING = 20; // Padding around images
+
+  // Left segment (before first image)
+  const firstImage = overlappingImages[0];
+  const leftSegmentWidth = firstImage.x - leftMargin - PADDING;
+  if (leftSegmentWidth >= MIN_SEGMENT_WIDTH) {
+    segments.push({
+      startX: leftMargin,
+      width: leftSegmentWidth
+    });
+  }
+
+  // Middle segments (between images)
+  for (let i = 0; i < overlappingImages.length - 1; i++) {
+    const currentImage = overlappingImages[i];
+    const nextImage = overlappingImages[i + 1];
+    const gapStart = currentImage.x + currentImage.width + PADDING;
+    const gapEnd = nextImage.x - PADDING;
+    const gapWidth = gapEnd - gapStart;
+
+    if (gapWidth >= MIN_SEGMENT_WIDTH) {
+      segments.push({
+        startX: gapStart,
+        width: gapWidth
       });
-    }
-
-    for (let i = 0; i < overlappingImages.length - 1; i++) {
-      const currentImage = overlappingImages[i];
-      const nextImage = overlappingImages[i + 1];
-      const gapStart = currentImage.x + currentImage.width + 20;
-      const gapEnd = nextImage.x - 20;
-
-      if (gapEnd > gapStart && gapEnd - gapStart > 100) {
-        textSegments.push({
-          start: gapStart,
-          end: gapEnd,
-          width: gapEnd - gapStart
-        });
-      }
-    }
-
-    const lastImage = overlappingImages[overlappingImages.length - 1];
-    const spaceAfterLast = (canvasWidth - rightMargin) - (lastImage.x + lastImage.width);
-
-    if (spaceAfterLast > 100) {
-      textSegments.push({
-        start: lastImage.x + lastImage.width + 20,
-        end: canvasWidth - rightMargin,
-        width: spaceAfterLast - 20
-      });
-    }
-
-    if (textSegments.length > 0) {
-      textSegments.sort((a, b) => b.width - a.width);
-      const bestSegment = textSegments[0];
-      startX = bestSegment.start;
-      availableWidth = bestSegment.width;
-    } else {
-      availableWidth = 0;
-      startX = leftMargin;
     }
   }
 
-  if (availableWidth < 150) {
-    availableWidth = 0;
+  // Right segment (after last image)
+  const lastImage = overlappingImages[overlappingImages.length - 1];
+  const rightSegmentStart = lastImage.x + lastImage.width + PADDING;
+  const rightSegmentWidth = (canvasWidth - rightMargin) - rightSegmentStart;
+  if (rightSegmentWidth >= MIN_SEGMENT_WIDTH) {
+    segments.push({
+      startX: rightSegmentStart,
+      width: rightSegmentWidth
+    });
   }
 
-  return { availableWidth, startX };
+  return segments.length > 0 ? segments : [];
 };
 
 export default function LiveJournalCanvas({
@@ -277,7 +267,7 @@ export default function LiveJournalCanvas({
 
       for (let lineIndex = 0; lineIndex < JOURNAL_LINE_Y_COORDS.length && currentWord < words.length; lineIndex++) {
         const currentY = JOURNAL_LINE_Y_COORDS[lineIndex];
-        const { availableWidth } = calculateTextWrapping(
+        const segments = calculateTextWrapping(
           currentY,
           fontSize,
           webImagePositions,
@@ -287,7 +277,10 @@ export default function LiveJournalCanvas({
           WEB_CANVAS_WIDTH
         );
 
-        if (availableWidth > 0) {
+        // Fill ALL segments on this line
+        for (const segment of segments) {
+          if (currentWord >= words.length) break;
+
           let currentLine = '';
           while (currentWord < words.length) {
             const nextWord = words[currentWord];
@@ -296,7 +289,7 @@ export default function LiveJournalCanvas({
             const widthAt100 = bodyFontTest.getTextWidth(testLine);
             const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
 
-            if (actualWidth > availableWidth && currentLine) {
+            if (actualWidth > segment.width && currentLine) {
               break;
             } else {
               currentLine = testLine;
@@ -318,7 +311,7 @@ export default function LiveJournalCanvas({
 
     for (let lineIndex = 0; lineIndex < JOURNAL_LINE_Y_COORDS.length && currentWord < words.length; lineIndex++) {
       const currentY = JOURNAL_LINE_Y_COORDS[lineIndex];
-      const { availableWidth, startX } = calculateTextWrapping(
+      const segments = calculateTextWrapping(
         currentY,
         fontSize,
         webImagePositions,
@@ -328,7 +321,10 @@ export default function LiveJournalCanvas({
         WEB_CANVAS_WIDTH
       );
 
-      if (availableWidth > 0) {
+      // Fill ALL segments on this line
+      for (const segment of segments) {
+        if (currentWord >= words.length) break;
+
         let currentLine = '';
         while (currentWord < words.length) {
           const nextWord = words[currentWord];
@@ -337,7 +333,7 @@ export default function LiveJournalCanvas({
           const widthAt100 = bodyFontTest.getTextWidth(testLine);
           const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
 
-          if (actualWidth > availableWidth && currentLine) {
+          if (actualWidth > segment.width && currentLine) {
             break;
           } else {
             currentLine = testLine;
@@ -346,7 +342,7 @@ export default function LiveJournalCanvas({
         }
 
         if (currentLine) {
-          lines.push({ text: currentLine, y: currentY, x: startX });
+          lines.push({ text: currentLine, y: currentY, x: segment.startX });
         }
       }
     }

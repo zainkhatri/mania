@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
   withDelay,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 import { getColors } from 'react-native-image-colors';
 
@@ -48,6 +49,7 @@ export default function LocationStep({
   onBack,
   images = [],
 }: LocationStepProps) {
+  const insets = useSafeAreaInsets();
   const locationInputRef = useRef<TextInput>(null);
   const [selectedColor, setSelectedColor] = useState(locationColor || DEFAULT_COLORS[0]);
   const [extractedColors, setExtractedColors] = useState<string[]>(DEFAULT_COLORS);
@@ -55,8 +57,6 @@ export default function LocationStep({
   const [showColors, setShowColors] = useState(false); // Track when to show color picker
 
   // Animation values
-  const titleOpacity = useSharedValue(0);
-  const titleTranslate = useSharedValue(50);  // Start from right
   const inputOpacity = useSharedValue(0);
   const inputScale = useSharedValue(0.95);
   const inputTranslate = useSharedValue(0);  // Slide animation for input
@@ -113,14 +113,11 @@ export default function LocationStep({
 
   useEffect(() => {
     // Staggered entrance animations
-    titleOpacity.value = withTiming(1, { duration: 600 });
-    titleTranslate.value = withTiming(0, { duration: 500 });
+    inputOpacity.value = withTiming(1, { duration: 600 });
+    inputScale.value = withSpring(1, { damping: 15, stiffness: 100 });
 
-    inputOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
-    inputScale.value = withDelay(150, withSpring(1, { damping: 15, stiffness: 100 }));
-
-    buttonsOpacity.value = withDelay(450, withTiming(1, { duration: 600 }));
-    buttonsTranslate.value = withDelay(450, withSpring(0, { damping: 20, stiffness: 90 }));
+    buttonsOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
+    buttonsTranslate.value = withDelay(300, withSpring(0, { damping: 20, stiffness: 90 }));
   }, []);
 
   // Fade animation when user submits location (clicks done)
@@ -142,11 +139,6 @@ export default function LocationStep({
       colorsOpacity.value = withTiming(0, { duration: 300 });
     }
   }, [showColors]);
-
-  const titleStyle = useAnimatedStyle(() => ({
-    opacity: titleOpacity.value,
-    transform: [{ translateX: titleTranslate.value }],
-  }));
 
   const inputStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
@@ -206,120 +198,114 @@ export default function LocationStep({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 100 }]}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
         bounces={false}
       >
         <View style={styles.content}>
-        {/* Title */}
-        <Animated.View style={[styles.titleContainer, titleStyle]}>
-          <Text style={styles.title}>Where were you?</Text>
-          <Text style={styles.subtitle}>Add a location to your memory</Text>
-        </Animated.View>
+          {/* Input/Color Toggle Container - both occupy same space */}
+          <View style={styles.toggleContainer}>
+            {/* Location Input */}
+            {!showColors && (
+              <Animated.View style={[styles.inputSection, inputStyle]}>
+                <View style={styles.locationInputWrapper}>
+                  {location.length === 0 && (
+                    <>
+                      <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
+                      <Text style={styles.tapToEditText}>Tap to edit</Text>
+                    </>
+                  )}
+                  <TextInput
+                    ref={locationInputRef}
+                    style={[styles.locationInput, { color: '#fff' }]}
+                    placeholder=""
+                    placeholderTextColor="transparent"
+                    value={location}
+                    onChangeText={onChangeLocation}
+                    onFocus={() => haptics.light()}
+                    autoCapitalize="characters"
+                    returnKeyType="done"
+                    onSubmitEditing={handleLocationSubmit}
+                    autoFocus={false}
+                    blurOnSubmit={true}
+                  />
+                </View>
+              </Animated.View>
+            )}
 
-        {/* Input/Color Toggle Container - both occupy same space */}
-        <View style={styles.toggleContainer}>
-          {/* Location Input */}
-          {!showColors && (
-            <Animated.View style={[styles.inputSection, inputStyle]}>
-              <View style={styles.locationInputWrapper}>
-                {location.length === 0 && (
-                  <>
-                    <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
-                    <Text style={styles.tapToEditText}>Tap to edit</Text>
-                  </>
+            {/* Color Picker - only show when user submits location */}
+            {showColors && (
+              <Animated.View style={[styles.colorSection, colorsStyle]}>
+                <Text style={styles.colorLabel}>
+                  {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
+                </Text>
+                {isExtracting ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                ) : (
+                  <View style={styles.colorPickerContainer}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.colorScroll}
+                      style={styles.colorScrollView}
+                    >
+                      {extractedColors.map((color, index) => (
+                        <Pressable
+                          key={`${color}-${index}`}
+                          style={({ pressed }) => [
+                            styles.colorOption,
+                            { backgroundColor: color },
+                            selectedColor === color && styles.colorOptionSelected,
+                            pressed && { opacity: 0.8 },
+                          ]}
+                          onPress={() => handleColorSelect(color)}
+                        >
+                          {selectedColor === color && (
+                            <View style={styles.colorCheck}>
+                              <Text style={styles.checkmark}>✓</Text>
+                            </View>
+                          )}
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
                 )}
-                <TextInput
-                  ref={locationInputRef}
-                  style={[styles.locationInput, { color: '#fff' }]}
-                  placeholder=""
-                  placeholderTextColor="transparent"
-                  value={location}
-                  onChangeText={onChangeLocation}
-                  onFocus={() => haptics.light()}
-                  autoCapitalize="characters"
-                  returnKeyType="done"
-                  onSubmitEditing={handleLocationSubmit}
-                  autoFocus={false}
-                  blurOnSubmit={true}
-                />
-              </View>
-            </Animated.View>
-          )}
+              </Animated.View>
+            )}
+          </View>
 
-          {/* Color Picker - only show when user submits location */}
-          {showColors && (
-            <Animated.View style={[styles.colorSection, colorsStyle]}>
-              <Text style={styles.colorLabel}>
-                {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
-              </Text>
-              {isExtracting ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              ) : (
-                <View style={styles.colorPickerContainer}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.colorScroll}
-                    style={styles.colorScrollView}
-                  >
-                    {extractedColors.map((color, index) => (
-                      <Pressable
-                        key={`${color}-${index}`}
-                        style={({ pressed }) => [
-                          styles.colorOption,
-                          { backgroundColor: color },
-                          selectedColor === color && styles.colorOptionSelected,
-                          pressed && { opacity: 0.8 },
-                        ]}
-                        onPress={() => handleColorSelect(color)}
-                      >
-                        {selectedColor === color && (
-                          <View style={styles.colorCheck}>
-                            <Text style={styles.checkmark}>✓</Text>
-                          </View>
-                        )}
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </Animated.View>
-          )}
-        </View>
+          {/* Navigation Buttons */}
+          <Animated.View style={[styles.buttonSection, buttonsStyle]}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && styles.backButtonPressed,
+              ]}
+              onPress={handleBack}
+            >
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
 
-        {/* Navigation Buttons */}
-        <Animated.View style={[styles.buttonSection, buttonsStyle]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
-            onPress={handleBack}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.continueButton,
+                pressed && styles.continueButtonPressed,
+              ]}
+              onPress={handleNext}
+            >
+              <Text style={styles.continueText}>Continue</Text>
+            </Pressable>
+          </Animated.View>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.continueButton,
-              pressed && styles.continueButtonPressed,
-            ]}
-            onPress={handleNext}
-          >
-            <Text style={styles.continueText}>Continue</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Helper Text */}
-        <Text style={styles.helperText}>
-          {location.length === 0
-            ? 'Optional — skip if you prefer'
-            : 'Your location will appear in this color'}
-        </Text>
+          {/* Helper Text */}
+          <Text style={styles.helperText}>
+            {location.length === 0
+              ? 'Optional — skip if you prefer'
+              : 'Your location will appear in this color'}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -333,19 +319,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100,
   },
   content: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
-    minHeight: height - 200,
-  },
-  titleContainer: {
-    marginBottom: 40,
-    alignItems: 'center',
   },
   toggleContainer: {
     width: '100%',
@@ -353,20 +332,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'TitleFont',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 12,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
   },
   inputSection: {
     width: '100%',
@@ -513,8 +478,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   helperText: {
-    position: 'absolute',
-    bottom: 60,
+    marginTop: 16,
     fontSize: 13,
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.4)',

@@ -16,6 +16,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Journal, getUserJournals, deleteJournal } from '../services/journalService';
 import LiveJournalCanvas from '../components/LiveJournalCanvas';
+import SimpleJournalPage from '../components/SimpleJournalPage';
 import { haptics } from '../utils/haptics';
 
 const { width } = Dimensions.get('window');
@@ -57,6 +58,7 @@ export default function JournalDetailScreen() {
   const [journal, setJournal] = useState<Journal | null>(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
+  const [useSimpleRenderer, setUseSimpleRenderer] = useState(true); // Use simple renderer by default
 
   useEffect(() => {
     loadJournal();
@@ -186,15 +188,26 @@ export default function JournalDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View ref={canvasRef} collapsable={false} style={styles.canvasWrapper}>
-          <LiveJournalCanvas
-            date={formatDate(journal.date)}
-            location={journal.location || ''}
-            text={journal.text}
-            locationColor={journal.colors.locationColor}
-            images={journal.images}
-            canvasWidth={CANVAS_WIDTH}
-            canvasHeight={CANVAS_HEIGHT}
-          />
+          {useSimpleRenderer ? (
+            <SimpleJournalPage
+              date={formatDate(journal.date)}
+              location={journal.location || ''}
+              text={journal.text}
+              locationColor={journal.colors.locationColor}
+              canvasWidth={CANVAS_WIDTH}
+              canvasHeight={CANVAS_HEIGHT}
+            />
+          ) : (
+            <LiveJournalCanvas
+              date={formatDate(journal.date)}
+              location={journal.location || ''}
+              text={journal.text}
+              locationColor={journal.colors.locationColor}
+              images={journal.images}
+              canvasWidth={CANVAS_WIDTH}
+              canvasHeight={CANVAS_HEIGHT}
+            />
+          )}
         </View>
 
         {/* Action Buttons - Now inside ScrollView */}

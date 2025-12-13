@@ -9,6 +9,7 @@ import {
   StatusBar,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,7 +17,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { haptics } from '../utils/haptics';
 import { getJournalById } from '../services/journalService';
 
@@ -31,14 +32,16 @@ const { width, height } = Dimensions.get('window');
 
 const STEPS = {
   DATE: 0,
-  IMAGES: 1,
-  LOCATION: 2,
-  WRITE: 3,
+  WRITE: 1,
+  IMAGES: 2,
+  LOCATION: 3,
   COMPLETE: 4,
 };
 
 export default function JournalScreen() {
   const route = useRoute();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const journalId = (route.params as { journalId?: string })?.journalId;
   const isEditing = !!journalId;
 
@@ -52,6 +55,7 @@ export default function JournalScreen() {
 
   // Animation values
   const opacity = useSharedValue(1);
+  const progressBarOffset = useSharedValue(0);
 
   // Load existing journal for edit mode
   useEffect(() => {
@@ -59,6 +63,15 @@ export default function JournalScreen() {
       loadExistingJournal();
     }
   }, [journalId]);
+
+  // Animate progress bar position for WRITE step
+  useEffect(() => {
+    if (currentStep === STEPS.WRITE) {
+      progressBarOffset.value = withTiming(5, { duration: 300 });
+    } else {
+      progressBarOffset.value = withTiming(0, { duration: 300 });
+    }
+  }, [currentStep]);
 
   const loadExistingJournal = async () => {
     try {
@@ -97,11 +110,19 @@ export default function JournalScreen() {
         runOnJS(setCurrentStep)(currentStep - 1);
         opacity.value = withTiming(1, { duration: 300 });
       });
+    } else {
+      // On first step, go back to home
+      haptics.light();
+      navigation.navigate('Home' as never);
     }
   };
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
+  }));
+
+  const progressBarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progressBarOffset.value }],
   }));
 
   const renderStep = () => {
@@ -111,6 +132,15 @@ export default function JournalScreen() {
           <DateStep
             date={date}
             onChangeDate={setDate}
+            onNext={goToNextStep}
+            onBack={goToPreviousStep}
+          />
+        );
+      case STEPS.WRITE:
+        return (
+          <WriteStep
+            text={text}
+            onChangeText={setText}
             onNext={goToNextStep}
             onBack={goToPreviousStep}
           />
@@ -137,15 +167,6 @@ export default function JournalScreen() {
             onNext={goToNextStep}
             onBack={goToPreviousStep}
             images={images}
-          />
-        );
-      case STEPS.WRITE:
-        return (
-          <WriteStep
-            text={text}
-            onChangeText={setText}
-            onNext={goToNextStep}
-            onBack={goToPreviousStep}
           />
         );
       case STEPS.COMPLETE:
@@ -183,8 +204,29 @@ export default function JournalScreen() {
     <GestureHandlerRootView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
+      {/* Step Title - Above Progress Bar */}
+      <View style={[styles.stepTitleContainer, { top: insets.top + 10 }]}>
+        {currentStep === STEPS.DATE && (
+          <Text style={styles.stepTitle}>When did this happen?</Text>
+        )}
+        {currentStep === STEPS.IMAGES && (
+          <Text style={styles.stepTitle}>
+            Add <Text style={styles.specialChar}>&</Text> Arrange Your Photos
+          </Text>
+        )}
+        {currentStep === STEPS.LOCATION && (
+          <Text style={styles.stepTitle}>Where were you?</Text>
+        )}
+        {currentStep === STEPS.WRITE && (
+          <Text style={styles.stepTitle}>What happened?</Text>
+        )}
+        {currentStep === STEPS.COMPLETE && (
+          <Text style={styles.stepTitle}>Preview & Save</Text>
+        )}
+      </View>
+
       {/* Progress Bar */}
-      <View style={styles.progressContainer}>
+      <Animated.View style={[styles.progressContainer, { top: insets.top + 60 }, progressBarStyle]}>
         <View style={styles.progressBar}>
           <Animated.View
             style={[
@@ -193,7 +235,7 @@ export default function JournalScreen() {
             ]}
           />
         </View>
-      </View>
+      </Animated.View>
 
       {/* Step Content */}
       <Animated.View style={[styles.stepContainer, animatedStyle]}>
@@ -218,9 +260,26 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     marginTop: 16,
   },
+  stepTitleContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    zIndex: 101,
+    alignItems: 'center',
+  },
+  stepTitle: {
+    fontSize: 32,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -1,
+  },
+  specialChar: {
+    fontFamily: 'ZainCustomFont',
+  },
   progressContainer: {
     position: 'absolute',
-    top: 60,
+    top: 70,
     left: 0,
     right: 0,
     zIndex: 100,
