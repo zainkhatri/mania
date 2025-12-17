@@ -989,40 +989,22 @@ const JournalCanvas = forwardRef<JournalCanvasHandle, JournalCanvasProps>(({
 
   // Single rendering useEffect to prevent flash when adding/deleting images
   useEffect(() => {
-    console.log('🔥 CANVAS RENDER TRIGGERED', {
-      hasCanvas: !!canvasRef.current,
-      isLoading,
-      hasTemplate: !!templateImage,
-      textSections: textSections.length,
-      images: images.length,
-      isDragging: !!draggedSimpleImage,
-      timestamp: Date.now()
-    });
-
     if (!canvasRef.current) {
-      console.log('🔥 SKIPPED: No canvas ref');
       return;
     }
     if (isLoading) {
-      console.log('🔥 SKIPPED: Still loading');
       return;
     }
 
     // Allow rendering during drag for smooth visual feedback
     // RAF throttling in mousemove handles performance
 
-    console.log('🔥 WILL RENDER on next frame');
     // Use requestAnimationFrame for smooth, synchronized rendering
     const frameId = requestAnimationFrame(() => {
-      console.log('🔥 RENDERING CANVAS NOW');
-      const startTime = performance.now();
       renderCanvas();
-      const endTime = performance.now();
-      console.log(`🔥 CANVAS RENDER COMPLETE in ${(endTime - startTime).toFixed(2)}ms`);
     });
 
     return () => {
-      // Debug statement removed
       cancelAnimationFrame(frameId);
       if (renderTimeoutRef.current) {
         clearTimeout(renderTimeoutRef.current);

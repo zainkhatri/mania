@@ -448,30 +448,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
   templateUrl = '/templates/cream-black-template.jpg',
   saveButtonText = 'Create Journal'
 }) => {
-  // DEBUG: Track JournalForm lifecycle
-  useEffect(() => {
-    console.log('🟢🟢🟢 JOURNALFORM MOUNTED 🟢🟢🟢');
-    console.log('🟢 Checking for duplicate JournalForm instances...');
-
-    // Check for duplicate journal form containers
-    const journalContainers = document.querySelectorAll('.journal-form-container');
-    console.log('🟢 Number of .journal-form-container elements:', journalContainers.length);
-
-    // Check for duplicate grids
-    const gridElements = document.querySelectorAll('.grid.grid-cols-1');
-    console.log('🟢 Number of .grid elements:', gridElements.length);
-
-    // Log all children of root
-    const root = document.getElementById('root');
-    console.log('🟢 Root children:', root?.children.length);
-    Array.from(root?.children || []).forEach((child, i) => {
-      console.log(`🟢   [${i}]:`, child.className, child.tagName);
-    });
-
-    return () => {
-      console.log('🟢🟢🟢 JOURNALFORM UNMOUNTED 🟢🟢🟢');
-    };
-  }, []);
 
   const navigate = useNavigate();
   const { notification, loading, success, error: showError, update, hide } = useNotification();
@@ -1168,7 +1144,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
         } else {
           // Debug statement removed
         }
-        console.log('Restored draft journal from localStorage');
       } catch (error) {
         console.error('Error restoring draft journal:', error);
         clearLocalStorageItem('webjournal_draft');
@@ -2868,7 +2843,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 {/* Journal preview content with buttons directly underneath */}
                 <div className="flex-1">
                   <div className="p-2 md:p-3 lg:p-6">
-                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10 md:h-[calc(100vh*0.85-1rem)]" ref={journalRef} id="journal-container" data-journal-content>
+                    <div className="relative bg-gradient-to-br from-[#1a1a1a]/70 to-[#2a2a2a]/70 rounded-xl overflow-hidden shadow-lg border border-white/10" ref={journalRef} id="journal-container" data-journal-content>
                       {/* Debug statement removed */}
                       {/* Desktop canvas debug removed */}
                       <MemoizedJournalCanvas
@@ -3251,8 +3226,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                   background: isGeneratingInspiration || isQuestionTyping
                                     ? `${textColors.locationColor}30`
                                     : `linear-gradient(135deg, ${textColors.locationColor}33, ${textColors.locationColor}aa)`,
-                                  borderColor: `${textColors.locationColor}99`,
-                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}33` : 'none',
+                                  borderTop: `1px solid ${textColors.locationColor}99`,
+                                  borderBottom: `1px solid ${textColors.locationColor}99`,
+                                  borderLeft: `1px solid ${textColors.locationColor}99`,
+                                  borderRight: showQuestionOverlay ? `1px solid ${textColors.locationColor}33` : `1px solid ${textColors.locationColor}99`,
                                 }}
                                 whileHover={
                                   !isGeneratingInspiration && !isQuestionTyping
