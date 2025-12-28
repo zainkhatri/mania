@@ -123,16 +123,16 @@ const calculateTextWrapping = (
   const textSegments = [];
   const firstImage = overlappingImages[0];
   const spaceBeforeFirst = firstImage.x - leftMargin;
-  const padding = 15; // Horizontal padding between text and images
+  const padding = 10; // Horizontal padding between text and images (reduced from 15)
 
-  // Minimum width needed to fit at least a few characters (increased from 15 to 100)
-  const MIN_USABLE_WIDTH = 100;
+  // Minimum width needed to fit at least a few characters
+  const MIN_USABLE_WIDTH = 80; // Reduced from 100 to allow narrower segments
 
   // Add space before first image if there's enough room
   if (spaceBeforeFirst > MIN_USABLE_WIDTH) {
     textSegments.push({
       startX: leftMargin,
-      availableWidth: firstImage.x - leftMargin - padding
+      availableWidth: Math.max(0, firstImage.x - leftMargin - padding)
     });
   }
 
@@ -147,7 +147,7 @@ const calculateTextWrapping = (
     if (gapWidth > MIN_USABLE_WIDTH) {
       textSegments.push({
         startX: gapStart,
-        availableWidth: gapWidth
+        availableWidth: Math.max(0, gapWidth)
       });
     }
   }
@@ -159,7 +159,7 @@ const calculateTextWrapping = (
   if (spaceAfterLast > MIN_USABLE_WIDTH) {
     textSegments.push({
       startX: lastImage.x + lastImage.width + padding,
-      availableWidth: spaceAfterLast - padding
+      availableWidth: Math.max(0, spaceAfterLast - padding)
     });
   }
 
@@ -215,7 +215,7 @@ export default function LiveJournalCanvas({
       const mid = Math.floor((low + high) / 2);
       // Measure at size 100, then scale to mid
       const widthAt100 = dateFontTest.getTextWidth(date);
-      const estimatedWidth = (widthAt100 / 100) * mid * 1.05; // Add 5% safety margin
+      const estimatedWidth = (widthAt100 / 100) * mid * 1.02; // Add 2% safety margin
 
       if (estimatedWidth <= availableWidth) {
         optimalSize = mid;
@@ -252,7 +252,7 @@ export default function LiveJournalCanvas({
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
       const widthAt100 = dateFontTest.getTextWidth(location.toUpperCase());
-      const estimatedWidth = (widthAt100 / 100) * mid * 1.05; // Add 5% safety margin
+      const estimatedWidth = (widthAt100 / 100) * mid * 1.02; // Add 2% safety margin
 
       if (estimatedWidth <= availableWidth) {
         optimalSize = mid;
@@ -362,17 +362,15 @@ export default function LiveJournalCanvas({
             const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
             // Use ACTUAL font measurement, scaled from size 100 to fontSize
             const widthAt100 = bodyFontTest.getTextWidth(testLine);
-            const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
+            const actualWidth = (widthAt100 / 100) * fontSize * 1.02; // Add 2% safety margin (reduced from 5%)
 
             if (actualWidth > segment.availableWidth) {
-              // If we can't fit even one word in this segment, skip it
+              // If we can't fit even one word in this segment, try next segment/line
               if (wordsInSegment === 0) {
                 break;
               }
-              // Otherwise, move to next segment
-              if (currentLine) {
-                break;
-              }
+              // Otherwise, we have text - save it and move to next segment
+              break;
             } else {
               currentLine = testLine;
               currentWord++;
@@ -421,17 +419,15 @@ export default function LiveJournalCanvas({
           const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
           // Use ACTUAL font measurement, scaled from size 100 to fontSize
           const widthAt100 = bodyFontTest.getTextWidth(testLine);
-          const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
+          const actualWidth = (widthAt100 / 100) * fontSize * 1.02; // Add 2% safety margin (reduced from 5%)
 
           if (actualWidth > segment.availableWidth) {
-            // If we can't fit even one word in this segment, skip it
+            // If we can't fit even one word in this segment, try next segment/line
             if (wordsInSegment === 0) {
               break;
             }
-            // Otherwise, move to next segment
-            if (currentLine) {
-              break;
-            }
+            // Otherwise, we have text - save it and move to next segment
+            break;
           } else {
             currentLine = testLine;
             currentWord++;
