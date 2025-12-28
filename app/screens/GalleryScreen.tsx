@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
-  SectionList,
+  ScrollView,
   StyleSheet,
   StatusBar,
   Text,
@@ -9,20 +9,16 @@ import {
   Dimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Journal, getUserJournals } from '../services/journalService';
 import LiveJournalCanvas from '../components/LiveJournalCanvas';
 import EmptyGalleryState from '../components/EmptyGalleryState';
+import BottomNav from '../components/BottomNav';
 import { haptics } from '../utils/haptics';
-
-interface JournalSection {
-  title: string;
-  data: Journal[][];
-}
+import { scaleFont, scaleHeight, scaleWidth, scaleSize } from '../utils/responsive';
 
 const { width } = Dimensions.get('window');
-const PAGE_WIDTH = (width - 48) / 2; // Two pages side by side with gap
-const PAGE_HEIGHT = PAGE_WIDTH * (2620 / 1860);
+const isIPad = width >= 768;
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -50,8 +46,24 @@ const formatDate = (dateString: string): string => {
   return dateStr.toUpperCase();
 };
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Calculate day cell size to fit 7 columns
+const DAY_CELL_WIDTH = (width - scaleWidth(48)) / 7;
+const DAY_CELL_HEIGHT = DAY_CELL_WIDTH * (2620 / 1860); // Journal aspect ratio
+const PREVIEW_SIZE = DAY_CELL_WIDTH * 0.85;
+const PREVIEW_HEIGHT = PREVIEW_SIZE * (2620 / 1860);
+
+interface MonthData {
+  year: number;
+  month: number;
+  monthYear: string;
+  days: Array<{ date: Date | null; journal: Journal | null }>;
+}
+
 export default function GalleryScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [journals, setJournals] = useState<Journal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,10 +71,7 @@ export default function GalleryScreen() {
     try {
       setLoading(true);
       const data = await getUserJournals();
-      const sorted = data.sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setJournals(sorted);
+      setJournals(data);
     } catch (error) {
       console.error('Error loading journals:', error);
     } finally {
@@ -76,117 +85,174 @@ export default function GalleryScreen() {
     }, [])
   );
 
-  // Group journals by month and year
-  const sections = useMemo(() => {
-    const grouped: { [key: string]: Journal[] } = {};
-
+  // Create a map of journals by date for quick lookup
+  const journalsByDate = useMemo(() => {
+    const map: { [key: string]: Journal } = {};
     journals.forEach((journal) => {
       const date = new Date(journal.date);
-      const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-      if (!grouped[monthYear]) {
-        grouped[monthYear] = [];
-      }
-      grouped[monthYear].push(journal);
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      map[key] = journal;
     });
-
-    // Convert to sections array and chunk into pairs for 2-column layout
-    const sectionsArray: JournalSection[] = Object.keys(grouped).map((monthYear) => {
-      const journalsInMonth = grouped[monthYear];
-      const pairs: Journal[][] = [];
-
-      for (let i = 0; i < journalsInMonth.length; i += 2) {
-        pairs.push(journalsInMonth.slice(i, i + 2));
-      }
-
-      return {
-        title: monthYear,
-        data: pairs,
-      };
-    });
-
-    return sectionsArray;
+    return map;
   }, [journals]);
 
-  const handlePagePress = (journal: Journal) => {
-    haptics.medium();
-    navigation.navigate('JournalDetail' as never, { journalId: journal.id } as never);
+  // Generate all months that have journals, plus current month
+  const monthsToShow = useMemo(() => {
+    const months: MonthData[] = [];
+    const today = new Date();
+    const monthsSet = new Set<string>();
+
+    // Add current month
+    monthsSet.add(`${today.getFullYear()}-${today.getMonth()}`);
+
+    // Add months with journals
+    journals.forEach((journal) => {
+      const date = new Date(journal.date);
+      monthsSet.add(`${date.getFullYear()}-${date.getMonth()}`);
+    });
+
+    // Convert to array and sort descending (most recent first)
+    const sortedMonths = Array.from(monthsSet)
+      .sort((a, b) => {
+        const [yearA, monthA] = a.split('-').map(Number);
+        const [yearB, monthB] = b.split('-').map(Number);
+        if (yearA !== yearB) return yearB - yearA;
+        return monthB - monthA;
+      });
+
+    // Generate calendar data for each month
+    sortedMonths.forEach((monthKey) => {
+      const [year, month] = monthKey.split('-').map(Number);
+
+      // First day of month
+      const firstDay = new Date(year, month, 1);
+      const firstDayOfWeek = firstDay.getDay();
+
+      // Last day of month
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+
+      // Build calendar grid
+      const days: Array<{ date: Date | null; journal: Journal | null }> = [];
+
+      // Add empty cells for days before month starts
+      for (let i = 0; i < firstDayOfWeek; i++) {
+        days.push({ date: null, journal: null });
+      }
+
+      // Add days of month
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const key = `${year}-${month}-${day}`;
+        const journal = journalsByDate[key] || null;
+        days.push({ date, journal });
+      }
+
+      const monthYear = new Date(year, month).toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric'
+      });
+
+      months.push({ year, month, monthYear, days });
+    });
+
+    return months;
+  }, [journals, journalsByDate]);
+
+  const handleDayPress = (journal: Journal | null) => {
+    if (journal) {
+      haptics.medium();
+      (navigation as any).navigate('JournalDetail', { journalId: journal.id });
+    }
   };
 
-  const handleBack = () => {
-    haptics.light();
-    navigation.navigate('Home' as never);
-  };
+  const renderDay = ({ date, journal }: { date: Date | null; journal: Journal | null }, index: number) => {
+    if (!date) {
+      return <View style={styles.emptyDay} key={`empty-${index}`} />;
+    }
 
-  const renderRow = ({ item }: { item: Journal[] }) => (
-    <View style={styles.row}>
-      {item.map((journal) => (
-        <Pressable
-          key={journal.id}
-          onPress={() => handlePagePress(journal)}
-          style={({ pressed }) => [
-            styles.pageContainer,
-            pressed && styles.pagePressed,
-          ]}
-        >
-          <View style={styles.page}>
-            <LiveJournalCanvas
-              date={formatDate(journal.date)}
-              location={journal.location || ''}
-              text={journal.text}
-              locationColor={journal.colors.locationColor}
-              images={journal.images}
-              canvasWidth={PAGE_WIDTH}
-              canvasHeight={PAGE_HEIGHT}
-            />
+    const dayNumber = date.getDate();
+    const isToday = new Date().toDateString() === date.toDateString();
+
+    return (
+      <Pressable
+        key={date.toISOString()}
+        onPress={() => handleDayPress(journal)}
+        style={({ pressed }) => [
+          styles.dayCell,
+          journal && styles.dayCellWithJournal,
+          isToday && styles.todayCell,
+          pressed && styles.dayCellPressed,
+        ]}
+      >
+        {journal ? (
+          <View style={styles.journalPreviewContainer}>
+            <View style={styles.miniPreview}>
+              <LiveJournalCanvas
+                date={formatDate(journal.date)}
+                location={journal.location || ''}
+                text={journal.text}
+                locationColor={journal.colors.locationColor}
+                images={journal.images}
+                canvasWidth={PREVIEW_SIZE}
+                canvasHeight={PREVIEW_HEIGHT}
+              />
+            </View>
+            <Text style={styles.dayNumber}>{dayNumber}</Text>
           </View>
-        </Pressable>
-      ))}
-    </View>
-  );
-
-  const renderSectionHeader = ({ section }: { section: JournalSection }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
-    </View>
-  );
-
-  const renderEmpty = () => {
-    if (loading) return null;
-    return <EmptyGalleryState />;
+        ) : (
+          <Text style={[styles.dayNumber, styles.dayNumberEmpty]}>{dayNumber}</Text>
+        )}
+      </Pressable>
+    );
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </Pressable>
-        <Text style={styles.title}>Your Journals</Text>
-        {journals.length > 0 && (
-          <Text style={styles.count}>{journals.length}</Text>
-        )}
+      {/* Title */}
+      <View style={[styles.titleContainer, { top: insets.top + scaleHeight(20) }]}>
+        <Text style={styles.title}>What have you written?</Text>
       </View>
 
-      {/* Journal Pages */}
-      <SectionList
-        sections={sections}
-        renderItem={renderRow}
-        renderSectionHeader={renderSectionHeader}
-        keyExtractor={(item, index) => `row-${index}`}
+      <ScrollView
         contentContainerStyle={[
           styles.contentContainer,
-          sections.length === 0 && styles.emptyContainer,
+          { paddingTop: insets.top + scaleHeight(80), paddingBottom: scaleHeight(120) },
         ]}
-        ListEmptyComponent={renderEmpty}
-        refreshing={loading}
-        onRefresh={loadJournals}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
-      />
+      >
+        {/* Weekday Headers (sticky would be nice but keeping it simple) */}
+        <View style={styles.weekdayRow}>
+          {WEEKDAYS.map((day) => (
+            <View key={day} style={styles.weekdayCell}>
+              <Text style={styles.weekdayText}>{day}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Scrollable months - most recent first */}
+        {monthsToShow.map((monthData) => (
+          <View key={`${monthData.year}-${monthData.month}`} style={styles.monthSection}>
+            {/* Month label */}
+            <Text style={styles.monthLabel}>{monthData.monthYear.toUpperCase()}</Text>
+
+            {/* Calendar Grid for this month */}
+            <View style={styles.calendarGrid}>
+              {monthData.days.map((dayData, index) => (
+                <View key={index} style={styles.dayWrapper}>
+                  {renderDay(dayData, index)}
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+
+        {journals.length === 0 && !loading && <EmptyGalleryState />}
+      </ScrollView>
+
+      <BottomNav activeTab="gallery" />
     </View>
   );
 }
@@ -196,76 +262,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: StatusBar.currentHeight || 60,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    paddingHorizontal: scaleWidth(24),
+    zIndex: 10,
     alignItems: 'center',
   },
   title: {
-    flex: 1,
-    fontSize: 24,
+    fontSize: scaleFont(32),
     fontFamily: 'TitleFont',
     color: '#fff',
     letterSpacing: -1,
-    marginLeft: 8,
-  },
-  count: {
-    fontSize: 16,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.6)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    textAlign: 'center',
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: scaleWidth(24),
   },
-  emptyContainer: {
+  weekdayRow: {
+    flexDirection: 'row',
+    marginBottom: scaleHeight(12),
+  },
+  weekdayCell: {
+    width: DAY_CELL_WIDTH,
+    alignItems: 'center',
+  },
+  weekdayText: {
+    fontSize: scaleFont(11),
+    fontFamily: 'TitleFont',
+    color: 'rgba(255, 255, 255, 0.5)',
+    letterSpacing: -0.3,
+  },
+  monthSection: {
+    marginBottom: scaleHeight(32),
+  },
+  monthLabel: {
+    fontSize: scaleFont(16),
+    fontFamily: 'TitleFont',
+    color: 'rgba(255, 255, 255, 0.7)',
+    letterSpacing: -0.5,
+    marginBottom: scaleHeight(12),
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayWrapper: {
+    width: DAY_CELL_WIDTH,
+    height: DAY_CELL_HEIGHT,
+    padding: scaleSize(1),
+  },
+  dayCell: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: scaleSize(4),
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: scaleSize(1),
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  dayCellWithJournal: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  todayCell: {
+    borderColor: '#007AFF',
+    borderWidth: scaleSize(2),
+  },
+  dayCellPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    transform: [{ scale: 0.95 }],
+  },
+  emptyDay: {
     flex: 1,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
+  journalPreviewContainer: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
-  sectionHeader: {
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    marginTop: 8,
+  miniPreview: {
+    width: PREVIEW_SIZE,
+    height: PREVIEW_HEIGHT,
+    borderRadius: scaleSize(2),
+    overflow: 'hidden',
   },
-  sectionTitle: {
-    fontSize: 20,
+  dayNumber: {
+    fontSize: scaleFont(10),
     fontFamily: 'TitleFont',
     color: '#fff',
-    letterSpacing: -0.5,
-    textTransform: 'uppercase',
+    letterSpacing: -0.3,
+    marginTop: scaleHeight(2),
   },
-  pageContainer: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    width: PAGE_WIDTH,
-  },
-  page: {
-    backgroundColor: '#f5f2e9',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  pagePressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
+  dayNumberEmpty: {
+    color: 'rgba(255, 255, 255, 0.3)',
   },
 });

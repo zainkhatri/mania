@@ -21,14 +21,22 @@ import LiveJournalCanvas from '../LiveJournalCanvas';
 
 const { width, height } = Dimensions.get('window');
 
+// Detect if device is a tablet (iPad)
+const isTablet = width >= 768;
+
 // Calculate display dimensions to fit full page on screen
 const ASPECT_RATIO = 2620 / 1860;
 // Account for: progress bar (60) + instruction (30) + buttons/helper (70) = 160
 const AVAILABLE_HEIGHT = height - 160;
 const AVAILABLE_WIDTH = width - 32;
 
+// For tablets, cap the journal size to maintain phone-like proportions
+// Use 70% of available height for tablets to ensure it fits nicely
+const MAX_TABLET_HEIGHT = AVAILABLE_HEIGHT * 0.7;
+const MAX_PHONE_HEIGHT = AVAILABLE_HEIGHT;
+
 // Size based on height constraint to ensure full page is visible
-const DISPLAY_CANVAS_HEIGHT = AVAILABLE_HEIGHT;
+const DISPLAY_CANVAS_HEIGHT = isTablet ? MAX_TABLET_HEIGHT : MAX_PHONE_HEIGHT;
 const DISPLAY_CANVAS_WIDTH = DISPLAY_CANVAS_HEIGHT / ASPECT_RATIO;
 
 // If width is still too large, constrain by width instead

@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width } = Dimensions.get('window');
+const isIPad = width >= 768;
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,6 +23,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { haptics } from '../utils/haptics';
 import { getJournalById } from '../services/journalService';
+import { scaleFont, scaleHeight } from '../utils/responsive';
 
 // Import steps
 import DateStep from '../components/steps/DateStep';
@@ -27,8 +31,6 @@ import ImageStep from '../components/steps/ImageStep';
 import LocationStep from '../components/steps/LocationStep';
 import WriteStep from '../components/steps/WriteStep';
 import CompleteStep from '../components/steps/CompleteStep';
-
-const { width, height } = Dimensions.get('window');
 
 const STEPS = {
   DATE: 0,
@@ -49,13 +51,13 @@ export default function JournalScreen() {
   const [date, setDate] = useState(new Date());
   const [location, setLocation] = useState('');
   const [locationColor, setLocationColor] = useState('#3498DB');
-  const [images, setImages] = useState<{ uri: string; x: number; y: number; scale: number }[]>([]);
+  const [images, setImages] = useState<{ uri: string; x: number; y: number; scale: number; width: number; height: number }[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Animation values
   const opacity = useSharedValue(1);
-  const progressBarOffset = useSharedValue(0);
+  const progressWidth = useSharedValue(((STEPS.DATE + 1) / 5) * 100);
 
   // Load existing journal for edit mode
   useEffect(() => {
@@ -64,13 +66,12 @@ export default function JournalScreen() {
     }
   }, [journalId]);
 
-  // Animate progress bar position for WRITE step
+  // Animate progress bar width for all steps
   useEffect(() => {
-    if (currentStep === STEPS.WRITE) {
-      progressBarOffset.value = withTiming(5, { duration: 300 });
-    } else {
-      progressBarOffset.value = withTiming(0, { duration: 300 });
-    }
+    // Animate progress bar width smoothly
+    progressWidth.value = withTiming(((currentStep + 1) / 5) * 100, { 
+      duration: 500 
+    });
   }, [currentStep]);
 
   const loadExistingJournal = async () => {
@@ -111,9 +112,9 @@ export default function JournalScreen() {
         opacity.value = withTiming(1, { duration: 300 });
       });
     } else {
-      // On first step, go back to home
+      // On first step, stay on date step (no back action)
+      // User can use Gallery/Feed buttons to navigate away
       haptics.light();
-      navigation.navigate('Home' as never);
     }
   };
 
@@ -121,8 +122,8 @@ export default function JournalScreen() {
     opacity: opacity.value,
   }));
 
-  const progressBarStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: progressBarOffset.value }],
+  const progressFillStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value}%`,
   }));
 
   const renderStep = () => {
@@ -155,6 +156,7 @@ export default function JournalScreen() {
             location={location}
             date={date}
             text={text}
+            locationColor={locationColor}
           />
         );
       case STEPS.LOCATION:
@@ -167,6 +169,8 @@ export default function JournalScreen() {
             onNext={goToNextStep}
             onBack={goToPreviousStep}
             images={images}
+            date={date}
+            text={text}
           />
         );
       case STEPS.COMPLETE:
@@ -183,6 +187,7 @@ export default function JournalScreen() {
               // Save logic handled in CompleteStep
               haptics.success();
             }}
+            onBack={goToPreviousStep}
           />
         );
       default:
@@ -205,7 +210,7 @@ export default function JournalScreen() {
       <StatusBar barStyle="light-content" />
 
       {/* Step Title - Above Progress Bar */}
-      <View style={[styles.stepTitleContainer, { top: insets.top + 10 }]}>
+      <View style={[styles.stepTitleContainer, { top: insets.top + scaleHeight(20) }]}>
         {currentStep === STEPS.DATE && (
           <Text style={styles.stepTitle}>When did this happen?</Text>
         )}
@@ -221,21 +226,23 @@ export default function JournalScreen() {
           <Text style={styles.stepTitle}>What happened?</Text>
         )}
         {currentStep === STEPS.COMPLETE && (
-          <Text style={styles.stepTitle}>Preview & Save</Text>
+          <Text style={styles.stepTitle}>
+            Preview <Text style={styles.specialChar}>&</Text> Save
+          </Text>
         )}
       </View>
 
       {/* Progress Bar */}
-      <Animated.View style={[styles.progressContainer, { top: insets.top + 60 }, progressBarStyle]}>
+      <View style={[styles.progressContainer, { top: insets.top + scaleHeight(70) }]}>
         <View style={styles.progressBar}>
           <Animated.View
             style={[
               styles.progressFill,
-              { width: `${((currentStep + 1) / 5) * 100}%` },
+              progressFillStyle,
             ]}
           />
         </View>
-      </Animated.View>
+      </View>
 
       {/* Step Content */}
       <Animated.View style={[styles.stepContainer, animatedStyle]}>
@@ -255,40 +262,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 16,
+    marginTop: scaleHeight(16),
   },
   stepTitleContainer: {
     position: 'absolute',
-    top: 20,
+    top: scaleHeight(20),
     left: 0,
     right: 0,
     zIndex: 101,
     alignItems: 'center',
   },
   stepTitle: {
-    fontSize: 32,
+    fontSize: scaleFont(32),
     fontFamily: 'TitleFont',
     color: '#fff',
     letterSpacing: -1,
+    textAlign: 'center',
   },
   specialChar: {
     fontFamily: 'ZainCustomFont',
   },
   progressContainer: {
     position: 'absolute',
-    top: 70,
+    top: scaleHeight(70),
     left: 0,
     right: 0,
     zIndex: 100,
-    paddingHorizontal: 24,
+    paddingHorizontal: scaleHeight(24),
   },
   progressBar: {
-    height: 3,
+    height: scaleHeight(3),
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
+    borderRadius: scaleHeight(2),
     overflow: 'hidden',
   },
   progressFill: {

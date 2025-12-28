@@ -11,16 +11,20 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Journal, getUserJournals, deleteJournal } from '../services/journalService';
 import LiveJournalCanvas from '../components/LiveJournalCanvas';
-import SimpleJournalPage from '../components/SimpleJournalPage';
 import { haptics } from '../utils/haptics';
 
-const { width } = Dimensions.get('window');
-const CANVAS_WIDTH = width - 32;
+const { width, height } = Dimensions.get('window');
+// Detect if device is a tablet (iPad)
+const isTablet = width >= 768;
+// For tablets, cap the canvas width to 70% of screen to maintain phone-like proportions
+const MAX_CANVAS_WIDTH = isTablet ? Math.min(width * 0.7, 600) : width - 32;
+const CANVAS_WIDTH = MAX_CANVAS_WIDTH;
 const CANVAS_HEIGHT = CANVAS_WIDTH * (2620 / 1860);
 
 const formatDate = (dateString: string): string => {
@@ -53,12 +57,12 @@ export default function JournalDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const canvasRef = useRef<View>(null);
+  const insets = useSafeAreaInsets();
 
   const journalId = (route.params as { journalId: string })?.journalId;
   const [journal, setJournal] = useState<Journal | null>(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
-  const [useSimpleRenderer, setUseSimpleRenderer] = useState(true); // Use simple renderer by default
 
   useEffect(() => {
     loadJournal();
@@ -144,7 +148,7 @@ export default function JournalDetailScreen() {
 
   const handleBack = () => {
     haptics.light();
-    navigation.navigate('Home' as never);
+    navigation.navigate('Gallery' as never);
   };
 
   if (loading) {
@@ -171,7 +175,7 @@ export default function JournalDetailScreen() {
       <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity style={styles.headerButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -188,26 +192,15 @@ export default function JournalDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View ref={canvasRef} collapsable={false} style={styles.canvasWrapper}>
-          {useSimpleRenderer ? (
-            <SimpleJournalPage
-              date={formatDate(journal.date)}
-              location={journal.location || ''}
-              text={journal.text}
-              locationColor={journal.colors.locationColor}
-              canvasWidth={CANVAS_WIDTH}
-              canvasHeight={CANVAS_HEIGHT}
-            />
-          ) : (
-            <LiveJournalCanvas
-              date={formatDate(journal.date)}
-              location={journal.location || ''}
-              text={journal.text}
-              locationColor={journal.colors.locationColor}
-              images={journal.images}
-              canvasWidth={CANVAS_WIDTH}
-              canvasHeight={CANVAS_HEIGHT}
-            />
-          )}
+          <LiveJournalCanvas
+            date={formatDate(journal.date)}
+            location={journal.location || ''}
+            text={journal.text}
+            locationColor={journal.colors.locationColor}
+            images={journal.images}
+            canvasWidth={CANVAS_WIDTH}
+            canvasHeight={CANVAS_HEIGHT}
+          />
         </View>
 
         {/* Action Buttons - Now inside ScrollView */}
@@ -294,9 +287,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: StatusBar.currentHeight || 60,
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   headerButton: {
     width: 40,
@@ -317,6 +309,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingTop: 8,
     paddingBottom: 60,
   },
   canvasWrapper: {

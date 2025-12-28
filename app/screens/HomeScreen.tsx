@@ -1,35 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Video, ResizeMode } from 'expo-av';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const videoRef = React.useRef<Video>(null);
 
-  // Random letter highlight animation
+  // Animation values
+  const opacity = useSharedValue(0);
+
   useEffect(() => {
+    console.log('🏠 Intro screen mounted');
+    
+    // Random letter highlight animation
     const styleInterval = setInterval(() => {
       const randomIndex = Math.floor(Math.random() * 5);
       setHighlightIndex(randomIndex);
     }, 200);
 
+    // Intro animation sequence
+    // Everything fades in together (0-1.5s)
+    opacity.value = withTiming(1, { duration: 1500, easing: Easing.out(Easing.ease) });
+
+    // Navigate directly to journal creation after 4 seconds
+    const navigationTimer = setTimeout(() => {
+      navigation.replace('Journal', {} as any);
+    }, 4000);
+
     return () => {
       clearInterval(styleInterval);
+      clearTimeout(navigationTimer);
     };
   }, []);
-
-  const handleStart = () => {
-    navigation.navigate('Journal');
-  };
-
-  const handleViewGallery = () => {
-    navigation.navigate('Gallery');
-  };
 
   // Exact rendering from web app - letter-highlight vs letter-normal
   const renderTitle = () => {
@@ -42,18 +58,23 @@ export default function HomeScreen() {
             key={`letter-${index}-${highlightIndex}`}
             style={index === highlightIndex ? styles.letterHighlight : styles.letterNormal}
           >
-            {letter}
+            {index === highlightIndex ? letter.toLowerCase() : letter.toUpperCase()}
           </Text>
         ))}
       </View>
     );
   };
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, animatedStyle]}>
       {/* Static video background */}
       <Video
-        source={require('../../assets/videos/static.webm')}
+        ref={videoRef}
+        source={require('../../assets/videos/static.mp4')}
         style={styles.videoBackground}
         resizeMode={ResizeMode.COVER}
         shouldPlay
@@ -64,34 +85,13 @@ export default function HomeScreen() {
       {/* Dark overlay for readability */}
       <View style={styles.overlay} />
 
-      {/* Content */}
+      {/* Content - Title */}
       <View style={styles.content}>
         <View style={styles.textFlicker}>
           {renderTitle()}
         </View>
-
-        <Text style={styles.subtitle}>
-          Create zain's journals without the pen in your hand.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={handleStart}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.arrow}>↓</Text>
-          <Text style={styles.startButtonText}>Start Journaling</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.galleryButton}
-          onPress={handleViewGallery}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.galleryButtonText}>View Gallery</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   content: {
     flex: 1,
@@ -120,7 +120,6 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 24,
   },
   // Normal letter style (ZainCustomFont equivalent)
   letterNormal: {
@@ -146,50 +145,5 @@ const styles = StyleSheet.create({
   },
   textFlicker: {
     // Text flicker animation
-  },
-  subtitle: {
-    fontSize: 20,
-    fontFamily: 'TitleFont',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 48,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    maxWidth: 340,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 40,
-    paddingVertical: 24,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  arrow: {
-    fontSize: 28,
-    color: '#fff',
-    marginRight: 12,
-  },
-  startButtonText: {
-    fontSize: 28,
-    fontFamily: 'TitleFont',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  galleryButton: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  galleryButtonText: {
-    fontSize: 16,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.7)',
-    textDecorationLine: 'underline',
-    textDecorationColor: 'rgba(255, 255, 255, 0.4)',
   },
 });
