@@ -27,7 +27,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Home"
+        initialRouteName="Gallery"
         screenOptions={{
           headerShown: false,
           animation: 'fade',
