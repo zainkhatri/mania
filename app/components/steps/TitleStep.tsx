@@ -8,12 +8,14 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 
 const { width, height } = Dimensions.get('window');
@@ -22,13 +24,16 @@ interface TitleStepProps {
   title: string;
   onChangeTitle: (title: string) => void;
   onNext: () => void;
+  onBack: () => void;
 }
 
 export default function TitleStep({
   title,
   onChangeTitle,
   onNext,
+  onBack,
 }: TitleStepProps) {
+  const insets = useSafeAreaInsets();
   const titleInputRef = useRef<TextInput>(null);
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -60,7 +65,7 @@ export default function TitleStep({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <Animated.View style={[styles.content, animatedStyle]}>
+      <Animated.View style={[styles.content, animatedStyle, { paddingBottom: insets.bottom + 30 }]}>
         {/* Instruction */}
         <Text style={styles.instruction}>Let's start your journal</Text>
 
@@ -78,12 +83,31 @@ export default function TitleStep({
           onSubmitEditing={handleNext}
         />
 
-        {/* Continue Button */}
-        <Animated.View style={{ marginTop: 40 }}>
-          <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
-            <Text style={styles.continueText}>Continue →</Text>
-          </TouchableOpacity>
-        </Animated.View>
+        {/* Buttons */}
+        <View style={styles.buttonsContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+            onPress={() => {
+              haptics.light();
+              onBack();
+            }}
+          >
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.continueButton,
+              pressed && styles.continueButtonPressed,
+            ]}
+            onPress={handleNext}
+          >
+            <Text style={styles.continueText}>Continue</Text>
+          </Pressable>
+        </View>
 
         {/* Helper Text */}
         <Text style={styles.helperText}>
@@ -126,21 +150,51 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.3)',
     marginBottom: 24,
   },
+  buttonsContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+    marginTop: 40,
+  },
+  backButton: {
+    flex: 1,
+    paddingVertical: 18,
+    borderRadius: 100,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  backButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    transform: [{ scale: 0.98 }],
+  },
+  backText: {
+    fontSize: 17,
+    fontFamily: 'TitleFont',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
   continueButton: {
+    flex: 1,
     backgroundColor: '#fff',
-    paddingHorizontal: 48,
-    paddingVertical: 20,
-    borderRadius: 30,
+    paddingVertical: 18,
+    borderRadius: 100,
+    alignItems: 'center',
+  },
+  continueButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    transform: [{ scale: 0.98 }],
   },
   continueText: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'TitleFont',
     color: '#000',
     letterSpacing: -0.5,
   },
   helperText: {
     position: 'absolute',
-    bottom: -100,
+    bottom: -60,
     fontSize: 14,
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.5)',

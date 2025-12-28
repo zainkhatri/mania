@@ -20,8 +20,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 import { generateJournalPrompts } from '../../services/gptService';
-
-const { width, height } = Dimensions.get('window');
+import { scaleFont, scaleHeight, scaleWidth, scaleSize } from '../../utils/responsive';
 
 interface WriteStepProps {
   text: string;
@@ -33,7 +32,7 @@ interface WriteStepProps {
 export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteStepProps) {
   const insets = useSafeAreaInsets();
   const textInputRef = useRef<TextInput>(null);
-  const [prompt, setPrompt] = useState("How are you feeling today?");
+  const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
 
@@ -44,7 +43,8 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
   const buttonsOpacity = useSharedValue(0);
   const buttonsTranslate = useSharedValue(20);
   const finishOpacity = useSharedValue(0);
-  const finishTranslate = useSharedValue(40);
+  const finishScale = useSharedValue(0.8);
+  const backButtonFlex = useSharedValue(2); // Start at full width
 
   useEffect(() => {
     // Staggered entrance animations
@@ -78,20 +78,28 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
 
   const finishStyle = useAnimatedStyle(() => ({
     opacity: finishOpacity.value,
-    transform: [
-      { translateX: finishTranslate.value },
-    ],
+    transform: [{ scale: finishScale.value }],
   }));
 
-  // Animate finish button when text is entered
+  const backButtonStyle = useAnimatedStyle(() => ({
+    flex: backButtonFlex.value,
+  }));
+
+  // Animate finish button and back button when text is entered
   useEffect(() => {
     if (text.trim().length > 0 && !showFinish) {
       setShowFinish(true);
+      // Shrink back button to make room for finish button
+      backButtonFlex.value = withSpring(1, { damping: 30, stiffness: 100 });
+      // Animate finish button in
       finishOpacity.value = withTiming(1, { duration: 300 });
-      finishTranslate.value = withSpring(0, { damping: 20, stiffness: 90 });
+      finishScale.value = withSpring(1, { damping: 20, stiffness: 120 });
     } else if (text.trim().length === 0 && showFinish) {
+      // Animate finish button out first with smooth fade
       finishOpacity.value = withTiming(0, { duration: 200 });
-      finishTranslate.value = withTiming(40, { duration: 200 });
+      finishScale.value = withTiming(0.8, { duration: 200 });
+      // Expand back button with smooth timing animation (no bounce)
+      backButtonFlex.value = withTiming(2, { duration: 300 });
       setTimeout(() => setShowFinish(false), 200);
     }
   }, [text]);
@@ -137,69 +145,63 @@ export default function WriteStep({ text, onChangeText, onNext, onBack }: WriteS
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
-      keyboardVerticalOffset={60}
+      keyboardVerticalOffset={scaleHeight(60)}
     >
-      <View style={[styles.content, { paddingTop: insets.top + 80 }]}>
-        {/* AI Prompt */}
-        <Animated.View style={[styles.promptSection, promptStyle]}>
-          <Text style={styles.promptText}>{prompt}</Text>
-          {text.length > 20 && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.generateButton,
-                pressed && styles.generateButtonPressed,
-              ]}
-              onPress={handleGeneratePrompt}
-              disabled={isGenerating}
-            >
-              <Text style={styles.generateText}>
-                {isGenerating ? 'Thinking...' : '✨ New Prompt'}
-              </Text>
-            </Pressable>
-          )}
-        </Animated.View>
+      <View style={[styles.content, { paddingTop: insets.top + scaleHeight(70) }]}>
+        {/* AI Prompt - Right below progress bar */}
+        {prompt && (
+          <Animated.View style={[styles.promptSection, promptStyle]}>
+            <Text style={styles.promptText}>{prompt}</Text>
+          </Animated.View>
+        )}
 
-        {/* Writing Area */}
+        {/* Writing Area - In a visible box */}
         <Animated.View style={[styles.textSection, textStyle]}>
-          <ScrollView
-            style={styles.textAreaScroll}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <TextInput
-              ref={textInputRef}
-              style={styles.textArea}
-              placeholder="Start writing your thoughts..."
-              placeholderTextColor="rgba(255, 255, 255, 0.25)"
-              value={text}
-              onChangeText={(newText) => {
-                onChangeText(newText);
-                if (newText.length % 10 === 0) haptics.selection();
-              }}
-              multiline
-              scrollEnabled={false}
-              autoFocus
-            />
-          </ScrollView>
+          <View style={styles.textBoxContainer}>
+            <ScrollView
+              style={styles.textAreaScroll}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="always"
+            >
+              <TextInput
+                ref={textInputRef}
+                style={styles.textArea}
+                placeholder="How are you feeling today?"
+                placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                value={text}
+                onChangeText={(newText) => {
+                  onChangeText(newText);
+                  if (newText.length % 10 === 0) haptics.selection();
+                }}
+                multiline
+                scrollEnabled={true}
+                blurOnSubmit={false}
+                autoFocus
+                caretHidden={text.length === 0}
+                selectTextOnFocus={false}
+                selection={undefined}
+              />
+            </ScrollView>
+          </View>
         </Animated.View>
 
-        {/* Footer with Word Count and Buttons */}
+        {/* Footer with Buttons */}
         <Animated.View style={[styles.footer, buttonsStyle]}>
-          <Text style={styles.wordCount}>{wordCount} words</Text>
-
           <View style={styles.buttonSection}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.backButton,
-                pressed && styles.backButtonPressed,
-              ]}
-              onPress={handleBack}
-            >
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
+            <Animated.View style={backButtonStyle}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.backButton,
+                  pressed && styles.backButtonPressed,
+                ]}
+                onPress={handleBack}
+              >
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            </Animated.View>
 
             {showFinish && (
-              <Animated.View style={[styles.finishButtonWrapper, finishStyle]}>
+              <Animated.View style={[styles.finishButtonContainer, finishStyle]}>
                 <Pressable
                   style={({ pressed }) => [
                     styles.continueButton,
@@ -225,26 +227,32 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingHorizontal: scaleWidth(24),
+    paddingTop: scaleHeight(80),
+    paddingBottom: scaleHeight(80),
   },
   promptSection: {
-    marginBottom: 32,
+    marginBottom: scaleHeight(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scaleWidth(12),
   },
   promptText: {
-    fontSize: 22,
+    fontSize: scaleFont(15),
     fontFamily: 'TitleFont',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 16,
-    letterSpacing: -0.3,
+    color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   generateButton: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 100,
-    borderWidth: 1,
+    paddingHorizontal: scaleWidth(20),
+    paddingVertical: scaleHeight(10),
+    borderRadius: scaleSize(100),
+    borderWidth: scaleSize(1),
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   generateButtonPressed: {
@@ -252,48 +260,56 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   generateText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontFamily: 'ZainCustomFont',
     color: '#fff',
   },
   textSection: {
     flex: 1,
-    marginBottom: 16,
+    marginTop: scaleHeight(15),
+    marginBottom: scaleHeight(12),
+  },
+  textBoxContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: scaleSize(16),
+    borderWidth: scaleSize(1),
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: scaleSize(20),
   },
   textAreaScroll: {
     flex: 1,
   },
   textArea: {
-    fontSize: 20,
+    fontSize: scaleFont(18),
     fontFamily: 'ZainCustomFont',
     color: '#fff',
-    lineHeight: 32,
-    minHeight: 200,
+    lineHeight: scaleHeight(28),
+    textAlignVertical: 'top',
+    minHeight: scaleHeight(400),
   },
   footer: {
-    gap: 20,
-    paddingBottom: 20,
+    marginTop: 0,
   },
   wordCount: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontFamily: 'ZainCustomFont',
     color: 'rgba(255, 255, 255, 0.4)',
     textAlign: 'center',
   },
   buttonSection: {
     flexDirection: 'row',
-    gap: 12,
+    gap: scaleWidth(4),
   },
-  finishButtonWrapper: {
-    flex: 2,
+  finishButtonContainer: {
+    flex: 1,
   },
   backButton: {
-    flex: 1,
-    paddingVertical: 18,
-    borderRadius: 100,
+    paddingVertical: scaleHeight(18),
+    borderRadius: scaleSize(100),
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
+    borderWidth: scaleSize(1),
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   backButtonPressed: {
@@ -301,14 +317,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   backText: {
-    fontSize: 17,
+    fontSize: scaleFont(17),
     fontFamily: 'TitleFont',
     color: '#fff',
     letterSpacing: -0.5,
   },
   continueButton: {
-    paddingVertical: 18,
-    borderRadius: 100,
+    paddingVertical: scaleHeight(18),
+    borderRadius: scaleSize(100),
     alignItems: 'center',
     backgroundColor: '#fff',
   },
@@ -317,7 +333,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   continueText: {
-    fontSize: 17,
+    fontSize: scaleFont(17),
     fontFamily: 'TitleFont',
     color: '#000',
     letterSpacing: -0.5,

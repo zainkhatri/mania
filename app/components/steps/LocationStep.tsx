@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -21,8 +22,23 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptics } from '../../utils/haptics';
 import { getColors } from 'react-native-image-colors';
+import LiveJournalCanvas from '../LiveJournalCanvas';
+import { scaleFont, scaleHeight, scaleWidth, scaleSize } from '../../utils/responsive';
 
 const { width, height } = Dimensions.get('window');
+const isIPad = width >= 768;
+
+// Calculate canvas size with constraints for iPad - MUST match ImageStep exactly
+// ImageStep uses: (width - 32) * 1.25 and height * 0.70
+const calculatedCanvasWidth = (width - 32) * 1.25; // 25% larger - matches ImageStep
+const calculatedCanvasHeight = calculatedCanvasWidth * (2620 / 1860);
+
+// On iPad, limit canvas to fit on screen nicely - MUST match ImageStep
+const MAX_CANVAS_HEIGHT_IPAD = height * 0.70; // SAME as ImageStep!
+const MAX_CANVAS_WIDTH_IPAD = MAX_CANVAS_HEIGHT_IPAD * (1860 / 2620);
+
+const CANVAS_WIDTH = isIPad ? Math.min(calculatedCanvasWidth, MAX_CANVAS_WIDTH_IPAD) : calculatedCanvasWidth;
+const CANVAS_HEIGHT = isIPad ? Math.min(calculatedCanvasHeight, MAX_CANVAS_HEIGHT_IPAD) : calculatedCanvasHeight;
 
 // Fallback color palette (used if no images)
 const DEFAULT_COLORS = [
@@ -37,7 +53,9 @@ interface LocationStepProps {
   onChangeLocationColor: (color: string) => void;
   onNext: () => void;
   onBack: () => void;
-  images?: { uri: string }[];
+  images?: { uri: string; x: number; y: number; scale: number; width: number; height: number }[];
+  date?: Date;
+  text?: string;
 }
 
 export default function LocationStep({
@@ -48,6 +66,8 @@ export default function LocationStep({
   onNext,
   onBack,
   images = [],
+  date,
+  text = '',
 }: LocationStepProps) {
   const insets = useSafeAreaInsets();
   const locationInputRef = useRef<TextInput>(null);
@@ -55,6 +75,8 @@ export default function LocationStep({
   const [extractedColors, setExtractedColors] = useState<string[]>(DEFAULT_COLORS);
   const [isExtracting, setIsExtracting] = useState(false);
   const [showColors, setShowColors] = useState(false); // Track when to show color picker
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState<{ start: number; end: number } | undefined>(undefined);
 
   // Animation values
   const inputOpacity = useSharedValue(0);
@@ -113,11 +135,33 @@ export default function LocationStep({
 
   useEffect(() => {
     // Staggered entrance animations
-    inputOpacity.value = withTiming(1, { duration: 600 });
-    inputScale.value = withSpring(1, { damping: 15, stiffness: 100 });
+    inputOpacity.value = withDelay(150, withTiming(1, { duration: 600 }));
+    inputScale.value = withDelay(150, withSpring(1, { damping: 15, stiffness: 100 }));
 
-    buttonsOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
-    buttonsTranslate.value = withDelay(300, withSpring(0, { damping: 20, stiffness: 90 }));
+    buttonsOpacity.value = withDelay(450, withTiming(1, { duration: 600 }));
+    buttonsTranslate.value = withDelay(450, withSpring(0, { damping: 20, stiffness: 90 }));
+  }, []);
+
+  // Keyboard listeners
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
   }, []);
 
   // Fade animation when user submits location (clicks done)
@@ -174,6 +218,16 @@ export default function LocationStep({
     }
   }, [location]);
 
+  // Set cursor to beginning on mount
+  useEffect(() => {
+    setCursorPosition({ start: 0, end: 0 });
+    // After a brief moment, allow normal cursor behavior
+    const timer = setTimeout(() => {
+      setCursorPosition(undefined);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleNext = () => {
     // If user typed location but hasn't shown colors yet, show colors first
     if (location.trim().length > 0 && !showColors) {
@@ -191,124 +245,175 @@ export default function LocationStep({
     onBack();
   };
 
+  // Format date for journal preview
+  const formatDateForPreview = (date?: Date): string => {
+    if (!date) return '';
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    };
+    let dateStr = date.toLocaleDateString('en-US', options);
+    const day = date.getDate();
+    const getOrdinalSuffix = (day: number): string => {
+      if (day > 3 && day < 21) return 'TH';
+      switch (day % 10) {
+        case 1: return 'ST';
+        case 2: return 'ND';
+        case 3: return 'RD';
+        default: return 'TH';
+      }
+    };
+    const ordinal = getOrdinalSuffix(day);
+    dateStr = dateStr.replace(/(\d+)/, `$1${ordinal}`);
+    return dateStr.toUpperCase();
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
+    <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 100 }]}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={true}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: insets.top + scaleHeight(60),
+            paddingBottom: keyboardHeight > 0 ? keyboardHeight + 120 : 180
+          }
+        ]}
+        keyboardShouldPersistTaps="always"
+        scrollEnabled={!showColors}
         bounces={false}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
-          {/* Input/Color Toggle Container - both occupy same space */}
-          <View style={styles.toggleContainer}>
-            {/* Location Input */}
-            {!showColors && (
-              <Animated.View style={[styles.inputSection, inputStyle]}>
-                <View style={styles.locationInputWrapper}>
-                  {location.length === 0 && (
-                    <>
-                      <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
-                      <Text style={styles.tapToEditText}>Tap to edit</Text>
-                    </>
-                  )}
-                  <TextInput
-                    ref={locationInputRef}
-                    style={[styles.locationInput, { color: '#fff' }]}
-                    placeholder=""
-                    placeholderTextColor="transparent"
-                    value={location}
-                    onChangeText={onChangeLocation}
-                    onFocus={() => haptics.light()}
-                    autoCapitalize="characters"
-                    returnKeyType="done"
-                    onSubmitEditing={handleLocationSubmit}
-                    autoFocus={false}
-                    blurOnSubmit={true}
-                  />
-                </View>
-              </Animated.View>
-            )}
-
-            {/* Color Picker - only show when user submits location */}
-            {showColors && (
-              <Animated.View style={[styles.colorSection, colorsStyle]}>
-                <Text style={styles.colorLabel}>
-                  {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
-                </Text>
-                {isExtracting ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color="#fff" />
-                  </View>
-                ) : (
-                  <View style={styles.colorPickerContainer}>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.colorScroll}
-                      style={styles.colorScrollView}
-                    >
-                      {extractedColors.map((color, index) => (
-                        <Pressable
-                          key={`${color}-${index}`}
-                          style={({ pressed }) => [
-                            styles.colorOption,
-                            { backgroundColor: color },
-                            selectedColor === color && styles.colorOptionSelected,
-                            pressed && { opacity: 0.8 },
-                          ]}
-                          onPress={() => handleColorSelect(color)}
-                        >
-                          {selectedColor === color && (
-                            <View style={styles.colorCheck}>
-                              <Text style={styles.checkmark}>✓</Text>
-                            </View>
-                          )}
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
+        {/* Input/Color Toggle Container - both occupy same space */}
+        <View style={styles.toggleContainer}>
+          {/* Location Input */}
+          {!showColors && (
+            <Animated.View style={[styles.inputSection, inputStyle]}>
+              <View style={styles.locationInputWrapper}>
+                {location.length === 0 && (
+                  <Text style={styles.placeholderText}>MANIA, LA JOLLA, CA</Text>
                 )}
-              </Animated.View>
-            )}
-          </View>
+                <TextInput
+                  ref={locationInputRef}
+                  style={[
+                    styles.locationInput,
+                    {
+                      color: '#fff',
+                      fontSize: location.length > 30 ? scaleFont(32) : location.length > 20 ? scaleFont(38) : scaleFont(48)
+                    }
+                  ]}
+                  placeholder=""
+                  placeholderTextColor="transparent"
+                  value={location}
+                  onChangeText={onChangeLocation}
+                  onFocus={() => haptics.light()}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLocationSubmit}
+                  autoFocus={true}
+                  blurOnSubmit={false}
+                  selection={cursorPosition}
+                />
+              </View>
+            </Animated.View>
+          )}
 
-          {/* Navigation Buttons */}
-          <Animated.View style={[styles.buttonSection, buttonsStyle]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.backButton,
-                pressed && styles.backButtonPressed,
-              ]}
-              onPress={handleBack}
-            >
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
+          {/* Color Picker with Journal Preview - only show when user submits location */}
+          {showColors && (
+            <Animated.View style={[styles.colorSection, colorsStyle, { marginTop: scaleHeight(80) }]}>
+              {/* Journal Preview */}
+              <View style={styles.journalPreview}>
+                <LiveJournalCanvas
+                  date={formatDateForPreview(date)}
+                  location={location}
+                  text={text}
+                  locationColor={selectedColor}
+                  images={images}
+                  canvasWidth={CANVAS_WIDTH}
+                  canvasHeight={CANVAS_HEIGHT}
+                />
+              </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.continueButton,
-                pressed && styles.continueButtonPressed,
-              ]}
-              onPress={handleNext}
-            >
-              <Text style={styles.continueText}>Continue</Text>
-            </Pressable>
-          </Animated.View>
+              {/* Color Picker Below Preview */}
+              <Text style={styles.colorLabel}>
+                {isExtracting ? 'Extracting colors from your photos...' : 'Choose a color'}
+              </Text>
+              {isExtracting ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              ) : (
+                <View style={styles.colorPickerContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.colorScroll}
+                    style={styles.colorScrollView}
+                  >
+                    {extractedColors.map((color, index) => (
+                      <Pressable
+                        key={`${color}-${index}`}
+                        style={({ pressed }) => [
+                          styles.colorOption,
+                          { backgroundColor: color },
+                          selectedColor === color && styles.colorOptionSelected,
+                          pressed && { opacity: 0.8 },
+                        ]}
+                        onPress={() => handleColorSelect(color)}
+                      >
+                        {selectedColor === color && (
+                          <View style={styles.colorCheck}>
+                            <Text style={styles.checkmark}>✓</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </Animated.View>
+          )}
+        </View>
 
-          {/* Helper Text */}
-          <Text style={styles.helperText}>
-            {location.length === 0
-              ? 'Optional — skip if you prefer'
-              : 'Your location will appear in this color'}
-          </Text>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+
+      {/* Navigation Buttons - Fixed at bottom */}
+      <Animated.View style={[
+        buttonsStyle,
+        {
+          position: 'absolute',
+          bottom: keyboardHeight > 0 ? keyboardHeight + 20 : Math.max(insets.bottom, 20),
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+        }
+      ]}>
+        <View style={styles.buttonSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+            onPress={handleBack}
+          >
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.continueButton,
+              pressed && styles.continueButtonPressed,
+            ]}
+            onPress={handleNext}
+          >
+            <Text style={styles.continueText}>Continue</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -319,17 +424,21 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 120,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 200,
+    minHeight: height - 150,
   },
   toggleContainer: {
     width: '100%',
-    minHeight: 120,
-    marginBottom: 40,
+    minHeight: 140,
+    marginBottom: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -345,33 +454,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeholderText: {
-    fontSize: 28,
+    fontSize: scaleFont(48),
     fontFamily: 'TitleFont',
     textAlign: 'center',
     color: 'rgba(255, 255, 255, 0.4)',
     letterSpacing: -0.5,
     position: 'absolute',
     width: '100%',
-    top: 20,
+    top: scaleHeight(20),
   },
   tapToEditText: {
-    fontSize: 13,
+    fontSize: scaleFont(13),
     fontFamily: 'ZainCustomFont',
     textAlign: 'center',
     color: 'rgba(255, 255, 255, 0.3)',
     position: 'absolute',
     width: '100%',
-    top: 58,
+    top: scaleHeight(70),
     letterSpacing: 0.5,
   },
   locationInput: {
     width: '100%',
-    fontSize: 28,
+    fontSize: scaleFont(38),
     fontFamily: 'TitleFont',
     textAlign: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    paddingVertical: scaleHeight(20),
+    paddingHorizontal: scaleWidth(20),
+    borderRadius: scaleSize(16),
     backgroundColor: 'transparent',
     borderWidth: 0,
     letterSpacing: -0.5,
@@ -381,6 +490,18 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  journalPreview: {
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   colorLabel: {
     fontSize: 14,
@@ -437,7 +558,7 @@ const styles = StyleSheet.create({
   },
   buttonSection: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 4,
     width: '100%',
     maxWidth: 320,
   },
@@ -461,7 +582,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   continueButton: {
-    flex: 2,
+    flex: 1,
     paddingVertical: 18,
     borderRadius: 100,
     alignItems: 'center',
@@ -476,12 +597,5 @@ const styles = StyleSheet.create({
     fontFamily: 'TitleFont',
     color: '#000',
     letterSpacing: -0.5,
-  },
-  helperText: {
-    marginTop: 16,
-    fontSize: 13,
-    fontFamily: 'ZainCustomFont',
-    color: 'rgba(255, 255, 255, 0.4)',
-    textAlign: 'center',
   },
 });

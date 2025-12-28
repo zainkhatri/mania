@@ -1,12 +1,23 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Dimensions, Image } from 'react-native';
+import { View, StyleSheet, Dimensions, Image, Text } from 'react-native';
 import { Canvas, Text as SkiaText, useFont, Group, Rect, useImage, Image as SkiaImage, Skia } from '@shopify/react-native-skia';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const isIPad = width >= 768;
 
 // EXACT dimensions from web version
 const WEB_CANVAS_WIDTH = 1860;
 const WEB_CANVAS_HEIGHT = 2620;
+
+// Calculate the canvas size used in ImageStep - MUST match ImageStep exactly
+const calculatedCanvasWidth = (width - 32) * 1.25; // 25% larger - matches ImageStep
+const calculatedCanvasHeight = calculatedCanvasWidth * (2620 / 1860);
+const MAX_CANVAS_HEIGHT_IPAD = height * 0.70;
+const MAX_CANVAS_WIDTH_IPAD = MAX_CANVAS_HEIGHT_IPAD * (1860 / 2620);
+const IMAGE_STEP_CANVAS_WIDTH = isIPad ? Math.min(calculatedCanvasWidth, MAX_CANVAS_WIDTH_IPAD) : calculatedCanvasWidth;
+
+// This is the canvas size where images were originally placed
+const ORIGINAL_CANVAS_WIDTH = IMAGE_STEP_CANVAS_WIDTH;
 
 // Exact line Y coordinates from web version
 const JOURNAL_LINE_Y_COORDS = [
@@ -23,10 +34,11 @@ interface LiveJournalCanvasProps {
   location: string;
   text: string;
   locationColor: string;
-  images?: Array<{uri: string; x: number; y: number; scale: number}>;
+  images?: Array<{uri: string; x: number; y: number; scale: number; width: number; height: number}>;
   title?: string;
   canvasWidth?: number;
   canvasHeight?: number;
+  hideImages?: boolean; // Hide images visually but still use them for text wrapping
 }
 
 // Helper to create darker version of color
@@ -81,13 +93,14 @@ const calculateTextWrapping = (
   leftMargin: number,
   rightMargin: number,
   canvasWidth: number
-): Array<{ startX: number; width: number }> => {
-  const lineHeight = fontSize * 1.2;
-  const textTop = currentY - lineHeight * 0.8;
-  const textBottom = currentY + lineHeight * 0.2;
-  const MIN_SEGMENT_WIDTH = 100; // Minimum width for usable segment
+): Array<{ startX: number; availableWidth: number }> => {
+  const lineHeight = fontSize * 1.3;
+  const textTop = currentY - lineHeight * 0.85;
+  const textBottom = currentY + lineHeight * 0.25;
 
   const overlappingImages = imagePositions.filter(imagePos => {
+    // Check if text line overlaps with image vertically
+    // Don't add padding to top - that causes false positives for lines above the image
     const imageTop = imagePos.y;
     const imageBottom = imagePos.y + imagePos.height;
     const verticalOverlap = textBottom > imageTop && textTop < imageBottom;
@@ -101,54 +114,57 @@ const calculateTextWrapping = (
     return horizontalOverlap;
   });
 
-  // No images overlapping - use full width
   if (overlappingImages.length === 0) {
-    return [{ startX: leftMargin, width: textWidth }];
+    // No images overlapping - return full width
+    return [{ startX: leftMargin, availableWidth: textWidth }];
   }
 
-  // Build all available segments
   overlappingImages.sort((a, b) => a.x - b.x);
-  const segments = [];
-  const PADDING = 20; // Padding around images
-
-  // Left segment (before first image)
+  const textSegments = [];
   const firstImage = overlappingImages[0];
-  const leftSegmentWidth = firstImage.x - leftMargin - PADDING;
-  if (leftSegmentWidth >= MIN_SEGMENT_WIDTH) {
-    segments.push({
+  const spaceBeforeFirst = firstImage.x - leftMargin;
+  const padding = 15; // Horizontal padding between text and images
+
+  // Minimum width needed to fit at least a few characters (increased from 15 to 100)
+  const MIN_USABLE_WIDTH = 100;
+
+  // Add space before first image if there's enough room
+  if (spaceBeforeFirst > MIN_USABLE_WIDTH) {
+    textSegments.push({
       startX: leftMargin,
-      width: leftSegmentWidth
+      availableWidth: firstImage.x - leftMargin - padding
     });
   }
 
-  // Middle segments (between images)
+  // Check gaps between images
   for (let i = 0; i < overlappingImages.length - 1; i++) {
     const currentImage = overlappingImages[i];
     const nextImage = overlappingImages[i + 1];
-    const gapStart = currentImage.x + currentImage.width + PADDING;
-    const gapEnd = nextImage.x - PADDING;
+    const gapStart = currentImage.x + currentImage.width + padding;
+    const gapEnd = nextImage.x - padding;
     const gapWidth = gapEnd - gapStart;
 
-    if (gapWidth >= MIN_SEGMENT_WIDTH) {
-      segments.push({
+    if (gapWidth > MIN_USABLE_WIDTH) {
+      textSegments.push({
         startX: gapStart,
-        width: gapWidth
+        availableWidth: gapWidth
       });
     }
   }
 
-  // Right segment (after last image)
+  // Add space after last image if there's enough room
   const lastImage = overlappingImages[overlappingImages.length - 1];
-  const rightSegmentStart = lastImage.x + lastImage.width + PADDING;
-  const rightSegmentWidth = (canvasWidth - rightMargin) - rightSegmentStart;
-  if (rightSegmentWidth >= MIN_SEGMENT_WIDTH) {
-    segments.push({
-      startX: rightSegmentStart,
-      width: rightSegmentWidth
+  const spaceAfterLast = (canvasWidth - rightMargin) - (lastImage.x + lastImage.width);
+
+  if (spaceAfterLast > MIN_USABLE_WIDTH) {
+    textSegments.push({
+      startX: lastImage.x + lastImage.width + padding,
+      availableWidth: spaceAfterLast - padding
     });
   }
 
-  return segments.length > 0 ? segments : [];
+  // If no usable segments found, return empty array to skip this line entirely
+  return textSegments;
 };
 
 export default function LiveJournalCanvas({
@@ -159,11 +175,28 @@ export default function LiveJournalCanvas({
   images = [],
   title = '',
   canvasWidth,
-  canvasHeight
+  canvasHeight,
+  hideImages = false
 }: LiveJournalCanvasProps) {
   const displayWidth = canvasWidth ?? (width - 48);
   const displayHeight = canvasHeight ?? (displayWidth * (WEB_CANVAS_HEIGHT / WEB_CANVAS_WIDTH));
   const scale = displayWidth / WEB_CANVAS_WIDTH;
+
+  // Safety check for invalid dimensions
+  if (!displayWidth || !displayHeight || !scale || isNaN(scale) || scale <= 0) {
+    console.warn('⚠️ Invalid canvas dimensions:', { displayWidth, displayHeight, scale });
+    return (
+      <View style={[styles.container, { 
+        width: displayWidth || 100, 
+        height: displayHeight || 100,
+        backgroundColor: '#f5f2e9',
+        justifyContent: 'center',
+        alignItems: 'center'
+      }]}>
+        <Text style={{ fontSize: 14, color: '#999' }}>Invalid dimensions</Text>
+      </View>
+    );
+  }
 
   // Load fonts at multiple sizes for measurement
   const dateFontTest = useFont(require('../../assets/fonts/titles.ttf'), 100);
@@ -201,8 +234,19 @@ export default function LiveJournalCanvas({
     if (!location || !location.trim() || !dateFontTest) return 72;
 
     const availableWidth = WEB_CANVAS_WIDTH - LEFT_MARGIN - RIGHT_MARGIN;
+    const locationLength = location.trim().length;
+    
+    // Reference: "MANIA, LA JOLLA, CA" is ~20 chars and should be around 140px
+    // Scale max size based on character count
+    let maxSize = 200; // Cap maximum size
+    if (locationLength < 15) {
+      maxSize = 140; // Short text shouldn't be huge
+    } else if (locationLength < 25) {
+      maxSize = 180;
+    }
+    
     let low = 72;
-    let high = 300;
+    let high = maxSize;
     let optimalSize = 72;
 
     while (low <= high) {
@@ -242,13 +286,37 @@ export default function LiveJournalCanvas({
 
   // Convert display image positions to web canvas coordinates
   const webImagePositions = useMemo(() => {
-    return images.map(img => ({
-      x: img.x / scale,
-      y: img.y / scale,
-      width: (150 * img.scale) / scale,
-      height: (150 * img.scale) / scale
-    }));
-  }, [images, scale]);
+    if (!scale || isNaN(scale) || scale <= 0) return [];
+
+    // Images are stored in IMAGE_STEP_CANVAS_WIDTH coordinates
+    // We need to convert them to WEB_CANVAS_WIDTH coordinates for text layout
+    const scaleFactor = WEB_CANVAS_WIDTH / ORIGINAL_CANVAS_WIDTH;
+
+    return images.map(img => {
+      // Calculate display size preserving aspect ratio
+      const aspectRatio = img.width / img.height;
+      const baseSize = 150;
+      let displayWidth: number;
+      let displayHeight: number;
+
+      if (aspectRatio > 1) {
+        // Landscape
+        displayWidth = baseSize;
+        displayHeight = baseSize / aspectRatio;
+      } else {
+        // Portrait or square
+        displayHeight = baseSize;
+        displayWidth = baseSize * aspectRatio;
+      }
+
+      return {
+        x: (img.x || 0) * scaleFactor,
+        y: (img.y || 0) * scaleFactor,
+        width: (displayWidth * (img.scale || 1)) * scaleFactor,
+        height: (displayHeight * (img.scale || 1)) * scaleFactor
+      };
+    });
+  }, [images, scale, width]);
 
   // Layout text with image wrapping using ACTUAL text measurement
   const { textLines, finalFontSize } = useMemo(() => {
@@ -256,12 +324,12 @@ export default function LiveJournalCanvas({
 
     const words = text.split(' ');
     const textWidth = WEB_CANVAS_WIDTH - LEFT_MARGIN - RIGHT_MARGIN;
-    const minFontSize = 17;
+    const minFontSize = 50; // Increased from 17 to keep text larger
     const maxFontSize = 84;
     let fontSize = maxFontSize;
     let fits = false;
 
-    // Find optimal font size using ACTUAL measurements
+    // Find optimal font size using ACTUAL measurements with multi-segment support
     while (fontSize >= minFontSize && !fits) {
       let currentWord = 0;
 
@@ -277,11 +345,18 @@ export default function LiveJournalCanvas({
           WEB_CANVAS_WIDTH
         );
 
-        // Fill ALL segments on this line
+        // Skip this line if no usable segments (images block the entire line)
+        if (segments.length === 0) {
+          continue;
+        }
+
+        // Try to fill all segments on this line
         for (const segment of segments) {
           if (currentWord >= words.length) break;
 
           let currentLine = '';
+          let wordsInSegment = 0;
+          
           while (currentWord < words.length) {
             const nextWord = words[currentWord];
             const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
@@ -289,11 +364,19 @@ export default function LiveJournalCanvas({
             const widthAt100 = bodyFontTest.getTextWidth(testLine);
             const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
 
-            if (actualWidth > segment.width && currentLine) {
-              break;
+            if (actualWidth > segment.availableWidth) {
+              // If we can't fit even one word in this segment, skip it
+              if (wordsInSegment === 0) {
+                break;
+              }
+              // Otherwise, move to next segment
+              if (currentLine) {
+                break;
+              }
             } else {
               currentLine = testLine;
               currentWord++;
+              wordsInSegment++;
             }
           }
         }
@@ -321,11 +404,18 @@ export default function LiveJournalCanvas({
         WEB_CANVAS_WIDTH
       );
 
-      // Fill ALL segments on this line
+      // Skip this line if no usable segments (images block the entire line)
+      if (segments.length === 0) {
+        continue;
+      }
+
+      // Fill all available segments on this line from left to right
       for (const segment of segments) {
         if (currentWord >= words.length) break;
 
         let currentLine = '';
+        let wordsInSegment = 0;
+        
         while (currentWord < words.length) {
           const nextWord = words[currentWord];
           const testLine = currentLine ? `${currentLine} ${nextWord}` : nextWord;
@@ -333,11 +423,19 @@ export default function LiveJournalCanvas({
           const widthAt100 = bodyFontTest.getTextWidth(testLine);
           const actualWidth = (widthAt100 / 100) * fontSize * 1.05; // Add 5% safety margin
 
-          if (actualWidth > segment.width && currentLine) {
-            break;
+          if (actualWidth > segment.availableWidth) {
+            // If we can't fit even one word in this segment, skip it
+            if (wordsInSegment === 0) {
+              break;
+            }
+            // Otherwise, move to next segment
+            if (currentLine) {
+              break;
+            }
           } else {
             currentLine = testLine;
             currentWord++;
+            wordsInSegment++;
           }
         }
 
@@ -364,12 +462,24 @@ export default function LiveJournalCanvas({
 
   const bodyFont = getBodyFont();
 
-  if (!dateFont || !locationFont || !bodyFont) {
-    return <View style={[styles.container, { height: displayHeight }]} />;
+  // Show loading placeholder if fonts or template aren't ready yet
+  const allFontsLoaded = dateFont && locationFont && bodyFontTest && 
+                         bodyFont84 && bodyFont70 && bodyFont60 && bodyFont50 && 
+                         bodyFont40 && bodyFont30 && bodyFont20 && bodyFont17;
+  
+  if (!allFontsLoaded || !templateImage) {
+    console.log('⏳ Loading journal... fonts:', !!allFontsLoaded, 'template:', !!templateImage);
+    return (
+      <View style={[styles.container, { width: displayWidth, height: displayHeight, backgroundColor: '#f5f2e9' }]}>
+        <Text style={{ textAlign: 'center', marginTop: 50, fontSize: 16, color: '#999' }}>
+          Loading journal...
+        </Text>
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { width: displayWidth, height: displayHeight }]}>
       <Canvas style={{ width: displayWidth, height: displayHeight }}>
         <Group transform={[{ scale }]}>
           <Rect x={0} y={0} width={WEB_CANVAS_WIDTH} height={WEB_CANVAS_HEIGHT} color="#f5f2e9" />
@@ -385,13 +495,13 @@ export default function LiveJournalCanvas({
             />
           )}
 
-          <SkiaText x={LEFT_MARGIN} y={150} text={date} font={dateFont} color="#000000" />
+          <SkiaText x={LEFT_MARGIN} y={130} text={date} font={dateFont} color="#000000" />
 
           {location && location.trim() && (
             <>
               <SkiaText
                 x={LEFT_MARGIN + 18}
-                y={163 + maxDateFontSize + 30}
+                y={143 + maxDateFontSize + 40}
                 text={location.toUpperCase()}
                 font={locationFont}
                 color={getDarkerColor(locationColor)}
@@ -399,7 +509,7 @@ export default function LiveJournalCanvas({
               />
               <SkiaText
                 x={LEFT_MARGIN}
-                y={150 + maxDateFontSize + 30}
+                y={130 + maxDateFontSize + 40}
                 text={location.toUpperCase()}
                 font={locationFont}
                 color={locationColor}
@@ -420,21 +530,62 @@ export default function LiveJournalCanvas({
         </Group>
       </Canvas>
 
-      {images && images.length > 0 && images.map((img, index) => (
-        <Image
-          key={`img-${index}`}
-          source={{ uri: img.uri }}
-          style={{
-            position: 'absolute',
-            left: img.x,
-            top: img.y,
-            width: 150 * img.scale,
-            height: 150 * img.scale,
-            borderRadius: 8,
-          }}
-          resizeMode="cover"
-        />
-      ))}
+      {!hideImages && images && images.length > 0 && images.map((img, index) => {
+        // Images are stored in coordinates for IMAGE_STEP_CANVAS_WIDTH
+        // We need to scale them to match the current display size
+        // The 'scale' variable represents: currentDisplayWidth / WEB_CANVAS_WIDTH
+        // But images were placed at a different display width, so we need to scale them proportionally
+
+        // Calculate the scale factor between the current canvas and the canvas where images were placed
+        // Images were placed at: IMAGE_STEP_CANVAS_WIDTH
+        // Current canvas is at: displayWidth
+        // So we need to scale images by: (displayWidth / IMAGE_STEP_CANVAS_WIDTH)
+
+        const imageScaleFactor = displayWidth / ORIGINAL_CANVAS_WIDTH;
+
+        // Calculate display size preserving aspect ratio
+        const aspectRatio = img.width / img.height;
+        const baseSize = 150;
+        let imgDisplayWidth: number;
+        let imgDisplayHeight: number;
+
+        if (aspectRatio > 1) {
+          // Landscape
+          imgDisplayWidth = baseSize;
+          imgDisplayHeight = baseSize / aspectRatio;
+        } else {
+          // Portrait or square
+          imgDisplayHeight = baseSize;
+          imgDisplayWidth = baseSize * aspectRatio;
+        }
+
+        const imgWidth = imgDisplayWidth * (img.scale || 1) * imageScaleFactor;
+        const imgHeight = imgDisplayHeight * (img.scale || 1) * imageScaleFactor;
+        const imgX = (img.x || 0) * imageScaleFactor;
+        const imgY = (img.y || 0) * imageScaleFactor;
+
+        // Skip if any values are invalid
+        if (isNaN(imgWidth) || isNaN(imgHeight) || isNaN(imgX) || isNaN(imgY)) {
+          console.warn(`⚠️ Invalid image ${index}:`, { x: imgX, y: imgY, width: imgWidth, height: imgHeight });
+          return null;
+        }
+
+        return (
+          <Image
+            key={`img-${index}`}
+            source={{ uri: img.uri }}
+            style={{
+              position: 'absolute',
+              left: imgX,
+              top: imgY,
+              width: imgWidth,
+              height: imgHeight,
+              borderRadius: 8 * imageScaleFactor,
+            }}
+            resizeMode="cover"
+          />
+        );
+      })}
     </View>
   );
 }
@@ -443,5 +594,6 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#f5f2e9',
     borderRadius: 8,
+    overflow: 'hidden',
   },
 });
